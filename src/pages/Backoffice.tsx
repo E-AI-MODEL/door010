@@ -8,10 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Users, MessageCircle, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, MessageCircle, Bell, LogOut } from "lucide-react";
 import { UserOverviewTable, type ProfileWithEmail } from "@/components/backoffice/UserOverviewTable";
 import { AdvisorChatPanel } from "@/components/backoffice/AdvisorChatPanel";
 import { BackofficeStats } from "@/components/backoffice/BackofficeStats";
+import { BackofficeAlerts } from "@/components/backoffice/BackofficeAlerts";
 
 type AppRole = 'candidate' | 'advisor' | 'admin';
 
@@ -275,6 +276,10 @@ export default function Backoffice() {
                 <Users className="h-4 w-4" />
                 Overzicht
               </TabsTrigger>
+              <TabsTrigger value="alerts" className="flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                Meldingen
+              </TabsTrigger>
               <TabsTrigger value="chat" className="flex items-center gap-2">
                 <MessageCircle className="h-4 w-4" />
                 Gesprekken
@@ -294,6 +299,34 @@ export default function Backoffice() {
                       profiles={profiles} 
                       onSelectUser={setSelectedUser}
                       selectedUserId={selectedUser?.user_id}
+                    />
+                  </div>
+                  
+                  {/* Chat panel - 1 column */}
+                  <div className="lg:col-span-1">
+                    <AdvisorChatPanel 
+                      selectedUser={selectedUser}
+                      onClose={() => setSelectedUser(null)}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            </TabsContent>
+
+            <TabsContent value="alerts">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Alerts panel - 2 columns */}
+                  <div className="lg:col-span-2">
+                    <BackofficeAlerts 
+                      onSelectUser={(userId) => {
+                        const profile = profiles.find(p => p.user_id === userId);
+                        if (profile) setSelectedUser(profile);
+                      }}
                     />
                   </div>
                   
