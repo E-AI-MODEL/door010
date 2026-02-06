@@ -56,7 +56,7 @@ export function HeroSection() {
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
               asChild
             >
-              <Link to="/registreren">
+              <Link to="/auth">
                 <ArrowRight className="mr-2 h-5 w-5" />
                 Ontdek jouw route
               </Link>

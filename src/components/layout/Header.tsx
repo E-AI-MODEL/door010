@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, User, MessageCircle } from "lucide-react";
+import { Menu, X, User, MessageCircle, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const navigation = [
   { name: "Ontdek het onderwijs", href: "/kennisbank" },
@@ -16,6 +17,36 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, loading } = useAuth();
   const [showDooraiHint, setShowDooraiHint] = useState(false);
+  const [isAdvisorOrAdmin, setIsAdvisorOrAdmin] = useState(false);
+
+  // Check if user has advisor or admin role
+  useEffect(() => {
+    if (user) {
+      checkUserRole();
+    } else {
+      setIsAdvisorOrAdmin(false);
+    }
+  }, [user]);
+
+  const checkUserRole = async () => {
+    if (!user) return;
+    
+    try {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+      
+      if (data) {
+        const hasAccess = data.some(
+          (r) => r.role === "advisor" || r.role === "admin"
+        );
+        setIsAdvisorOrAdmin(hasAccess);
+      }
+    } catch (error) {
+      console.error("Error checking user role:", error);
+    }
+  };
 
   // Show DOORai hint every 2 minutes for 5 seconds
   useEffect(() => {
@@ -37,15 +68,15 @@ export function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white border-b border-border">
+    <header className="sticky top-0 z-50 w-full bg-background border-b border-border">
       <nav className="container flex h-16 items-center justify-between">
         {/* Logo - styled like onderwijsloketrotterdam.nl */}
         <Link to="/" className="flex items-center gap-3">
           {/* Arrow icon similar to onderwijsloket */}
           <div className="flex items-center justify-center">
             <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8 20L28 20M28 20L20 12M28 20L20 28" stroke="hsl(152 100% 33%)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M32 8L32 32" stroke="hsl(152 100% 33%)" strokeWidth="3" strokeLinecap="round"/>
+              <path d="M8 20L28 20M28 20L20 12M28 20L20 28" stroke="currentColor" className="text-primary" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M32 8L32 32" stroke="currentColor" className="text-primary" strokeWidth="3" strokeLinecap="round"/>
             </svg>
           </div>
           <div className="flex flex-col leading-tight">
@@ -91,6 +122,15 @@ export function Header() {
               {item.name}
             </Link>
           ))}
+          {isAdvisorOrAdmin && (
+            <Link
+              to="/backoffice"
+              className="px-4 py-2 text-sm font-medium text-accent hover:text-accent/80 transition-colors uppercase tracking-wide flex items-center gap-1"
+            >
+              <Shield className="h-4 w-4" />
+              Backoffice
+            </Link>
+          )}
         </div>
 
         {/* Desktop CTA */}
@@ -128,7 +168,7 @@ export function Header() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden border-t border-border bg-white"
+            className="lg:hidden border-t border-border bg-background"
           >
             <div className="container py-4 space-y-1">
               {navigation.map((item) => (
@@ -141,6 +181,16 @@ export function Header() {
                   {item.name}
                 </Link>
               ))}
+              {isAdvisorOrAdmin && (
+                <Link
+                  to="/backoffice"
+                  className="block px-3 py-3 text-sm font-medium text-accent hover:text-accent/80 hover:bg-muted rounded uppercase tracking-wide flex items-center gap-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Shield className="h-4 w-4" />
+                  Backoffice
+                </Link>
+              )}
               <div className="pt-4 border-t border-border">
                 {!loading && (
                   user ? (
