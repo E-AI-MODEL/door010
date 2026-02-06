@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { PageHero } from "@/components/shared/PageHero";
+import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { ExternalLink, Calendar } from "lucide-react";
+import { ExternalLink, Calendar, MapPin, Laptop, Users, Briefcase, GraduationCap, Lightbulb } from "lucide-react";
 import regionalDesks from "@/data/regional-education-desks.json";
 
 // Extract event sources from regional desks
@@ -33,31 +35,46 @@ const eventSources = getEventSources();
 const externalAgendas = [
   {
     title: "Onderwijsloket Rotterdam",
-    description: "Regionale activiteiten en events voor (aankomende) leraren",
+    description: "Regionale activiteiten en events",
     url: "https://www.onderwijsloketrotterdam.nl/activiteiten",
+    highlight: true,
   },
   {
     title: "Onderwijs010",
-    description: "Events en informatiebijeenkomsten in de onderwijsregio Rotterdam",
+    description: "Events onderwijsregio Rotterdam",
     url: "https://www.onderwijs010.nl/activiteiten",
+    highlight: true,
   },
   {
     title: "Landelijk Onderwijsloket",
-    description: "Landelijke agenda met open dagen, webinars en meeloopdagen",
+    description: "Landelijke open dagen & webinars",
     url: "https://www.onderwijsloket.com/activiteiten",
+    highlight: false,
   },
 ];
 
 const eventTypes = [
-  { title: "Open dagen", description: "Bezoek hogescholen en lerarenopleidingen" },
-  { title: "Webinars", description: "Online sessies over zij-instromen en subsidies" },
-  { title: "Meeloopdagen", description: "Ervaar het vak van leraar in de praktijk" },
-  { title: "Informatiebijeenkomsten", description: "Ontmoet scholen en besturen" },
-  { title: "Banenmarkten", description: "Direct solliciteren bij vacatures" },
-  { title: "Trainingen", description: "Ontdek of het onderwijs bij je past" },
+  { id: "open-dagen", title: "Open dagen", description: "Bezoek hogescholen en lerarenopleidingen", icon: GraduationCap },
+  { id: "webinars", title: "Webinars", description: "Online sessies over zij-instromen en subsidies", icon: Laptop },
+  { id: "meeloopdagen", title: "Meeloopdagen", description: "Ervaar het vak van leraar in de praktijk", icon: Users },
+  { id: "info", title: "Informatiebijeenkomsten", description: "Ontmoet scholen en besturen", icon: Lightbulb },
+  { id: "banenmarkten", title: "Banenmarkten", description: "Direct solliciteren bij vacatures", icon: Briefcase },
+];
+
+const quickNavItems = [
+  { label: "Agenda's Rotterdam", href: "#agendas" },
+  { label: "Type events", href: "#types" },
+  { label: "Regionale loketten", href: "#regionaal" },
 ];
 
 export default function Events() {
+  const [activeSection, setActiveSection] = useState("agendas");
+
+  const scrollToSection = (id: string) => {
+    setActiveSection(id.replace("#", ""));
+    document.querySelector(id)?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -66,107 +83,146 @@ export default function Events() {
           variant="image"
           title="AGENDA"
           titleHighlight="& EVENTS"
-          subtitle="Bekijk alle open dagen, webinars, informatiesessies en meeloopdagen in de regio Rotterdam."
+          subtitle="Open dagen, webinars en meeloopdagen in de regio Rotterdam."
         />
 
-        {/* Main agenda links */}
-        <section className="py-12 md:py-16">
+        {/* Quick navigation - sticky */}
+        <nav className="bg-white border-b border-border sticky top-16 z-40">
+          <div className="container py-3">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              {quickNavItems.map((item) => (
+                <Button
+                  key={item.href}
+                  variant={activeSection === item.href.replace("#", "") ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => scrollToSection(item.href)}
+                  className="whitespace-nowrap"
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </nav>
+
+        {/* Main agenda links - compact cards */}
+        <section id="agendas" className="py-10 md:py-12">
           <div className="container">
-            <h2 className="text-xl font-bold text-foreground mb-8 uppercase tracking-wide">
+            <h2 className="text-lg font-bold text-foreground mb-6 uppercase tracking-wide">
               Agenda's <span className="text-primary">Rotterdam</span>
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {externalAgendas.map((agenda, index) => (
                 <motion.a
                   key={index}
                   href={agenda.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: index * 0.1 }}
-                  className="group bg-white border border-border rounded-lg p-8 hover:border-primary/50 hover:shadow-lg transition-all"
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className={`group flex items-center gap-4 rounded-lg p-4 transition-all ${
+                    agenda.highlight 
+                      ? "bg-primary/5 border-2 border-primary/20 hover:border-primary/50" 
+                      : "bg-white border border-border hover:border-primary/30"
+                  }`}
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="bg-primary/10 rounded-full p-3">
-                      <Calendar className="h-6 w-6 text-primary" />
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <div className={`rounded-full p-2 ${agenda.highlight ? "bg-primary/10" : "bg-muted"}`}>
+                    <Calendar className={`h-5 w-5 ${agenda.highlight ? "text-primary" : "text-muted-foreground"}`} />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors mb-2">
-                    {agenda.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {agenda.description}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors text-sm">
+                      {agenda.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {agenda.description}
+                    </p>
+                  </div>
+                  <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
                 </motion.a>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Event types */}
-        <section className="bg-muted py-12 md:py-16">
+        {/* Event types - horizontal scroll on mobile, grid on desktop */}
+        <section id="types" className="bg-muted py-10 md:py-12">
           <div className="container">
-            <h2 className="text-xl font-bold text-foreground mb-8 uppercase tracking-wide">
-              Welke <span className="text-primary">events</span> kun je verwachten?
+            <h2 className="text-lg font-bold text-foreground mb-6 uppercase tracking-wide">
+              Welke <span className="text-primary">events</span> zijn er?
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-5 md:overflow-visible">
               {eventTypes.map((type, index) => (
                 <motion.div
-                  key={type.title}
-                  initial={{ opacity: 0, y: 20 }}
+                  key={type.id}
+                  initial={{ opacity: 0, y: 10 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="bg-white rounded-lg p-6 border border-border"
+                  transition={{ duration: 0.2, delay: index * 0.03 }}
+                  className="bg-white rounded-lg p-4 border border-border min-w-[160px] md:min-w-0 flex flex-col items-center text-center"
                 >
-                  <h3 className="font-semibold text-foreground mb-2">{type.title}</h3>
-                  <p className="text-sm text-muted-foreground">{type.description}</p>
+                  <div className="bg-primary/10 rounded-full p-3 mb-3">
+                    <type.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="font-semibold text-foreground text-sm mb-1">{type.title}</h3>
+                  <p className="text-xs text-muted-foreground">{type.description}</p>
                 </motion.div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Regional desks */}
+        {/* Regional desks - collapsible/compact */}
         {eventSources.length > 0 && (
-          <section className="py-12 md:py-16">
+          <section id="regionaal" className="py-10 md:py-12">
             <div className="container">
-              <h2 className="text-xl font-bold text-foreground mb-4 uppercase tracking-wide">
-                Activiteiten van <span className="text-primary">regionale loketten</span>
-              </h2>
-              <p className="text-muted-foreground mb-8">
-                Bekijk de agenda's van onderwijsloketten door heel Nederland:
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {eventSources.slice(0, 9).map((source, index) => (
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-foreground uppercase tracking-wide">
+                  <span className="text-primary">Regionale</span> loketten
+                </h2>
+                <span className="text-sm text-muted-foreground">
+                  {eventSources.length} loketten
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {eventSources.slice(0, 8).map((source, index) => (
                   <motion.a
                     key={index}
                     href={source.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
-                    transition={{ duration: 0.3, delay: index * 0.03 }}
-                    className="group bg-white border border-border rounded-lg p-4 hover:border-primary/50 transition-all flex items-start justify-between"
+                    transition={{ duration: 0.2, delay: index * 0.02 }}
+                    className="group bg-white border border-border rounded-lg p-3 hover:border-primary/50 transition-all"
                   >
-                    <div>
-                      <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        {source.title}
-                      </h3>
-                      {source.regions.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {source.regions.slice(0, 2).join(", ")}
-                          {source.regions.length > 2 && ` +${source.regions.length - 2}`}
-                        </p>
-                      )}
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <h3 className="font-medium text-foreground group-hover:text-primary transition-colors text-sm truncate">
+                          {source.title}
+                        </h3>
+                        {source.regions.length > 0 && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {source.regions.slice(0, 2).join(", ")}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
                   </motion.a>
                 ))}
               </div>
+              {eventSources.length > 8 && (
+                <div className="mt-4 text-center">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href="https://www.onderwijsloket.com/loketten" target="_blank" rel="noopener noreferrer">
+                      Bekijk alle {eventSources.length} loketten
+                      <ExternalLink className="ml-2 h-3 w-3" />
+                    </a>
+                  </Button>
+                </div>
+              )}
             </div>
           </section>
         )}
