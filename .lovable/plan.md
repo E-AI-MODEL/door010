@@ -1,152 +1,130 @@
 
+# Plan: Dashboard Personalisatie en Backoffice Integratie
 
-# DOOR - Digitaal Onderwijsloket Onderwijsregio's Rotterdam
-
-Een professioneel, AI-gestuurd SaaS platform in corporate/enterprise stijl (denk aan Linear, Stripe) voor de begeleiding van toekomstige onderwijsprofessionals.
-
----
-
-## 🎯 Overzicht
-
-**Doelgroep:** Kandidaten (studiekiezers, zij-instromers, overstappers) die een loopbaan in het onderwijs overwegen
-
-**Kernbelofte:** Van eerste oriëntatie tot instroom in het onderwijs - persoonlijk begeleid door een AI-coach
+Dit plan beschrijft de uitbreidingen van het gebruikersdashboard en de verbinding met het backoffice systeem.
 
 ---
 
-## 📱 Fase 1: Publieke Website & AI Widget (MVP)
+## Deel 1: Verwijderen AI Widget Sectie (Eenvoudig)
 
-### Homepage
-- **Hero sectie** met krachtige value proposition
-- **Publieke AI Chat Widget** - eerste kennismaking met de AI-coach
-- Duidelijke CTA's: "Start je oriëntatie" / "Log in"
-- Sectie met succesverhalen en testimonials
-- Overzicht van de klantreis (visuele stappen)
-- Footer met partners en contactinfo
-- allemaal te vinden in de json bestanden in de zip.
+De `AIWidgetSection` op de homepage kan veilig worden verwijderd. De floating chat-widget (`PublicChatWidget`) biedt dezelfde functionaliteit en is al globaal beschikbaar.
 
-### Publieke Pagina's
-- **Werken in het Onderwijs** - algemene informatie over banen, sectoren (PO/VO/MBO)
-- **Vacatures** - eenvoudig overzicht met filters, scraping van Meesterbaan en werkenbij-sites
-- **Events** - jaarkalender met open dagen, webinars, informatiesessies
-- **Opleidingen** - basisinfo met links naar Studiekeuze123
-- **Kennisbank** - FAQ, routes naar bevoegdheid, CAO-info
+**Wijzigingen:**
+- `src/pages/Index.tsx`: Import en gebruik van `AIWidgetSection` verwijderen
+
+**Geen risico**: De widget-functionaliteit blijft werken via de floating button.
 
 ---
 
-## 🔐 Fase 2: Authenticatie & Kandidaat Portal
+## Deel 2: Database Uitbreidingen
 
-### Registratie & Login
-- Email/wachtwoord authenticatie
-- Social login opties (Google, LinkedIn)
-- Multi-tenant ondersteuning (voorbereiding voor andere regio's)
+### Nieuwe velden in `profiles` tabel:
+```text
+avatar_url     | text    | URL naar profielfoto
+cv_url         | text    | URL naar CV document  
+bio            | text    | Korte introductie
+test_completed | boolean | Is de interessetest afgerond
+test_results   | jsonb   | Resultaten van de interessetest
+```
 
-### Kandidaat Dashboard
-- **Persoonlijk Dossier**
-  - Profielgegevens (CV, skills, werkervaring, opleiding)
-  - Voorkeuren (locatie, salaris, uren, sector)
-  - Statusveld met klantreis-voortgang
-- **Mijn Klantreis** - visuele weergave van doorlopen stappen
-- **Opgeslagen vacatures en matches**
-- **Afgenomen testen** (links naar externe testen)
-- **Geplande events**
-
-### AI Assistent (Ingelogd)
-- Volwaardige AI-coach met geheugen van eerdere gesprekken
-- Proactieve suggesties gebaseerd op profiel
-- Begeleiding door de klantreis
-- Alle processtappen en kennisitems moeten minimaal aan één SSOT-fase worden gekoppeld.
-•	1. Interesseren (JA)
-•	2. Oriënteren (JA)
-•	3. Beslissen (JA)
-•	4. Matchen (JA)
-•	5. Voorbereiden (JA)
-- alle kennis en phase detector voor gesprek en doorvragen zitten in de zip bestand 
-- Escalatie naar menselijk consult mogelijk
+### Nieuwe Storage Bucket:
+- Bucket naam: `user-uploads`
+- Structuur: `{user_id}/avatar.{ext}` en `{user_id}/cv.{ext}`
+- RLS: Gebruikers kunnen alleen eigen bestanden beheren, adviseurs kunnen lezen
 
 ---
 
-## 🏢 Fase 3: Backoffice & Beheer
+## Deel 3: Dashboard Uitbreidingen
 
-### Backoffice Dashboard
-- **Kandidaatoverzicht** met filters en zoekfunctie
-- **Individuele kandidaatpagina's** met dossier en gesprekshistorie
-- **Consult planning** - inplannen van gesprekken
-- **Monitoring** - triggers bij stagnerende kandidaten
+### A. Profiel Sectie (bovenaan)
+- Avatar upload met preview
+- Naam en voortgangspercentage
+- Snelle link naar profiel bewerken
 
-### Content Management
-- **Vacaturebeheer** - handmatig toevoegen + scraping overzicht
-- **Events beheer** - aanmaken en publiceren
-- **Kennisbank beheer** - artikelen en FAQ's
+### B. CV Upload Functie
+- Drag-and-drop PDF upload
+- Status badge (Geupload/Ontbreekt)
+- Adviseur kan CV bekijken
 
-### Gebruikersbeheer (Multi-tenant)
-- **Rollen:** Admin, Redacteur, Loopbaanadviseur, Auteur
-- **Teams/Organisaties** - voorbereiding voor meerdere regio's
-- **Uitnodigingen en permissies**
+### C. Interesse/Persoonlijkheidstest
+- Interactieve vragenlijst (8-12 vragen)
+- Resultaten opslaan in `test_results`
+- Sectoraanbevelingen op basis van antwoorden
 
----
-
-## 📊 Fase 4: Analytics & Optimalisatie
-
-### Managementinformatie Dashboard
-- **KPI's:** Aantal kandidaten, doorlooptijden, conversies
-- **Klantreisanalyse** - waar haken mensen af?
-- **Vacature-effectiviteit** - welke vacatures leiden tot sollicitaties
-- **AI-coach prestaties** - kwaliteitsmetrieken
-
-### AI Training & Monitoring
-- Overzicht van AI-gesprekken voor kwaliteitscontrole
-- Mogelijkheid tot bijsturen van AI-gedrag
-- Signalering van hallucinaties of fouten
+### D. Persoonlijke Feed
+- Aanbevelingen gebaseerd op:
+  - Huidige fase
+  - Gekozen sector
+  - Testresultaten
+- Relevante vacatures, events, opleidingen
 
 ---
 
-## 🎨 Design & Stijl
+## Deel 4: Profile Pagina Uitbreidingen
 
-- **Corporate/Enterprise look** - clean, professioneel, betrouwbaar
-- kijk af van onderwijs010 website en website onderwijsregio Rotterdam vo-mbo
-- **Kleurenpalet:** Gedempte, professionele kleuren met accent voor Rotterdam
-- **Typografie:** Duidelijk leesbaar, modern sans-serif
-- **Responsief:** Desktop, tablet en mobiel
-- **WCAG compliant** voor toegankelijkheid
-- **Meertalig** - geautomatiseerde vertaling via AI
+Toevoegen aan `src/pages/Profile.tsx`:
+- Avatar upload component met crop-functionaliteit
+- CV upload met preview
+- Optie om interessetest te starten/herhalen
+- Overzicht van ingevulde gegevens
 
 ---
 
-## 🔧 Technische Architectuur
+## Deel 5: Backoffice Integratie
 
-### Frontend
-- React met TypeScript
-- Tailwind CSS voor styling
-- Responsief design
+### Kandidaatweergave uitbreiden:
+- Avatar thumbnail in tabel
+- CV download knop
+- Test status indicator (voltooid/niet voltooid)
+- Testresultaten bekijken (modal)
 
-### Backend (Lovable Cloud)
-- Supabase voor database en authenticatie
-- Multi-tenant database structuur
-- Row Level Security voor datascheiding
+### Alerts toevoegen voor:
+- Kandidaat heeft CV geupload
+- Kandidaat heeft interessetest afgerond
+- Kandidaat is van fase veranderd
 
-### AI Integratie
-- Lovable AI Gateway voor AI-coach
-- Meerdere AI-agenten voor specialistische taken
-- Opslag van conversatiehistorie
-
-### Koppelingen
-- Vacature scraping (Meesterbaan, werken-bij sites)
-- Links naar externe bronnen (Onderwijsloket, Studiekeuze123)
+### RLS Policies:
+- Adviseurs krijgen leestoegang tot `avatar_url`, `cv_url`, `test_results`
+- Storage policies voor adviseurs om bestanden te kunnen downloaden
 
 ---
 
-## 📋 MVP Scope (Eerste Release)
+## Technische Details
 
-1. ✅ Homepage met AI chat widget
-2. ✅ Publieke pagina's (vacatures, events, kennisbank)
-3. ✅ Kandidaat registratie en login
-4. ✅ Persoonlijk dossier met statusveld
-5. ✅ AI-coach met gesprekshistorie
-6. ✅ Basis backoffice voor content en kandidaten
-7. ✅ Eenvoudige managementinformatie
+### Storage Bucket Setup (SQL):
+```text
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('user-uploads', 'user-uploads', false);
+
+-- RLS policies voor eigen bestanden beheren
+-- RLS policies voor adviseurs om te kunnen lezen
+```
+
+### Database Migratie:
+```text
+ALTER TABLE profiles ADD COLUMN avatar_url text;
+ALTER TABLE profiles ADD COLUMN cv_url text;
+ALTER TABLE profiles ADD COLUMN bio text;
+ALTER TABLE profiles ADD COLUMN test_completed boolean DEFAULT false;
+ALTER TABLE profiles ADD COLUMN test_results jsonb DEFAULT '{}'::jsonb;
+```
+
+### Benodigde nieuwe componenten:
+1. `src/components/profile/AvatarUpload.tsx`
+2. `src/components/profile/CVUpload.tsx`  
+3. `src/components/profile/InterestTest.tsx`
+4. `src/components/dashboard/PersonalFeed.tsx`
 
 ---
 
-*Dit plan levert een professioneel, schaalbaar platform dat Rotterdam als pilot kan dienen en later uitbreidbaar is naar andere onderwijsregio's.*
+## Implementatie Volgorde
 
+1. Database migratie uitvoeren (nieuwe velden + storage bucket)
+2. AIWidgetSection verwijderen van homepage
+3. Upload componenten bouwen (Avatar + CV)
+4. Profile pagina uitbreiden met nieuwe functionaliteit
+5. Interessetest component bouwen
+6. Dashboard uitbreiden met feed en nieuwe cards
+7. Backoffice uitbreiden met kandidaat-details
+8. RLS policies aanpassen voor adviseur-toegang
+9. End-to-end testen van volledige flow
