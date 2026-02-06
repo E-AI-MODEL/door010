@@ -13,7 +13,7 @@ interface Message {
   quickReplies?: string[];
 }
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/homepage-coach`;
 
 // Quick reply suggestions - focused doorvragen
 const INITIAL_QUICK_REPLIES = [
