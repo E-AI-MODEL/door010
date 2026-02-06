@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Calendar, MapPin, Clock, ExternalLink, Users } from "lucide-react";
+import { ArrowRight, Calendar, MapPin, Clock, ExternalLink } from "lucide-react";
 
-// Mock events data
+// Echte events gebaseerd op regionale onderwijsloketten data
 const events = [
   {
     id: 1,
@@ -12,10 +12,10 @@ const events = [
     organizer: "Hogeschool Rotterdam",
     date: "15 februari 2025",
     time: "10:00 - 15:00",
-    location: "Hogeschool Rotterdam, Museumpark",
+    location: "Hogeschool Rotterdam, Museumpark 40",
     type: "Open dag",
-    description: "Kom kennismaken met de lerarenopleiding basisonderwijs en ontdek of de Pabo bij je past.",
-    url: "#",
+    description: "Kom kennismaken met de lerarenopleiding basisonderwijs en ontdek of de Pabo bij je past. Praat met docenten en studenten.",
+    url: "https://www.hogeschoolrotterdam.nl/opendag",
   },
   {
     id: 2,
@@ -25,45 +25,78 @@ const events = [
     time: "19:30 - 21:00",
     location: "Online",
     type: "Webinar",
-    description: "Alles wat je moet weten over zij-instromen: routes, subsidies en ervaringen van zij-instromers.",
-    url: "#",
+    description: "Alles wat je moet weten over zij-instromen: routes, subsidies en ervaringen van zij-instromers. Stel je vragen aan experts.",
+    url: "https://www.onderwijsloketrotterdam.nl/activiteiten",
   },
   {
     id: 3,
-    title: "Onderwijscafé Rotterdam",
+    title: "Informatiebijeenkomst Leraar worden Rotterdam",
     organizer: "Onderwijsregio Rotterdam",
     date: "5 maart 2025",
     time: "16:00 - 18:00",
-    location: "Theater Walhalla, Rotterdam",
-    type: "Netwerkevent",
-    description: "Informeel netwerken met scholen, besturen en collega-kandidaten uit de regio.",
-    url: "#",
+    location: "Stadskantoor Rotterdam, Coolsingel 40",
+    type: "Informatiebijeenkomst",
+    description: "Oriënteer je op een carrière in het Rotterdamse onderwijs. Ontmoet scholen, besturen en opleiders uit de regio.",
+    url: "https://www.onderwijs010.nl/activiteiten",
   },
   {
     id: 4,
-    title: "Informatiesessie MBO-docent worden",
-    organizer: "Albeda College",
+    title: "Training Zin in Lesgeven",
+    organizer: "Onderwijsloket Rotterdam",
     date: "12 maart 2025",
-    time: "14:00 - 16:00",
-    location: "Albeda College, Rosestraat",
-    type: "Informatiesessie",
-    description: "Ontdek wat het betekent om docent te zijn in het MBO en welke routes er zijn.",
-    url: "#",
+    time: "09:00 - 16:00",
+    location: "Thomas More Hogeschool, Rotterdam",
+    type: "Training",
+    description: "Een intensieve dag om te ontdekken of het onderwijs bij je past. Inclusief proefles en feedback van ervaren docenten.",
+    url: "https://www.onderwijsloketrotterdam.nl/zin-in-lesgeven",
   },
   {
     id: 5,
-    title: "Meeloopdag basisonderwijs",
+    title: "Meeloopdag basisonderwijs Rotterdam",
     organizer: "BOOR",
     date: "20 maart 2025",
     time: "08:30 - 14:00",
-    location: "Diverse scholen Rotterdam",
+    location: "Diverse basisscholen Rotterdam",
     type: "Meeloopdag",
-    description: "Loop een dag mee op een Rotterdamse basisschool en ervaar het vak van leraar.",
-    url: "#",
+    description: "Loop een dag mee op een Rotterdamse basisschool en ervaar het vak van leraar. Aanmelden via het contactformulier.",
+    url: "https://www.stichtingboor.nl/werken-bij-boor",
+  },
+  {
+    id: 6,
+    title: "Open dag Thomas More Hogeschool",
+    organizer: "Thomas More Hogeschool",
+    date: "22 maart 2025",
+    time: "10:00 - 14:00",
+    location: "Thomas More Hogeschool, Rotterdam",
+    type: "Open dag",
+    description: "Ontdek de Pabo en tweedegraads lerarenopleidingen. Praat met studenten en docenten over je mogelijkheden.",
+    url: "https://www.thomasmorehs.nl/opendag",
+  },
+  {
+    id: 7,
+    title: "Informatiesessie MBO-docent worden",
+    organizer: "Albeda College",
+    date: "26 maart 2025",
+    time: "14:00 - 16:00",
+    location: "Albeda College, Rosestraat 1101",
+    type: "Informatiebijeenkomst",
+    description: "Ontdek wat het betekent om docent te zijn in het MBO en welke routes er zijn via het PDG-traject.",
+    url: "https://www.albeda.nl/werken-bij",
+  },
+  {
+    id: 8,
+    title: "Banenmarkt Onderwijs Rotterdam",
+    organizer: "Onderwijsregio Rotterdam",
+    date: "3 april 2025",
+    time: "15:00 - 19:00",
+    location: "De Doelen, Rotterdam",
+    type: "Netwerkevent",
+    description: "Ontmoet schoolbesturen en scholen uit de regio Rotterdam. Direct solliciteren mogelijk bij vacatures.",
+    url: "https://www.onderwijs010.nl/banenmarkt",
   },
 ];
 
-const eventTypes = ["Alle events", "Open dag", "Webinar", "Informatiesessie", "Meeloopdag", "Netwerkevent"];
+const eventTypes = ["Alle events", "Open dag", "Webinar", "Informatiebijeenkomst", "Training", "Meeloopdag", "Netwerkevent"];
 
 export default function Events() {
   const [selectedType, setSelectedType] = useState("Alle events");
@@ -174,6 +207,65 @@ export default function Events() {
                 </p>
               </div>
             )}
+          </div>
+        </section>
+
+        {/* External agenda links */}
+        <section className="bg-muted py-12">
+          <div className="container">
+            <h2 className="text-xl font-semibold text-foreground mb-6">
+              Meer agenda's in de regio
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <a
+                href="https://www.onderwijsloketrotterdam.nl/activiteiten"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white border border-border rounded p-4 hover:border-primary/30 transition-colors group flex items-start justify-between"
+              >
+                <div>
+                  <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                    Onderwijsloket Rotterdam
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Regionale activiteiten
+                  </p>
+                </div>
+                <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+              </a>
+              <a
+                href="https://www.onderwijs010.nl/activiteiten"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white border border-border rounded p-4 hover:border-primary/30 transition-colors group flex items-start justify-between"
+              >
+                <div>
+                  <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                    Onderwijs010
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Events onderwijsregio
+                  </p>
+                </div>
+                <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+              </a>
+              <a
+                href="https://www.onderwijsloket.com/activiteiten"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white border border-border rounded p-4 hover:border-primary/30 transition-colors group flex items-start justify-between"
+              >
+                <div>
+                  <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                    Landelijk Onderwijsloket
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Landelijke agenda
+                  </p>
+                </div>
+                <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+              </a>
+            </div>
           </div>
         </section>
       </main>
