@@ -14,31 +14,35 @@ interface Message {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
 
-// Quick reply suggestions for different contexts
+// Quick reply suggestions - focused doorvragen
 const INITIAL_QUICK_REPLIES = [
-  "Welke routes zijn er?",
-  "Is onderwijs iets voor mij?",
-  "Wat verdien ik als leraar?",
-  "Hoe werkt zij-instroom?",
+  "Ik wil leraar worden",
+  "Welke sector past bij mij?",
+  "Ik werk al, kan ik overstappen?",
 ];
 
 const FOLLOW_UP_REPLIES: Record<string, string[]> = {
+  sector: [
+    "Basisonderwijs (PO)",
+    "Middelbare school (VO)",
+    "Beroepsonderwijs (MBO)",
+  ],
+  background: [
+    "Ik heb een hbo/wo diploma",
+    "Ik heb werkervaring",
+    "Ik wil studeren",
+  ],
   routes: [
-    "Vertel meer over Pabo",
-    "Wat is zij-instroom?",
-    "Routes voor VO",
-    "MBO docent worden",
+    "Zij-instroom, hoe werkt dat?",
+    "Kan ik leren en werken combineren?",
   ],
-  salary: [
-    "Wat zijn de schalen?",
-    "PO vs VO salaris",
-    "Zijn er toeslagen?",
-  ],
-  general: [
+  practical: [
     "Waar vind ik vacatures?",
-    "Wanneer zijn open dagen?",
-    "Subsidies en financiering",
-    "Maak een account aan",
+    "Hoe zit het met salaris?",
+  ],
+  next: [
+    "Wat is mijn volgende stap?",
+    "Ik wil een account maken",
   ],
 };
 
@@ -47,9 +51,7 @@ export function PublicChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: `Hoi! 👋 Ik ben DOORai, jouw gids naar een carrière in het onderwijs.
-
-Waar kan ik je mee helpen?`,
+      content: `Hoi! 👋 Ik ben DOORai, je gids naar het onderwijs. Wat brengt jou hier?`,
       quickReplies: INITIAL_QUICK_REPLIES,
     },
   ]);
@@ -149,14 +151,18 @@ Waar kan ik je mee helpen?`,
         }
       }
 
-      // Determine follow-up quick replies based on conversation
+      // Determine follow-up quick replies based on AI's question context
       const lowerContent = assistantContent.toLowerCase();
-      let quickReplies = FOLLOW_UP_REPLIES.general;
+      let quickReplies = FOLLOW_UP_REPLIES.next;
       
-      if (lowerContent.includes("route") || lowerContent.includes("pabo") || lowerContent.includes("zij-instroom")) {
+      if (lowerContent.includes("sector") || lowerContent.includes("leeftijd") || lowerContent.includes("groep")) {
+        quickReplies = FOLLOW_UP_REPLIES.sector;
+      } else if (lowerContent.includes("diploma") || lowerContent.includes("achtergrond") || lowerContent.includes("opleiding")) {
+        quickReplies = FOLLOW_UP_REPLIES.background;
+      } else if (lowerContent.includes("zij-instroom") || lowerContent.includes("route") || lowerContent.includes("traject")) {
         quickReplies = FOLLOW_UP_REPLIES.routes;
-      } else if (lowerContent.includes("salaris") || lowerContent.includes("verdien") || lowerContent.includes("schaal")) {
-        quickReplies = FOLLOW_UP_REPLIES.salary;
+      } else if (lowerContent.includes("vacature") || lowerContent.includes("salaris") || lowerContent.includes("verdien")) {
+        quickReplies = FOLLOW_UP_REPLIES.practical;
       }
 
       // Add quick replies to last message
