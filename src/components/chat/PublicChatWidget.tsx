@@ -9,9 +9,38 @@ import ReactMarkdown from "react-markdown";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  quickReplies?: string[];
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
+
+// Quick reply suggestions for different contexts
+const INITIAL_QUICK_REPLIES = [
+  "Welke routes zijn er?",
+  "Is onderwijs iets voor mij?",
+  "Wat verdien ik als leraar?",
+  "Hoe werkt zij-instroom?",
+];
+
+const FOLLOW_UP_REPLIES: Record<string, string[]> = {
+  routes: [
+    "Vertel meer over Pabo",
+    "Wat is zij-instroom?",
+    "Routes voor VO",
+    "MBO docent worden",
+  ],
+  salary: [
+    "Wat zijn de schalen?",
+    "PO vs VO salaris",
+    "Zijn er toeslagen?",
+  ],
+  general: [
+    "Waar vind ik vacatures?",
+    "Wanneer zijn open dagen?",
+    "Subsidies en financiering",
+    "Maak een account aan",
+  ],
+};
 
 export function PublicChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,16 +49,13 @@ export function PublicChatWidget() {
       role: "assistant",
       content: `Hoi! 👋 Ik ben DOORai, jouw gids naar een carrière in het onderwijs.
 
-Ik kan je helpen met:
-- **Ontdekken** of het onderwijs bij je past
-- **Routes** naar het leraarschap uitleggen
-- **Wegwijs** maken op dit platform
-
-Wat wil je weten?`,
+Waar kan ik je mee helpen?`,
+      quickReplies: INITIAL_QUICK_REPLIES,
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showQuickReplies, setShowQuickReplies] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -40,14 +66,20 @@ Wat wil je weten?`,
     scrollToBottom();
   }, [messages]);
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const handleQuickReply = (text: string) => {
+    setInput(text);
+    // Trigger send
+    sendMessageWithText(text);
+  };
 
-    const userMessage: Message = { role: "user", content: input };
+  const sendMessageWithText = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+
+    const userMessage: Message = { role: "user", content: text };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setShowQuickReplies(false);
 
     let assistantContent = "";
 
@@ -116,6 +148,28 @@ Wat wil je weten?`,
           }
         }
       }
+
+      // Determine follow-up quick replies based on conversation
+      const lowerContent = assistantContent.toLowerCase();
+      let quickReplies = FOLLOW_UP_REPLIES.general;
+      
+      if (lowerContent.includes("route") || lowerContent.includes("pabo") || lowerContent.includes("zij-instroom")) {
+        quickReplies = FOLLOW_UP_REPLIES.routes;
+      } else if (lowerContent.includes("salaris") || lowerContent.includes("verdien") || lowerContent.includes("schaal")) {
+        quickReplies = FOLLOW_UP_REPLIES.salary;
+      }
+
+      // Add quick replies to last message
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          quickReplies,
+        };
+        return updated;
+      });
+      setShowQuickReplies(true);
+
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
@@ -123,12 +177,22 @@ Wat wil je weten?`,
         {
           role: "assistant",
           content: "Sorry, er ging iets mis. Probeer het later opnieuw.",
+          quickReplies: INITIAL_QUICK_REPLIES,
         },
       ]);
+      setShowQuickReplies(true);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessageWithText(input);
+  };
+
+  // Get the latest quick replies
+  const latestQuickReplies = messages[messages.length - 1]?.quickReplies;
 
   return (
     <>
@@ -155,7 +219,7 @@ Wat wil je weten?`,
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] bg-white rounded-lg shadow-2xl border border-border overflow-hidden flex flex-col"
-            style={{ height: "500px", maxHeight: "calc(100vh - 6rem)" }}
+            style={{ height: "520px", maxHeight: "calc(100vh - 6rem)" }}
           >
             {/* Header */}
             <div className="bg-primary text-primary-foreground p-4 flex items-center justify-between shrink-0">
@@ -181,45 +245,48 @@ Wat wil je weten?`,
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex ${
-                    message.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
+                <div key={index}>
                   <div
-                    className={`max-w-[85%] rounded-lg px-4 py-2 ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
+                    className={`flex ${
+                      message.role === "user" ? "justify-end" : "justify-start"
                     }`}
                   >
-                    {message.role === "assistant" ? (
-                      <div className="prose prose-sm max-w-none dark:prose-invert">
-                        <ReactMarkdown
-                          components={{
-                            a: ({ href, children }) => (
-                              <Link
-                                to={href || "#"}
-                                className="text-primary hover:underline inline-flex items-center gap-1"
-                                onClick={() => setIsOpen(false)}
-                              >
-                                {children}
-                                <ExternalLink className="h-3 w-3" />
-                              </Link>
-                            ),
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <p className="text-sm">{message.content}</p>
-                    )}
+                    <div
+                      className={`max-w-[85%] rounded-lg px-4 py-2 ${
+                        message.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-foreground"
+                      }`}
+                    >
+                      {message.role === "assistant" ? (
+                        <div className="prose prose-sm max-w-none dark:prose-invert">
+                          <ReactMarkdown
+                            components={{
+                              a: ({ href, children }) => (
+                                <Link
+                                  to={href || "#"}
+                                  className="text-primary hover:underline inline-flex items-center gap-1"
+                                  onClick={() => setIsOpen(false)}
+                                >
+                                  {children}
+                                  <ExternalLink className="h-3 w-3" />
+                                </Link>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm">{message.content}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
-              {isLoading && messages[messages.length - 1]?.role === "user" && (
+
+              {/* Loading indicator */}
+              {isLoading && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-lg px-4 py-2">
                     <div className="flex gap-1">
@@ -236,6 +303,26 @@ Wat wil je weten?`,
                   </div>
                 </div>
               )}
+
+              {/* Quick reply buttons */}
+              {showQuickReplies && latestQuickReplies && !isLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-wrap gap-2 pt-2"
+                >
+                  {latestQuickReplies.map((reply, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleQuickReply(reply)}
+                      className="px-3 py-1.5 text-sm bg-white border border-primary/30 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                    >
+                      {reply}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 
