@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,10 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  
+  const redirectTo = searchParams.get("redirect") || "dashboard";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,11 +62,11 @@ export default function Auth() {
             description: "Je bent succesvol ingelogd.",
           });
 
-          // Redirect based on role
+          // Redirect based on role or original destination
           if (isAdvisorOrAdmin) {
             navigate("/backoffice", { replace: true });
           } else {
-            navigate("/dashboard", { replace: true });
+            navigate(`/${redirectTo}`, { replace: true });
           }
         } else {
           // Fallback if user not found immediately
@@ -71,7 +74,7 @@ export default function Auth() {
             title: "Welkom terug!",
             description: "Je bent succesvol ingelogd.",
           });
-          navigate("/dashboard", { replace: true });
+          navigate(`/${redirectTo}`, { replace: true });
         }
       } else {
         const { error } = await signUp(email, password);
