@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navigation = [
-  { name: "Ontdek het onderwijs", href: "/werken-in-onderwijs" },
-  { name: "Jouw route", href: "/routes" },
+  { name: "Ontdek het onderwijs", href: "/kennisbank" },
+  { name: "Opleidingen", href: "/opleidingen" },
   { name: "Agenda", href: "/events" },
-  { name: "Werken in Rotterdam", href: "/vacatures" },
-  { name: "Contact", href: "/contact" },
+  { name: "Vacatures", href: "/vacatures" },
 ];
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, loading } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-border">
@@ -48,9 +49,20 @@ export function Header() {
 
         {/* Desktop CTA */}
         <div className="hidden lg:flex lg:items-center lg:gap-3">
-          <Button variant="ghost" size="sm" className="font-medium" asChild>
-            <Link to="/login">Inloggen</Link>
-          </Button>
+          {!loading && (
+            user ? (
+              <Button size="sm" className="font-medium" asChild>
+                <Link to="/dashboard">
+                  <User className="mr-2 h-4 w-4" />
+                  Dashboard
+                </Link>
+              </Button>
+            ) : (
+              <Button size="sm" className="font-medium" asChild>
+                <Link to="/auth">Inloggen</Link>
+              </Button>
+            )
+          )}
         </div>
 
         {/* Mobile menu button */}
@@ -84,9 +96,20 @@ export function Header() {
                 </Link>
               ))}
               <div className="pt-4 border-t border-border">
-                <Button variant="outline" className="w-full" asChild>
-                  <Link to="/login">Inloggen</Link>
-                </Button>
+                {!loading && (
+                  user ? (
+                    <Button className="w-full" asChild>
+                      <Link to="/dashboard">
+                        <User className="mr-2 h-4 w-4" />
+                        Dashboard
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button className="w-full" asChild>
+                      <Link to="/auth">Inloggen</Link>
+                    </Button>
+                  )
+                )}
               </div>
             </div>
           </motion.div>
