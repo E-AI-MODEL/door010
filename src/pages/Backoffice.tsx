@@ -48,11 +48,11 @@ interface ProfileWithEmail {
 }
 
 const phaseLabels: Record<OrientationPhase, { label: string; color: string }> = {
-  interesseren: { label: 'Interesseren', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  orienteren: { label: 'Oriënteren', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  beslissen: { label: 'Beslissen', color: 'bg-primary/10 text-primary border-primary/20' },
-  matchen: { label: 'Matchen', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-  voorbereiden: { label: 'Voorbereiden', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  interesseren: { label: 'Interesseren', color: 'bg-accent/10 text-accent border-accent/20' },
+  orienteren: { label: 'Oriënteren', color: 'bg-primary/10 text-primary border-primary/20' },
+  beslissen: { label: 'Beslissen', color: 'bg-primary/20 text-primary border-primary/30' },
+  matchen: { label: 'Matchen', color: 'bg-accent/20 text-accent border-accent/30' },
+  voorbereiden: { label: 'Voorbereiden', color: 'bg-primary/15 text-primary border-primary/25' },
 };
 
 const sectorLabels: Record<string, string> = {
@@ -194,17 +194,17 @@ export default function Backoffice() {
       <Header />
       <main className="flex-1">
         {/* Header */}
-        <section className="bg-gradient-to-r from-slate-800 to-slate-700 py-6">
+        <section className="bg-secondary py-6">
           <div className="container">
             <div className="flex items-center gap-4">
-              <div className="bg-white/20 rounded-full p-3">
-                <LayoutDashboard className="h-6 w-6 text-white" />
+              <div className="bg-primary/20 rounded-full p-3">
+                <LayoutDashboard className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-lg md:text-xl font-bold text-white">
+                <h1 className="text-lg md:text-xl font-bold text-secondary-foreground">
                   BackDOORai Dashboard
                 </h1>
-                <p className="text-white/80 text-sm">
+                <p className="text-secondary-foreground/80 text-sm">
                   Overzicht van alle kandidaten
                 </p>
               </div>
@@ -235,8 +235,8 @@ export default function Backoffice() {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="bg-emerald-100 rounded-full p-2">
-                      <TrendingUp className="h-5 w-5 text-emerald-600" />
+                    <div className="bg-primary/10 rounded-full p-2">
+                      <TrendingUp className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-foreground">{stats.newThisWeek}</p>
@@ -251,8 +251,8 @@ export default function Backoffice() {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="bg-amber-100 rounded-full p-2">
-                      <Clock className="h-5 w-5 text-amber-600" />
+                    <div className="bg-accent/10 rounded-full p-2">
+                      <Clock className="h-5 w-5 text-accent" />
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-foreground">{stats.byPhase['interesseren'] || 0}</p>
@@ -267,8 +267,8 @@ export default function Backoffice() {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="bg-purple-100 rounded-full p-2">
-                      <UserCheck className="h-5 w-5 text-purple-600" />
+                    <div className="bg-accent/20 rounded-full p-2">
+                      <UserCheck className="h-5 w-5 text-accent" />
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-foreground">{stats.byPhase['matchen'] || 0}</p>
@@ -285,7 +285,7 @@ export default function Backoffice() {
             initial={{ opacity: 0, y: 10 }} 
             animate={{ opacity: 1, y: 0 }} 
             transition={{ delay: 0.2 }}
-            className="bg-white rounded-lg border border-border p-4 mb-6"
+            className="bg-card rounded-lg border border-border p-4 mb-6"
           >
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
@@ -331,7 +331,7 @@ export default function Backoffice() {
             initial={{ opacity: 0, y: 10 }} 
             animate={{ opacity: 1, y: 0 }} 
             transition={{ delay: 0.25 }}
-            className="bg-white rounded-lg border border-border overflow-hidden"
+            className="bg-card rounded-lg border border-border overflow-hidden"
           >
             <Table>
               <TableHeader>
