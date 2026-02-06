@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, User, MessageCircle, Shield } from "lucide-react";
+import { Menu, X, User, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,10 +13,77 @@ const navigation = [
   { name: "Vacatures", href: "/vacatures" },
 ];
 
+// DOORai mascot SVG component
+function DOORaiMascot() {
+  return (
+    <motion.div
+      animate={{ y: [0, -4, 0] }}
+      transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+      className="flex items-center gap-2"
+    >
+      <svg width="32" height="36" viewBox="0 0 60 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Body */}
+        <rect x="12" y="25" width="36" height="35" rx="8" fill="hsl(var(--primary))" />
+        {/* Head */}
+        <rect x="15" y="8" width="30" height="22" rx="6" fill="hsl(var(--primary))" />
+        {/* Antenna */}
+        <circle cx="30" cy="4" r="4" fill="hsl(var(--accent))" />
+        <rect x="28" y="4" width="4" height="6" fill="hsl(var(--primary))" />
+        {/* Eyes - blinking */}
+        <motion.ellipse
+          cx="22"
+          cy="18"
+          rx="4"
+          ry="4"
+          fill="white"
+          animate={{ scaleY: [1, 0.1, 1] }}
+          transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
+        />
+        <motion.ellipse
+          cx="38"
+          cy="18"
+          rx="4"
+          ry="4"
+          fill="white"
+          animate={{ scaleY: [1, 0.1, 1] }}
+          transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
+        />
+        {/* Pupils */}
+        <circle cx="23" cy="18" r="2" fill="hsl(var(--secondary))" />
+        <circle cx="39" cy="18" r="2" fill="hsl(var(--secondary))" />
+        {/* Smile */}
+        <path d="M24 24 Q30 28 36 24" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none" />
+      </svg>
+      <div className="flex flex-col leading-tight">
+        <span className="text-xs font-medium text-muted-foreground">Vraag het aan</span>
+        <span className="text-sm font-bold text-primary">DOORai</span>
+      </div>
+    </motion.div>
+  );
+}
+
+// Regular logo component
+function RegularLogo() {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-center justify-center">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 20L28 20M28 20L20 12M28 20L20 28" stroke="currentColor" className="text-primary" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M32 8L32 32" stroke="currentColor" className="text-primary" strokeWidth="3" strokeLinecap="round"/>
+        </svg>
+      </div>
+      <div className="flex flex-col leading-tight">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Onderwijsloket</span>
+        <span className="text-lg font-bold text-primary uppercase tracking-tight">Rotterdam</span>
+      </div>
+    </div>
+  );
+}
+
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, loading } = useAuth();
-  const [showDooraiHint, setShowDooraiHint] = useState(false);
+  const [showMascot, setShowMascot] = useState(false);
   const [isAdvisorOrAdmin, setIsAdvisorOrAdmin] = useState(false);
 
   // Check if user has advisor or admin role
@@ -48,18 +115,18 @@ export function Header() {
     }
   };
 
-  // Show DOORai hint every 2 minutes for 5 seconds
+  // Show DOORai mascot every 5 minutes for 8 seconds (replaces logo)
   useEffect(() => {
-    const showHint = () => {
-      setShowDooraiHint(true);
-      setTimeout(() => setShowDooraiHint(false), 5000);
+    const showMascotAnimation = () => {
+      setShowMascot(true);
+      setTimeout(() => setShowMascot(false), 8000);
     };
 
-    // Show after 10 seconds initially
-    const initialTimeout = setTimeout(showHint, 10000);
+    // Show after 30 seconds initially
+    const initialTimeout = setTimeout(showMascotAnimation, 30000);
     
-    // Then every 2 minutes
-    const interval = setInterval(showHint, 120000);
+    // Then every 5 minutes
+    const interval = setInterval(showMascotAnimation, 300000);
 
     return () => {
       clearTimeout(initialTimeout);
@@ -70,110 +137,32 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full bg-background border-b border-border">
       <nav className="container flex h-16 items-center justify-between">
-        {/* Logo - styled like onderwijsloketrotterdam.nl */}
-        <Link to="/" className="flex items-center gap-3">
-          {/* Arrow icon similar to onderwijsloket */}
-          <div className="flex items-center justify-center">
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8 20L28 20M28 20L20 12M28 20L20 28" stroke="currentColor" className="text-primary" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M32 8L32 32" stroke="currentColor" className="text-primary" strokeWidth="3" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Onderwijsloket</span>
-            <span className="text-lg font-bold text-primary uppercase tracking-tight">Rotterdam</span>
-          </div>
-        </Link>
-
-        {/* DOORai mascot - subtle floating illustration */}
-        <AnimatePresence>
-          {showDooraiHint && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0, rotate: -20 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              exit={{ opacity: 0, scale: 0, rotate: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              className="fixed bottom-24 right-6 z-50 pointer-events-none"
-            >
-              {/* Cute robot mascot SVG illustration */}
+        {/* Logo / Mascot - animated swap */}
+        <Link to="/" className="flex items-center">
+          <AnimatePresence mode="wait">
+            {showMascot ? (
               <motion.div
-                animate={{ y: [0, -8, 0] }}
-                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                className="relative"
+                key="mascot"
+                initial={{ opacity: 0, scale: 0.8, rotate: -10 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 0.8, rotate: 10 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
               >
-                <svg width="60" height="70" viewBox="0 0 60 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {/* Body */}
-                  <rect x="12" y="25" width="36" height="35" rx="8" fill="hsl(var(--primary))" />
-                  {/* Head */}
-                  <rect x="15" y="8" width="30" height="22" rx="6" fill="hsl(var(--primary))" />
-                  {/* Antenna */}
-                  <circle cx="30" cy="4" r="4" fill="hsl(var(--accent))" />
-                  <rect x="28" y="4" width="4" height="6" fill="hsl(var(--primary))" />
-                  {/* Eyes - blinking */}
-                  <motion.ellipse
-                    cx="22"
-                    cy="18"
-                    rx="4"
-                    ry="4"
-                    fill="white"
-                    animate={{ scaleY: [1, 0.1, 1] }}
-                    transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
-                  />
-                  <motion.ellipse
-                    cx="38"
-                    cy="18"
-                    rx="4"
-                    ry="4"
-                    fill="white"
-                    animate={{ scaleY: [1, 0.1, 1] }}
-                    transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
-                  />
-                  {/* Pupils */}
-                  <circle cx="23" cy="18" r="2" fill="hsl(var(--secondary))" />
-                  <circle cx="39" cy="18" r="2" fill="hsl(var(--secondary))" />
-                  {/* Smile */}
-                  <path d="M24 24 Q30 28 36 24" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none" />
-                  {/* Buttons on body */}
-                  <circle cx="25" cy="40" r="3" fill="hsl(var(--accent))" />
-                  <circle cx="35" cy="40" r="3" fill="white" opacity="0.8" />
-                  {/* Arms waving */}
-                  <motion.path
-                    d="M8 35 Q4 30 8 25"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    fill="none"
-                    animate={{ rotate: [0, 15, 0] }}
-                    transition={{ repeat: Infinity, duration: 0.8 }}
-                    style={{ transformOrigin: "12px 35px" }}
-                  />
-                  <motion.path
-                    d="M52 35 Q56 30 52 25"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    fill="none"
-                    animate={{ rotate: [0, -15, 0] }}
-                    transition={{ repeat: Infinity, duration: 0.8 }}
-                    style={{ transformOrigin: "48px 35px" }}
-                  />
-                  {/* Feet */}
-                  <rect x="16" y="58" width="10" height="6" rx="3" fill="hsl(var(--secondary))" />
-                  <rect x="34" y="58" width="10" height="6" rx="3" fill="hsl(var(--secondary))" />
-                </svg>
-                {/* Small speech bubble */}
-                <motion.div
-                  initial={{ opacity: 0, scale: 0 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="absolute -top-2 -left-8 bg-white rounded-full px-2 py-1 shadow-md text-xs"
-                >
-                  <span className="text-primary">👋</span>
-                </motion.div>
+                <DOORaiMascot />
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            ) : (
+              <motion.div
+                key="logo"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.3 }}
+              >
+                <RegularLogo />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden lg:flex lg:items-center lg:gap-1">
