@@ -1,1 +1,10 @@
 project_id = "idzeiqycitwaaklhgmql"
+
+[functions.doorai-chat]
+verify_jwt = false
+
+[functions.homepage-coach]
+verify_jwt = false
+
+[functions.seed-admin-users]
+verify_jwt = false

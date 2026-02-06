@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, Send, X, Sparkles, Bot, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
@@ -23,7 +25,10 @@ const quickPrompts = [
   "Vacatures in Rotterdam",
 ];
 
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/homepage-coach`;
+
 export function AIWidgetSection() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [input, setInput] = useState("");
@@ -51,21 +56,156 @@ export function AIWidgetSection() {
     setInput("");
     setIsLoading(true);
 
-    // Simulate AI response (will be replaced with actual AI call)
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: getSimulatedResponse(userMessage.content),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
+    let assistantContent = "";
+
+    try {
+      const response = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: messages
+            .filter((m) => m.id !== "welcome")
+            .concat(userMessage)
+            .map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to get response");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      // Add empty assistant message
+      const assistantId = (Date.now() + 1).toString();
+      setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              assistantContent += content;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  id: assistantId,
+                  role: "assistant",
+                  content: assistantContent,
+                };
+                return updated;
+              });
+            }
+          } catch {
+            buffer = line + "\n" + buffer;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Sorry, er ging iets mis. Probeer het later opnieuw.",
+        },
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleQuickPrompt = (prompt: string) => {
     setInput(prompt);
   };
+
+  // Don't show widget for logged-in users (they use /chat)
+  if (user) {
+    return (
+      <section className="py-20 md:py-28 bg-secondary text-secondary-foreground">
+        <div className="container">
+          <div className="max-w-3xl mx-auto text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-sm font-medium mb-6"
+            >
+              <Bot className="h-4 w-4" />
+              <span>Je persoonlijke AI-coach</span>
+            </motion.div>
+
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="text-3xl md:text-4xl font-bold mb-4"
+            >
+              Ga verder met DOORai
+            </motion.h2>
+
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="text-lg opacity-90 mb-8"
+            >
+              Je bent ingelogd! Ga naar je dashboard voor persoonlijke begeleiding met geheugen.
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+            >
+              <Button
+                size="lg"
+                className="bg-white text-secondary hover:bg-white/90 text-base px-8"
+                asChild
+              >
+                <a href="/chat">
+                  <MessageCircle className="mr-2 h-5 w-5" />
+                  Open DOORai
+                </a>
+              </Button>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <>
@@ -194,21 +334,27 @@ export function AIWidgetSection() {
                           : "bg-primary text-primary-foreground rounded-tr-sm"
                       }`}
                     >
-                      {message.content}
+                      {message.role === "assistant" ? (
+                        <div className="prose prose-sm max-w-none">
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        message.content
+                      )}
                     </div>
                   </div>
                 ))}
 
-                {isLoading && (
+                {isLoading && messages[messages.length - 1]?.role === "user" && (
                   <div className="flex gap-3">
                     <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0">
                       <Bot className="h-4 w-4" />
                     </div>
                     <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3">
                       <div className="flex gap-1">
-                        <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse-soft" />
-                        <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse-soft [animation-delay:0.2s]" />
-                        <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse-soft [animation-delay:0.4s]" />
+                        <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse" />
+                        <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:0.2s]" />
+                        <span className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:0.4s]" />
                       </div>
                     </div>
                   </div>
@@ -283,27 +429,4 @@ export function AIWidgetSection() {
       )}
     </>
   );
-}
-
-// Temporary simulated responses (will be replaced with AI)
-function getSimulatedResponse(input: string): string {
-  const lowerInput = input.toLowerCase();
-
-  if (lowerInput.includes("leraar") || lowerInput.includes("docent")) {
-    return "Om leraar te worden heb je een lesbevoegdheid nodig. Voor het basisonderwijs (PO) volg je de Pabo. Voor voortgezet onderwijs (VO) kun je een eerstegraads of tweedegraads lerarenopleiding volgen. Wil je meer weten over een specifieke route?";
-  }
-
-  if (lowerInput.includes("verdien") || lowerInput.includes("salaris")) {
-    return "Het salaris in het onderwijs hangt af van je ervaring en sector. Een startende leraar verdient circa €2.800 - €3.500 bruto per maand. Met ervaring kan dit oplopen tot €5.500+. De CAO's voor PO, VO en MBO verschillen enigszins. Wil je specifieke salarisschalen zien?";
-  }
-
-  if (lowerInput.includes("zij-instrom")) {
-    return "Zij-instromen is een route voor mensen met relevante werkervaring die leraar willen worden. Je combineert werken met leren. Je krijgt een geschiktheidsonderzoek, begeleiding op school, en volgt een verkorte opleiding. Rotterdam heeft speciale programma's voor zij-instromers. Zal ik je meer vertellen?";
-  }
-
-  if (lowerInput.includes("vacature")) {
-    return "In Rotterdam zijn momenteel 500+ onderwijsvacatures beschikbaar in PO, VO en MBO. Je kunt filteren op sector, vakgebied, en locatie. Wil je direct naar het vacature-overzicht, of eerst meer weten over welke richting bij je past?";
-  }
-
-  return "Dat is een goede vraag! Als je wilt kan ik je helpen met informatie over: routes naar het leraarschap, vacatures in Rotterdam, salaris en arbeidsvoorwaarden, of je door de klantreis begeleiden. Waar ben je het meest benieuwd naar?";
 }
