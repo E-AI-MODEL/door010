@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.get-profiles-with-email]
 verify_jwt = false
+
+[functions.scrape-events]
+verify_jwt = false

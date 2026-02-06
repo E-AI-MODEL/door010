@@ -113,6 +113,39 @@ export type Database = {
         }
         Relationships: []
       }
+      scraped_events: {
+        Row: {
+          created_at: string
+          events_data: Json
+          expires_at: string
+          id: string
+          scraped_at: string
+          source_name: string
+          source_url: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          events_data?: Json
+          expires_at?: string
+          id?: string
+          scraped_at?: string
+          source_name: string
+          source_url: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          events_data?: Json
+          expires_at?: string
+          id?: string
+          scraped_at?: string
+          source_name?: string
+          source_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

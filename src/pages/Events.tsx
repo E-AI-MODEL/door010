@@ -5,6 +5,7 @@ import { PageHero } from "@/components/shared/PageHero";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ExternalLink, Calendar, MapPin, Laptop, Users, Briefcase, GraduationCap, Lightbulb } from "lucide-react";
+import { ScrapedEventsList } from "@/components/events/ScrapedEventsList";
 import regionalDesks from "@/data/regional-education-desks.json";
 
 // Extract event sources from regional desks
@@ -62,7 +63,8 @@ const eventTypes = [
 ];
 
 const quickNavItems = [
-  { label: "Agenda's Rotterdam", href: "#agendas" },
+  { label: "Actuele events", href: "#events" },
+  { label: "Agenda's", href: "#agendas" },
   { label: "Type events", href: "#types" },
   { label: "Regionale loketten", href: "#regionaal" },
 ];
@@ -105,8 +107,18 @@ export default function Events() {
           </div>
         </nav>
 
+        {/* Live scraped events section */}
+        <section id="events" className="py-10 md:py-12">
+          <div className="container">
+            <h2 className="text-lg font-bold text-foreground mb-6 uppercase tracking-wide">
+              Actuele <span className="text-primary">events</span>
+            </h2>
+            <ScrapedEventsList />
+          </div>
+        </section>
+
         {/* Main agenda links - compact cards */}
-        <section id="agendas" className="py-10 md:py-12">
+        <section id="agendas" className="py-10 md:py-12 bg-muted/30">
           <div className="container">
             <h2 className="text-lg font-bold text-foreground mb-6 uppercase tracking-wide">
               Agenda's <span className="text-primary">Rotterdam</span>
@@ -123,8 +135,8 @@ export default function Events() {
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className={`group flex items-center gap-4 rounded-lg p-4 transition-all ${
                     agenda.highlight 
-                      ? "bg-primary/5 border-2 border-primary/20 hover:border-primary/50" 
-                      : "bg-white border border-border hover:border-primary/30"
+                      ? "bg-card border-2 border-primary/20 hover:border-primary/50" 
+                      : "bg-card border border-border hover:border-primary/30"
                   }`}
                 >
                   <div className={`rounded-full p-2 ${agenda.highlight ? "bg-primary/10" : "bg-muted"}`}>
@@ -146,7 +158,7 @@ export default function Events() {
         </section>
 
         {/* Event types - horizontal scroll on mobile, grid on desktop */}
-        <section id="types" className="bg-muted py-10 md:py-12">
+        <section id="types" className="py-10 md:py-12">
           <div className="container">
             <h2 className="text-lg font-bold text-foreground mb-6 uppercase tracking-wide">
               Welke <span className="text-primary">events</span> zijn er?
