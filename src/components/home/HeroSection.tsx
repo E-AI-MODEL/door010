@@ -2,6 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import rotterdamSkyline from "@/assets/rotterdam-skyline.jpeg";
 
 export function HeroSection() {
   return (
@@ -11,7 +12,7 @@ export function HeroSection() {
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80')`,
+            backgroundImage: `url(${rotterdamSkyline})`,
           }}
         />
         {/* Dark overlay for text readability */}

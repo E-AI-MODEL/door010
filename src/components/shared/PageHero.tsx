@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { ReactNode } from "react";
+import rotterdamSkyline from "@/assets/rotterdam-skyline.jpeg";
 
 interface PageHeroProps {
   title: string;
@@ -16,8 +17,9 @@ export function PageHero({
   subtitle, 
   children,
   variant = "primary",
-  imageUrl = "https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80"
+  imageUrl
 }: PageHeroProps) {
+  const backgroundImage = imageUrl || rotterdamSkyline;
   if (variant === "image") {
     return (
       <section className="relative min-h-[40vh] flex items-center">
@@ -25,7 +27,7 @@ export function PageHero({
         <div className="absolute inset-0 -z-10">
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url('${imageUrl}')` }}
+            style={{ backgroundImage: `url(${backgroundImage})` }}
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
         </div>

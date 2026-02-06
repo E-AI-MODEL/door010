@@ -123,7 +123,6 @@ export default function Opleidingen() {
           title="ROUTES"
           titleHighlight="NAAR HET ONDERWIJS"
           subtitle="Ontdek welke opleiding bij jou past. Van Pabo tot zij-instroom — er is altijd een route."
-          imageUrl="https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80"
         />
 
         {/* Filters */}
