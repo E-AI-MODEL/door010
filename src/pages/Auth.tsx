@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { ArrowRight, Mail, Lock, User } from "lucide-react";
 
 export default function Auth() {
@@ -32,11 +33,30 @@ export default function Auth() {
             variant: "destructive",
           });
         } else {
-          toast({
-            title: "Welkom terug!",
-            description: "Je bent succesvol ingelogd.",
-          });
-          navigate("/dashboard");
+          // Check if user is advisor or admin
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: roles } = await supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", user.id);
+            
+            const isAdvisorOrAdmin = roles?.some(
+              (r) => r.role === "advisor" || r.role === "admin"
+            );
+
+            toast({
+              title: "Welkom terug!",
+              description: "Je bent succesvol ingelogd.",
+            });
+
+            // Redirect based on role
+            if (isAdvisorOrAdmin) {
+              navigate("/backoffice");
+            } else {
+              navigate("/dashboard");
+            }
+          }
         }
       } else {
         const { error } = await signUp(email, password);
