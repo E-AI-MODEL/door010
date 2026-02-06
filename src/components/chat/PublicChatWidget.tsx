@@ -53,7 +53,7 @@ export function PublicChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: `Hoi! 👋 Ik ben DOORai, je gids naar het onderwijs. Wat brengt jou hier?`,
+      content: `Hoi! 👋 Ik ben DOORai, je gids op deze website. Wat wil je weten of waar kan ik je mee helpen?`,
       quickReplies: INITIAL_QUICK_REPLIES,
     },
   ]);
@@ -69,6 +69,18 @@ export function PublicChatWidget() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Listen for custom event to open chat from header DOORai hint
+  useEffect(() => {
+    const handleOpenChat = () => {
+      setIsOpen(true);
+    };
+
+    window.addEventListener('openDOORaiChat', handleOpenChat);
+    return () => {
+      window.removeEventListener('openDOORaiChat', handleOpenChat);
+    };
+  }, []);
 
   const handleQuickReply = (text: string) => {
     setInput(text);

@@ -13,13 +13,18 @@ const navigation = [
   { name: "Vacatures", href: "/vacatures" },
 ];
 
-// Elegant DOORai hint - minimal text badge instead of cartoon mascot
-function DOORaiHint() {
+// Elegant DOORai hint - clickable to open chat widget
+function DOORaiHint({ onClick }: { onClick: () => void }) {
   return (
-    <motion.div
+    <motion.button
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex items-center gap-3"
+      className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
     >
       {/* Elegant arrow icon matching the logo style */}
       <div className="flex items-center justify-center">
@@ -44,11 +49,11 @@ function DOORaiHint() {
           />
         </svg>
       </div>
-      <div className="flex flex-col leading-tight">
+      <div className="flex flex-col leading-tight text-left">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Hulp nodig?</span>
         <span className="text-lg font-bold text-primary uppercase tracking-tight">DOORai</span>
       </div>
-    </motion.div>
+    </motion.button>
   );
 }
 
@@ -128,7 +133,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full bg-background border-b border-border">
       <nav className="container flex h-16 items-center justify-between">
         {/* Logo / Mascot - animated swap */}
-        <Link to="/" className="flex items-center">
+        <div className="flex items-center">
           <AnimatePresence mode="wait">
             {showMascot ? (
               <motion.div
@@ -138,21 +143,27 @@ export function Header() {
                 exit={{ opacity: 0, scale: 0.8, rotate: 10 }}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
               >
-                <DOORaiHint />
+                <DOORaiHint onClick={() => {
+                  // Dispatch custom event to open chat widget
+                  window.dispatchEvent(new CustomEvent('openDOORaiChat'));
+                  setShowMascot(false);
+                }} />
               </motion.div>
             ) : (
-              <motion.div
-                key="logo"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.3 }}
-              >
-                <RegularLogo />
-              </motion.div>
+              <Link to="/">
+                <motion.div
+                  key="logo"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <RegularLogo />
+                </motion.div>
+              </Link>
             )}
           </AnimatePresence>
-        </Link>
+        </div>
 
         {/* Desktop Navigation */}
         <div className="hidden lg:flex lg:items-center lg:gap-1">
