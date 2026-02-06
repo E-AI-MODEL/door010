@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 
 const journeySteps = [
   {
@@ -30,65 +31,50 @@ const journeySteps = [
 
 export function JourneySection() {
   return (
-    <section className="py-20 md:py-28 bg-background">
+    <section className="py-16 md:py-24 bg-white">
       <div className="container">
-        <div className="text-center mb-16">
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-3xl md:text-4xl font-bold text-foreground mb-4"
-          >
-            Jouw klantreis naar het onderwijs
-          </motion.h2>
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-lg text-muted-foreground max-w-2xl mx-auto"
-          >
-            DOOR begeleidt je door elke fase — van eerste interesse tot instroom in je nieuwe baan.
-          </motion.p>
+        <div className="flex items-center gap-3 mb-8">
+          {/* Arrow icon like onderwijsloketrotterdam.nl */}
+          <ArrowRight className="h-8 w-8 text-primary" />
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+            <span className="text-primary">JOUW ROUTE</span> NAAR HET ONDERWIJS
+          </h2>
         </div>
+        
+        <p className="text-muted-foreground mb-12 max-w-2xl">
+          DOOR begeleidt je door elke fase — van eerste interesse tot instroom in je nieuwe baan.
+        </p>
 
-        {/* Horizontal timeline design */}
-        <div className="relative">
-          {/* Progress line */}
-          <div className="absolute top-6 left-0 right-0 h-px bg-border hidden lg:block" />
-          <div className="absolute top-6 left-0 w-1/2 h-px bg-primary hidden lg:block" />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-6">
-            {journeySteps.map((step, index) => (
-              <motion.div
-                key={step.phase}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.08 }}
-                className="relative"
-              >
-                {/* Step indicator */}
-                <div className="flex items-center gap-3 mb-4 lg:flex-col lg:items-start">
-                  <div className="relative z-10 flex items-center justify-center w-12 h-12 rounded-full border-2 border-border bg-background text-lg font-semibold text-foreground lg:mb-0">
+        {/* Timeline style cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          {journeySteps.map((step, index) => (
+            <motion.div
+              key={step.phase}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: index * 0.1 }}
+              className="relative group"
+            >
+              <div className="bg-muted hover:bg-primary/5 border border-border hover:border-primary/30 rounded p-6 h-full transition-all">
+                {/* Phase number */}
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">
                     {step.phase}
-                  </div>
-                  <div className="lg:hidden h-px flex-1 bg-border" />
+                  </span>
+                  <div className="h-px flex-1 bg-border group-hover:bg-primary/30 transition-colors" />
                 </div>
 
                 {/* Content */}
-                <div className="lg:pt-4">
-                  <h3 className="text-base font-semibold text-foreground mb-1.5">
-                    {step.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {step.description}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2 uppercase tracking-wide">
+                  {step.title}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {step.description}
+                </p>
+              </div>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>

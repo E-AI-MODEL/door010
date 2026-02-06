@@ -1,31 +1,35 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, User, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 
 const navigation = [
-  { name: "Werken in Onderwijs", href: "/werken-in-onderwijs" },
-  { name: "Vacatures", href: "/vacatures" },
-  { name: "Events", href: "/events" },
-  { name: "Opleidingen", href: "/opleidingen" },
-  { name: "Kennisbank", href: "/kennisbank" },
+  { name: "Ontdek het onderwijs", href: "/werken-in-onderwijs" },
+  { name: "Jouw route", href: "/routes" },
+  { name: "Agenda", href: "/events" },
+  { name: "Werken in Rotterdam", href: "/vacatures" },
+  { name: "Contact", href: "/contact" },
 ];
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full bg-white border-b border-border">
       <nav className="container flex h-16 items-center justify-between">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <span className="text-lg font-bold text-primary-foreground">D</span>
+        {/* Logo - styled like onderwijsloketrotterdam.nl */}
+        <Link to="/" className="flex items-center gap-3">
+          {/* Arrow icon similar to onderwijsloket */}
+          <div className="flex items-center justify-center">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 20L28 20M28 20L20 12M28 20L20 28" stroke="hsl(152 100% 33%)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M32 8L32 32" stroke="hsl(152 100% 33%)" strokeWidth="3" strokeLinecap="round"/>
+            </svg>
           </div>
-          <div className="flex flex-col">
-            <span className="text-lg font-semibold leading-tight text-foreground">DOOR</span>
-            <span className="text-xs text-muted-foreground leading-tight hidden sm:block">Rotterdam</span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Onderwijsloket</span>
+            <span className="text-lg font-bold text-primary uppercase tracking-tight">Rotterdam</span>
           </div>
         </Link>
 
@@ -35,7 +39,7 @@ export function Header() {
             <Link
               key={item.name}
               to={item.href}
-              className="px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors uppercase tracking-wide"
             >
               {item.name}
             </Link>
@@ -44,18 +48,15 @@ export function Header() {
 
         {/* Desktop CTA */}
         <div className="hidden lg:flex lg:items-center lg:gap-3">
-          <Button variant="ghost" size="sm" asChild>
+          <Button variant="ghost" size="sm" className="font-medium" asChild>
             <Link to="/login">Inloggen</Link>
-          </Button>
-          <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
-            <Link to="/registreren">Start je oriëntatie</Link>
           </Button>
         </div>
 
         {/* Mobile menu button */}
         <button
           type="button"
-          className="lg:hidden p-2 text-muted-foreground"
+          className="lg:hidden p-2 text-foreground"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
           {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -69,25 +70,22 @@ export function Header() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden border-t border-border bg-background"
+            className="lg:hidden border-t border-border bg-white"
           >
-            <div className="container py-4 space-y-2">
+            <div className="container py-4 space-y-1">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
                   to={item.href}
-                  className="block px-3 py-2 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
+                  className="block px-3 py-3 text-sm font-medium text-foreground hover:text-primary hover:bg-muted rounded uppercase tracking-wide"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {item.name}
                 </Link>
               ))}
-              <div className="pt-4 flex flex-col gap-2 border-t border-border">
-                <Button variant="outline" asChild>
+              <div className="pt-4 border-t border-border">
+                <Button variant="outline" className="w-full" asChild>
                   <Link to="/login">Inloggen</Link>
-                </Button>
-                <Button className="bg-primary hover:bg-primary/90" asChild>
-                  <Link to="/registreren">Start je oriëntatie</Link>
                 </Button>
               </div>
             </div>

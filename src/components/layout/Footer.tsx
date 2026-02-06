@@ -1,70 +1,59 @@
 import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 
 const footerLinks = {
-  platform: [
-    { name: "Werken in Onderwijs", href: "/werken-in-onderwijs" },
+  ontdek: [
+    { name: "Werken in het onderwijs", href: "/werken-in-onderwijs" },
+    { name: "Primair onderwijs", href: "/po" },
+    { name: "Voortgezet onderwijs", href: "/vo" },
+    { name: "MBO", href: "/mbo" },
+  ],
+  route: [
+    { name: "Jouw route", href: "/routes" },
     { name: "Vacatures", href: "/vacatures" },
-    { name: "Events", href: "/events" },
+    { name: "Agenda", href: "/events" },
     { name: "Kennisbank", href: "/kennisbank" },
   ],
-  support: [
+  contact: [
     { name: "Contact", href: "/contact" },
-    { name: "FAQ", href: "/kennisbank#faq" },
-    { name: "Over DOOR", href: "/over-ons" },
-  ],
-  legal: [
-    { name: "Privacyverklaring", href: "/privacy" },
-    { name: "Algemene voorwaarden", href: "/voorwaarden" },
-    { name: "Toegankelijkheid", href: "/toegankelijkheid" },
+    { name: "Over ons", href: "/over-ons" },
+    { name: "FAQ", href: "/faq" },
   ],
 };
 
-const partners = [
-  "Onderwijsregio Rotterdam PO",
-  "Onderwijsregio Rotterdam VO-MBO",
-  "Gemeente Rotterdam",
-];
-
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-muted/30">
+    <footer className="bg-secondary text-secondary-foreground">
       <div className="container py-12 md:py-16">
-        <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           {/* Brand */}
-          <div className="col-span-2 lg:col-span-2">
-            <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                <span className="text-lg font-bold text-primary-foreground">D</span>
+          <div className="col-span-2 md:col-span-1">
+            <Link to="/" className="flex items-center gap-3 mb-6">
+              <div className="flex items-center justify-center">
+                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M8 20L28 20M28 20L20 12M28 20L20 28" stroke="hsl(152 100% 40%)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M32 8L32 32" stroke="hsl(152 100% 40%)" strokeWidth="3" strokeLinecap="round"/>
+                </svg>
               </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-semibold leading-tight">DOOR</span>
-                <span className="text-xs text-muted-foreground leading-tight">
-                  Digitaal Onderwijsloket Rotterdam
-                </span>
+              <div className="flex flex-col leading-tight">
+                <span className="text-xs font-medium text-secondary-foreground/70 uppercase tracking-wider">Onderwijsloket</span>
+                <span className="text-base font-bold text-primary uppercase tracking-tight">Rotterdam</span>
               </div>
             </Link>
-            <p className="text-sm text-muted-foreground max-w-xs mb-6">
-              Van eerste oriëntatie tot instroom in het onderwijs — persoonlijk begeleid door een AI-coach.
+            <p className="text-sm text-secondary-foreground/70 max-w-xs">
+              Van eerste oriëntatie tot instroom in het onderwijs — persoonlijk begeleid.
             </p>
-            <div className="text-xs text-muted-foreground">
-              <p className="font-medium mb-2">Partners:</p>
-              <ul className="space-y-1">
-                {partners.map((partner) => (
-                  <li key={partner}>{partner}</li>
-                ))}
-              </ul>
-            </div>
           </div>
 
-          {/* Platform links */}
+          {/* Ontdek */}
           <div>
-            <h3 className="text-sm font-semibold mb-3">Platform</h3>
+            <h3 className="text-sm font-semibold mb-4 uppercase tracking-wide">Ontdek</h3>
             <ul className="space-y-2">
-              {footerLinks.platform.map((link) => (
+              {footerLinks.ontdek.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-secondary-foreground/70 hover:text-primary transition-colors"
                   >
                     {link.name}
                   </Link>
@@ -73,15 +62,15 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Support links */}
+          {/* Jouw route */}
           <div>
-            <h3 className="text-sm font-semibold mb-3">Ondersteuning</h3>
+            <h3 className="text-sm font-semibold mb-4 uppercase tracking-wide">Jouw route</h3>
             <ul className="space-y-2">
-              {footerLinks.support.map((link) => (
+              {footerLinks.route.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-secondary-foreground/70 hover:text-primary transition-colors"
                   >
                     {link.name}
                   </Link>
@@ -90,15 +79,15 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Legal links */}
+          {/* Contact */}
           <div>
-            <h3 className="text-sm font-semibold mb-3">Juridisch</h3>
+            <h3 className="text-sm font-semibold mb-4 uppercase tracking-wide">Contact</h3>
             <ul className="space-y-2">
-              {footerLinks.legal.map((link) => (
+              {footerLinks.contact.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-secondary-foreground/70 hover:text-primary transition-colors"
                   >
                     {link.name}
                   </Link>
@@ -109,14 +98,14 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} DOOR - Onderwijsregio's Rotterdam. Alle rechten voorbehouden.
+        <div className="mt-12 pt-8 border-t border-secondary-foreground/10 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p className="text-sm text-secondary-foreground/50">
+            © {new Date().getFullYear()} Onderwijsloket Rotterdam. Alle rechten voorbehouden.
           </p>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>WCAG 2.1 AA</span>
-            <span>•</span>
-            <span>AVG-proof</span>
+          <div className="flex items-center gap-6 text-sm text-secondary-foreground/50">
+            <Link to="/privacy" className="hover:text-secondary-foreground transition-colors">Privacy</Link>
+            <Link to="/voorwaarden" className="hover:text-secondary-foreground transition-colors">Voorwaarden</Link>
+            <Link to="/toegankelijkheid" className="hover:text-secondary-foreground transition-colors">Toegankelijkheid</Link>
           </div>
         </div>
       </div>
