@@ -2,112 +2,109 @@
 @tailwind components;
 @tailwind utilities;
 
-/* DOOR Design System - Corporate/Enterprise Style
-   Inspired by Rotterdam green + professional navy palette
+/* DOOR Design System - Onderwijsloket Rotterdam Style
+   Primary: Rotterdam Green #00A651 / HSL 152 100% 33%
+   Accent: Magenta/Pink for highlights
+   Typography: Clean, accessible, government-style
    All colors MUST be HSL.
 */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap');
 
 @layer base {
   :root {
     /* Rotterdam Green - Primary brand color */
-    --primary: 152 55% 32%;
+    --primary: 152 100% 33%;
     --primary-foreground: 0 0% 100%;
     
-    /* Navy Blue - Secondary/accent */
-    --secondary: 210 50% 25%;
+    /* Dark text / backgrounds */
+    --secondary: 0 0% 15%;
     --secondary-foreground: 0 0% 100%;
     
     /* Backgrounds */
-    --background: 210 20% 98%;
-    --foreground: 210 50% 12%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 15%;
     
     /* Cards and surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 210 50% 12%;
+    --card-foreground: 0 0% 15%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 210 50% 12%;
+    --popover-foreground: 0 0% 15%;
     
     /* Muted elements */
-    --muted: 210 20% 94%;
-    --muted-foreground: 210 20% 45%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
     
-    /* Accent - Light teal for highlights */
-    --accent: 174 45% 92%;
-    --accent-foreground: 152 55% 25%;
+    /* Accent - Magenta/Pink like onderwijsloket.com */
+    --accent: 330 85% 60%;
+    --accent-foreground: 0 0% 100%;
     
     /* Destructive */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     
     /* Borders and inputs */
-    --border: 210 20% 88%;
-    --input: 210 20% 88%;
-    --ring: 152 55% 32%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 152 100% 33%;
     
-    --radius: 0.5rem;
+    --radius: 0.25rem;
     
     /* Sidebar */
-    --sidebar-background: 210 50% 18%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 152 55% 45%;
+    --sidebar-background: 0 0% 15%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 152 100% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 50% 25%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 210 50% 25%;
-    --sidebar-ring: 152 55% 45%;
+    --sidebar-accent: 0 0% 20%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 25%;
+    --sidebar-ring: 152 100% 40%;
     
     /* Custom DOOR tokens */
-    --door-green: 152 55% 32%;
-    --door-green-light: 152 45% 45%;
-    --door-navy: 210 50% 18%;
-    --door-navy-light: 210 45% 28%;
-    --door-teal: 174 45% 45%;
-    --door-orange: 25 95% 53%;
-    --door-gradient: linear-gradient(135deg, hsl(152 55% 32%) 0%, hsl(174 45% 45%) 100%);
-    --door-shadow: 0 4px 20px -4px hsl(210 50% 18% / 0.1);
-    --door-shadow-lg: 0 12px 40px -8px hsl(210 50% 18% / 0.15);
+    --door-green: 152 100% 33%;
+    --door-green-light: 152 80% 45%;
+    --door-black: 0 0% 15%;
+    --door-magenta: 330 85% 60%;
   }
 
   .dark {
-    --background: 210 50% 8%;
-    --foreground: 210 20% 95%;
+    --background: 0 0% 10%;
+    --foreground: 0 0% 95%;
     
-    --card: 210 50% 12%;
-    --card-foreground: 210 20% 95%;
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
     
-    --popover: 210 50% 12%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
     
-    --primary: 152 55% 45%;
+    --primary: 152 100% 45%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 210 45% 25%;
-    --secondary-foreground: 210 20% 95%;
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 0 0% 95%;
     
-    --muted: 210 45% 18%;
-    --muted-foreground: 210 20% 65%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
     
-    --accent: 174 35% 18%;
-    --accent-foreground: 174 45% 70%;
+    --accent: 330 75% 50%;
+    --accent-foreground: 0 0% 100%;
     
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 210 45% 20%;
-    --input: 210 45% 20%;
-    --ring: 152 55% 45%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 152 100% 45%;
     
-    --sidebar-background: 210 50% 6%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 152 55% 45%;
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 152 100% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 50% 15%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 210 50% 15%;
-    --sidebar-ring: 152 55% 45%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 152 100% 45%;
   }
 }
 
@@ -118,10 +115,10 @@
   
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Open Sans', system-ui, sans-serif;
   }
   
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold tracking-tight;
+    @apply font-semibold;
   }
 }
