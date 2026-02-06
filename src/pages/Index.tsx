@@ -3,7 +3,6 @@ import { Footer } from "@/components/layout/Footer";
 import { HeroSection } from "@/components/home/HeroSection";
 import { JourneySection } from "@/components/home/JourneySection";
 import { TestimonialsSection } from "@/components/home/TestimonialsSection";
-import { AIWidgetSection } from "@/components/home/AIWidgetSection";
 
 const Index = () => {
   return (
@@ -13,7 +12,6 @@ const Index = () => {
         <HeroSection />
         <JourneySection />
         <TestimonialsSection />
-        <AIWidgetSection />
       </main>
       <Footer />
     </div>
