@@ -85,28 +85,92 @@ export function Header() {
           </div>
         </Link>
 
-        {/* DOORai hint - subtle animation */}
+        {/* DOORai mascot - subtle floating illustration */}
         <AnimatePresence>
           {showDooraiHint && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden lg:block"
+              initial={{ opacity: 0, scale: 0, rotate: -20 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0, rotate: 20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className="fixed bottom-24 right-6 z-50 pointer-events-none"
             >
-              <div className="bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium">
-                <MessageCircle className="h-4 w-4" />
-                <span>DOORai staat klaar om je te helpen!</span>
+              {/* Cute robot mascot SVG illustration */}
+              <motion.div
+                animate={{ y: [0, -8, 0] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                className="relative"
+              >
+                <svg width="60" height="70" viewBox="0 0 60 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Body */}
+                  <rect x="12" y="25" width="36" height="35" rx="8" fill="hsl(var(--primary))" />
+                  {/* Head */}
+                  <rect x="15" y="8" width="30" height="22" rx="6" fill="hsl(var(--primary))" />
+                  {/* Antenna */}
+                  <circle cx="30" cy="4" r="4" fill="hsl(var(--accent))" />
+                  <rect x="28" y="4" width="4" height="6" fill="hsl(var(--primary))" />
+                  {/* Eyes - blinking */}
+                  <motion.ellipse
+                    cx="22"
+                    cy="18"
+                    rx="4"
+                    ry="4"
+                    fill="white"
+                    animate={{ scaleY: [1, 0.1, 1] }}
+                    transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
+                  />
+                  <motion.ellipse
+                    cx="38"
+                    cy="18"
+                    rx="4"
+                    ry="4"
+                    fill="white"
+                    animate={{ scaleY: [1, 0.1, 1] }}
+                    transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
+                  />
+                  {/* Pupils */}
+                  <circle cx="23" cy="18" r="2" fill="hsl(var(--secondary))" />
+                  <circle cx="39" cy="18" r="2" fill="hsl(var(--secondary))" />
+                  {/* Smile */}
+                  <path d="M24 24 Q30 28 36 24" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none" />
+                  {/* Buttons on body */}
+                  <circle cx="25" cy="40" r="3" fill="hsl(var(--accent))" />
+                  <circle cx="35" cy="40" r="3" fill="white" opacity="0.8" />
+                  {/* Arms waving */}
+                  <motion.path
+                    d="M8 35 Q4 30 8 25"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    fill="none"
+                    animate={{ rotate: [0, 15, 0] }}
+                    transition={{ repeat: Infinity, duration: 0.8 }}
+                    style={{ transformOrigin: "12px 35px" }}
+                  />
+                  <motion.path
+                    d="M52 35 Q56 30 52 25"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    fill="none"
+                    animate={{ rotate: [0, -15, 0] }}
+                    transition={{ repeat: Infinity, duration: 0.8 }}
+                    style={{ transformOrigin: "48px 35px" }}
+                  />
+                  {/* Feet */}
+                  <rect x="16" y="58" width="10" height="6" rx="3" fill="hsl(var(--secondary))" />
+                  <rect x="34" y="58" width="10" height="6" rx="3" fill="hsl(var(--secondary))" />
+                </svg>
+                {/* Small speech bubble */}
                 <motion.div
-                  animate={{ x: [0, 4, 0] }}
-                  transition={{ repeat: Infinity, duration: 1 }}
-                  className="text-primary-foreground/80"
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="absolute -top-2 -left-8 bg-white rounded-full px-2 py-1 shadow-md text-xs"
                 >
-                  →
+                  <span className="text-primary">👋</span>
                 </motion.div>
-              </div>
-              {/* Arrow pointing up */}
-              <div className="absolute left-1/2 -translate-x-1/2 -top-2 w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-primary" />
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
