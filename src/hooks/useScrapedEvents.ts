@@ -5,6 +5,7 @@ interface ScrapedEvent {
   title: string;
   date: string | null;
   source: string;
+  sourceUrl: string;
   description: string;
 }
 
@@ -33,11 +34,14 @@ export function useScrapedEvents() {
 
       // If we have fresh cached data, return it
       if (cached && cached.length > 0) {
-        // Flatten all events from all sources
+        // Flatten all events from all sources, adding source URL
         const allEvents: ScrapedEvent[] = [];
         for (const source of cached as unknown as ScrapedEventsData[]) {
           if (Array.isArray(source.events_data)) {
-            allEvents.push(...source.events_data);
+            allEvents.push(...source.events_data.map(event => ({
+              ...event,
+              sourceUrl: source.source_url,
+            })));
           }
         }
         return {
@@ -64,12 +68,15 @@ export function useScrapedEvents() {
         };
       }
 
-      // Extract events from scrape result
+      // Extract events from scrape result, adding source URL
       const allEvents: ScrapedEvent[] = [];
       if (scrapeResult?.events) {
         for (const source of scrapeResult.events) {
           if (Array.isArray(source.events_data)) {
-            allEvents.push(...source.events_data);
+            allEvents.push(...source.events_data.map((event: any) => ({
+              ...event,
+              sourceUrl: source.source_url,
+            })));
           }
         }
       }

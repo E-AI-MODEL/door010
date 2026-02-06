@@ -93,19 +93,22 @@ export function ScrapedEventsList() {
       {/* Events grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {events.slice(0, 10).map((event, index) => (
-          <motion.div
+          <motion.a
             key={`${event.source}-${index}`}
+            href={event.sourceUrl || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: index * 0.05 }}
-            className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 transition-colors"
+            className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-md transition-all cursor-pointer"
           >
             <div className="flex items-start gap-3">
               <div className="bg-primary/10 rounded-full p-2 shrink-0">
                 <Calendar className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-foreground text-sm line-clamp-2 mb-1">
+                <h3 className="font-semibold text-foreground text-sm line-clamp-2 mb-1 group-hover:text-primary">
                   {event.title}
                 </h3>
                 {event.date && (
@@ -124,7 +127,7 @@ export function ScrapedEventsList() {
                 </p>
               </div>
             </div>
-          </motion.div>
+          </motion.a>
         ))}
       </div>
 
