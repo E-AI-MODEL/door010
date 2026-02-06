@@ -32,31 +32,46 @@ export default function Auth() {
             description: error.message,
             variant: "destructive",
           });
-        } else {
-          // Check if user is advisor or admin
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { data: roles } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", user.id);
-            
-            const isAdvisorOrAdmin = roles?.some(
-              (r) => r.role === "advisor" || r.role === "admin"
-            );
-
-            toast({
-              title: "Welkom terug!",
-              description: "Je bent succesvol ingelogd.",
-            });
-
-            // Redirect based on role
-            if (isAdvisorOrAdmin) {
-              navigate("/backoffice");
-            } else {
-              navigate("/dashboard");
-            }
+          setLoading(false);
+          return;
+        }
+        
+        // Wait a moment for auth state to update, then get user and roles
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: roles, error: rolesError } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id);
+          
+          if (rolesError) {
+            console.error("Error fetching roles:", rolesError);
           }
+          
+          const isAdvisorOrAdmin = roles?.some(
+            (r) => r.role === "advisor" || r.role === "admin"
+          );
+
+          toast({
+            title: "Welkom terug!",
+            description: "Je bent succesvol ingelogd.",
+          });
+
+          // Redirect based on role
+          if (isAdvisorOrAdmin) {
+            navigate("/backoffice", { replace: true });
+          } else {
+            navigate("/dashboard", { replace: true });
+          }
+        } else {
+          // Fallback if user not found immediately
+          toast({
+            title: "Welkom terug!",
+            description: "Je bent succesvol ingelogd.",
+          });
+          navigate("/dashboard", { replace: true });
         }
       } else {
         const { error } = await signUp(email, password);
@@ -73,6 +88,13 @@ export default function Auth() {
           });
         }
       }
+    } catch (err) {
+      console.error("Auth error:", err);
+      toast({
+        title: "Er ging iets mis",
+        description: "Probeer het later opnieuw.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
