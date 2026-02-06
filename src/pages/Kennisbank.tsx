@@ -103,7 +103,6 @@ export default function Kennisbank() {
           title="KENNIS"
           titleHighlight="BANK"
           subtitle="Vind antwoorden op al je vragen over werken in het onderwijs."
-          imageUrl="https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80"
         >
           <div className="relative max-w-xl">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />

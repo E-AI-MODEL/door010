@@ -69,7 +69,6 @@ export default function Vacatures() {
           title="VACATURES"
           titleHighlight="ROTTERDAM"
           subtitle="Bekijk de actuele vacatures bij scholen en besturen in de regio Rotterdam."
-          imageUrl="https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80"
         />
 
         {/* Filters */}

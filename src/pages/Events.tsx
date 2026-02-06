@@ -67,7 +67,6 @@ export default function Events() {
           title="AGENDA"
           titleHighlight="& EVENTS"
           subtitle="Bekijk alle open dagen, webinars, informatiesessies en meeloopdagen in de regio Rotterdam."
-          imageUrl="https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80"
         />
 
         {/* Main agenda links */}
