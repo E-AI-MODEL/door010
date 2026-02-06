@@ -31,7 +31,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate("/auth");
+      navigate("/auth?redirect=dashboard");
     }
   }, [user, authLoading, navigate]);
 
