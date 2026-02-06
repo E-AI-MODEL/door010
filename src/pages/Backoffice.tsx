@@ -41,6 +41,7 @@ interface ProfileWithEmail {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
+  email: string | null;
   current_phase: OrientationPhase | null;
   preferred_sector: string | null;
   created_at: string;
@@ -106,13 +107,26 @@ export default function Backoffice() {
 
       setHasAccess(true);
 
-      // Fetch all profiles (RLS allows advisors/admins to see all)
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
+      // Fetch profiles with emails via edge function
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
 
-      if (profilesError) throw profilesError;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-profiles-with-email`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch profiles");
+      }
+
+      const { profiles: profilesData } = await response.json();
       setProfiles(profilesData || []);
     } catch (error) {
       console.error("Error:", error);
@@ -127,6 +141,7 @@ export default function Backoffice() {
       !searchQuery ||
       profile.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       profile.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      profile.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       profile.phone?.includes(searchQuery);
     
     const matchesPhase = phaseFilter === "all" || profile.current_phase === phaseFilter;
@@ -292,7 +307,7 @@ export default function Backoffice() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Zoek op naam of telefoon..."
+                    placeholder="Zoek op naam, email of telefoon..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10"
@@ -372,14 +387,23 @@ export default function Backoffice() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {profile.phone ? (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Phone className="h-3 w-3 text-muted-foreground" />
-                            <span>{profile.phone}</span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">—</span>
-                        )}
+                        <div className="space-y-1">
+                          {profile.email && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Mail className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-foreground">{profile.email}</span>
+                            </div>
+                          )}
+                          {profile.phone && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Phone className="h-3 w-3 text-muted-foreground" />
+                              <span>{profile.phone}</span>
+                            </div>
+                          )}
+                          {!profile.email && !profile.phone && (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {profile.current_phase && phaseLabels[profile.current_phase] ? (
