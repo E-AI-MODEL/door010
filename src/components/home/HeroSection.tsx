@@ -6,16 +6,16 @@ import { motion } from "framer-motion";
 export function HeroSection() {
   return (
     <section className="relative min-h-[70vh] flex items-center">
-      {/* Background image - Rotterdam skyline */}
+      {/* Background image - Rotterdam Erasmusbrug skyline */}
       <div className="absolute inset-0 -z-10">
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80')`,
+            backgroundImage: `url('https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80')`,
           }}
         />
         {/* Dark overlay for text readability */}
-        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
       </div>
 
       <div className="container py-20 md:py-28">

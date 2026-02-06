@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { PageHero } from "@/components/shared/PageHero";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { motion } from "framer-motion";
+import { ExternalLink, Briefcase } from "lucide-react";
 
-// Externe vacaturesites in de regio Rotterdam
 const externalVacatureSites = [
   {
     title: "Meesterbaan",
@@ -63,23 +64,16 @@ export default function Vacatures() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        {/* Hero */}
-        <section className="bg-primary py-12 md:py-16">
-          <div className="container">
-            <div className="flex items-center gap-3 mb-4">
-              <ArrowRight className="h-8 w-8 text-primary-foreground" />
-              <h1 className="text-2xl md:text-4xl font-bold text-primary-foreground uppercase tracking-tight">
-                Vacatures
-              </h1>
-            </div>
-            <p className="text-primary-foreground/90 max-w-2xl">
-              Bekijk de actuele vacatures bij scholen en besturen in de regio Rotterdam.
-            </p>
-          </div>
-        </section>
+        <PageHero
+          variant="image"
+          title="VACATURES"
+          titleHighlight="ROTTERDAM"
+          subtitle="Bekijk de actuele vacatures bij scholen en besturen in de regio Rotterdam."
+          imageUrl="https://images.unsplash.com/photo-1560969184-10fe8719e047?w=1920&q=80"
+        />
 
         {/* Filters */}
-        <section className="bg-muted py-6 border-b border-border">
+        <section className="bg-white py-6 border-b border-border sticky top-16 z-40">
           <div className="container">
             <div className="flex flex-wrap gap-2">
               {sectors.map((sector) => (
@@ -88,7 +82,6 @@ export default function Vacatures() {
                   variant={selectedSector === sector ? "default" : "outline"}
                   size="sm"
                   onClick={() => setSelectedSector(sector)}
-                  className={selectedSector === sector ? "bg-primary" : "bg-white"}
                 >
                   {sector}
                 </Button>
@@ -98,49 +91,86 @@ export default function Vacatures() {
         </section>
 
         {/* Vacancy sites */}
-        <section className="py-8 md:py-12">
+        <section className="py-12 md:py-16">
           <div className="container">
-            <p className="text-sm text-muted-foreground mb-6">
-              {filteredSites.length} vacaturesites gevonden
+            <p className="text-muted-foreground mb-8">
+              <span className="font-semibold text-foreground">{filteredSites.length}</span> vacaturesites gevonden
             </p>
 
-            {/* External vacancy sites */}
-            <div className="bg-muted rounded-lg p-8">
-              <h2 className="text-xl font-semibold text-foreground mb-6">
-                Vacaturesites in de regio Rotterdam
-              </h2>
-              <p className="text-muted-foreground mb-6">
-                Bekijk de actuele vacatures op deze sites van scholen en besturen in de regio:
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {externalVacatureSites.map((site, index) => (
-                  <a
-                    key={index}
-                    href={site.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-white border border-border rounded p-4 hover:border-primary/30 transition-colors group"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                            {site.title}
-                          </h3>
-                          <span className="text-xs font-medium px-2 py-0.5 bg-primary/10 text-primary rounded">
-                            {site.sector}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {site.description}
-                        </p>
-                      </div>
-                      <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredSites.map((site, index) => (
+                <motion.a
+                  key={site.title}
+                  href={site.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: index * 0.05 }}
+                  className="group bg-white border border-border rounded-lg p-6 hover:border-primary/50 hover:shadow-lg transition-all"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="bg-primary/10 rounded-full p-3">
+                      <Briefcase className="h-6 w-6 text-primary" />
                     </div>
-                  </a>
-                ))}
-              </div>
+                    <span className="text-xs font-semibold px-2 py-1 bg-primary/10 text-primary rounded uppercase">
+                      {site.sector}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors mb-2">
+                    {site.title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {site.description}
+                  </p>
+                  <div className="flex items-center text-sm text-primary font-medium">
+                    Bekijk vacatures
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </div>
+                </motion.a>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Tips section */}
+        <section className="bg-muted py-12 md:py-16">
+          <div className="container">
+            <h2 className="text-xl font-bold text-foreground mb-8 uppercase tracking-wide">
+              Tips voor <span className="text-primary">solliciteren</span>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                {
+                  title: "Ken je route",
+                  description: "Weet welke bevoegdheid je nodig hebt voor de vacature waar je op solliciteert.",
+                },
+                {
+                  title: "Bereid je voor",
+                  description: "Lees je in over de school en het onderwijs. Scholen waarderen betrokkenheid.",
+                },
+                {
+                  title: "Loop mee",
+                  description: "Vraag of je een dag kunt meelopen. Zo ontdek je of de school bij je past.",
+                },
+              ].map((tip, index) => (
+                <motion.div
+                  key={tip.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                  className="bg-white rounded-lg p-6 border border-border"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-bold text-sm">
+                      {index + 1}
+                    </span>
+                    <h3 className="font-semibold text-foreground">{tip.title}</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{tip.description}</p>
+                </motion.div>
+              ))}
             </div>
           </div>
         </section>
