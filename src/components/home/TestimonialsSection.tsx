@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { Quote } from "lucide-react";
 
 const testimonials = [
   {
@@ -7,21 +6,18 @@ const testimonials = [
     author: "Maria van der Berg",
     role: "Zij-instromer Wiskunde",
     sector: "VO",
-    avatar: "M",
   },
   {
     quote: "Het platform gaf mij direct inzicht in alle vacatures die bij mijn profiel pasten. Binnen twee maanden had ik een baan.",
     author: "Thomas de Vries",
     role: "Docent Basisonderwijs",
     sector: "PO",
-    avatar: "T",
   },
   {
     quote: "Als student was ik zoekende naar de juiste route. DOOR heeft mij door de hele oriëntatiefase geloodst met persoonlijk advies.",
     author: "Sophie Janssen",
     role: "Student Pabo",
     sector: "PO",
-    avatar: "S",
   },
 ];
 
@@ -50,7 +46,7 @@ export function TestimonialsSection() {
           </motion.p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {testimonials.map((testimonial, index) => (
             <motion.div
               key={index}
@@ -58,28 +54,23 @@ export function TestimonialsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="bg-card border border-border rounded-xl p-8 shadow-door"
+              className="relative bg-card border border-border rounded-lg p-6"
             >
-              {/* Quote icon */}
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                <Quote className="h-5 w-5 text-primary" />
-              </div>
+              {/* Large quote mark */}
+              <span className="absolute top-4 left-6 text-6xl text-border font-serif leading-none select-none">
+                "
+              </span>
 
               {/* Quote text */}
-              <blockquote className="text-foreground mb-6">
-                "{testimonial.quote}"
+              <blockquote className="relative z-10 text-foreground pt-8 mb-6 leading-relaxed">
+                {testimonial.quote}
               </blockquote>
 
               {/* Author */}
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                  {testimonial.avatar}
-                </div>
-                <div>
-                  <div className="font-medium text-foreground">{testimonial.author}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {testimonial.role} • {testimonial.sector}
-                  </div>
+              <div className="border-t border-border pt-4">
+                <div className="font-medium text-foreground text-sm">{testimonial.author}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {testimonial.role} · {testimonial.sector}
                 </div>
               </div>
             </motion.div>
