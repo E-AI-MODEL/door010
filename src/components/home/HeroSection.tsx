@@ -15,8 +15,8 @@ export function HeroSection() {
             backgroundImage: `url(${rotterdamSkyline})`,
           }}
         />
-        {/* Dark overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
+        {/* Gradient overlay - sharp at top, fading to white at bottom */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 via-50% to-white" />
       </div>
 
       <div className="container py-20 md:py-28">

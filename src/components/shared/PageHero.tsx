@@ -29,7 +29,7 @@ export function PageHero({
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
             style={{ backgroundImage: `url(${backgroundImage})` }}
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 via-50% to-white" />
         </div>
 
         <div className="container py-16 md:py-20">
