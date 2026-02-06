@@ -72,7 +72,6 @@ export function PublicChatWidget() {
 
   const handleQuickReply = (text: string) => {
     setInput(text);
-    // Trigger send
     sendMessageWithText(text);
   };
 
@@ -111,7 +110,6 @@ export function PublicChatWidget() {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      // Add empty assistant message to update
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
       while (true) {
@@ -153,7 +151,6 @@ export function PublicChatWidget() {
         }
       }
 
-      // Determine follow-up quick replies based on AI's question context
       const lowerContent = assistantContent.toLowerCase();
       let quickReplies = FOLLOW_UP_REPLIES.next;
       
@@ -167,7 +164,6 @@ export function PublicChatWidget() {
         quickReplies = FOLLOW_UP_REPLIES.practical;
       }
 
-      // Add quick replies to last message
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = {
@@ -199,17 +195,15 @@ export function PublicChatWidget() {
     sendMessageWithText(input);
   };
 
-  // Get the latest quick replies
   const latestQuickReplies = messages[messages.length - 1]?.quickReplies;
 
-  // Don't show widget for logged-in users
   if (user) {
     return null;
   }
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button - more rounded */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
@@ -217,39 +211,39 @@ export function PublicChatWidget() {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground rounded-full p-4 shadow-lg hover:bg-primary/90 transition-colors"
+            className="fixed bottom-6 right-6 z-50 bg-[hsl(152,100%,33%)] text-white rounded-full p-4 shadow-lg hover:bg-[hsl(152,100%,28%)] transition-colors"
           >
             <MessageCircle className="h-6 w-6" />
           </motion.button>
         )}
       </AnimatePresence>
 
-      {/* Chat window */}
+      {/* Chat window - more rounded corners */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] bg-white rounded-lg shadow-2xl border border-border overflow-hidden flex flex-col"
+            className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] bg-white rounded-3xl shadow-2xl border border-border overflow-hidden flex flex-col"
             style={{ height: "520px", maxHeight: "calc(100vh - 6rem)" }}
           >
-            {/* Header */}
-            <div className="bg-primary text-primary-foreground p-4 flex items-center justify-between shrink-0">
+            {/* Header - matching green, rounded top */}
+            <div className="bg-[hsl(152,100%,33%)] text-white p-4 flex items-center justify-between shrink-0 rounded-t-3xl">
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 rounded-full p-2">
                   <MessageCircle className="h-5 w-5" />
                 </div>
                 <div>
                   <h3 className="font-semibold">DOORai</h3>
-                  <p className="text-xs text-primary-foreground/80">
+                  <p className="text-xs text-white/80">
                     Je gids naar het onderwijs
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 hover:bg-white/20 rounded"
+                className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -265,9 +259,9 @@ export function PublicChatWidget() {
                     }`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-lg px-4 py-2 ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
                         message.role === "user"
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-[hsl(152,100%,33%)] text-white"
                           : "bg-muted text-foreground"
                       }`}
                     >
@@ -278,7 +272,7 @@ export function PublicChatWidget() {
                               a: ({ href, children }) => (
                                 <Link
                                   to={href || "#"}
-                                  className="text-primary hover:underline inline-flex items-center gap-1"
+                                  className="text-[hsl(152,100%,33%)] hover:underline inline-flex items-center gap-1"
                                   onClick={() => setIsOpen(false)}
                                 >
                                   {children}
@@ -301,7 +295,7 @@ export function PublicChatWidget() {
               {/* Loading indicator */}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg px-4 py-2">
+                  <div className="bg-muted rounded-2xl px-4 py-2.5">
                     <div className="flex gap-1">
                       <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
                       <span
@@ -317,7 +311,7 @@ export function PublicChatWidget() {
                 </div>
               )}
 
-              {/* Quick reply buttons */}
+              {/* Quick reply buttons - more rounded, matching green */}
               {showQuickReplies && latestQuickReplies && !isLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -328,7 +322,7 @@ export function PublicChatWidget() {
                     <button
                       key={index}
                       onClick={() => handleQuickReply(reply)}
-                      className="px-3 py-1.5 text-sm bg-white border border-primary/30 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                      className="px-3 py-1.5 text-sm bg-white border border-[hsl(152,100%,33%)]/30 text-[hsl(152,100%,33%)] rounded-full hover:bg-[hsl(152,100%,33%)]/10 transition-colors"
                     >
                       {reply}
                     </button>
@@ -340,10 +334,10 @@ export function PublicChatWidget() {
             </div>
 
             {/* Login prompt */}
-            <div className="px-4 py-2 bg-muted/50 border-t border-border shrink-0">
+            <div className="px-4 py-2.5 bg-muted/50 border-t border-border shrink-0">
               <Link
                 to="/auth"
-                className="flex items-center justify-center gap-2 text-sm text-primary hover:underline"
+                className="flex items-center justify-center gap-2 text-sm text-[hsl(152,100%,33%)] hover:underline font-medium"
                 onClick={() => setIsOpen(false)}
               >
                 <ArrowRight className="h-4 w-4" />
@@ -351,7 +345,7 @@ export function PublicChatWidget() {
               </Link>
             </div>
 
-            {/* Input */}
+            {/* Input - more rounded */}
             <form
               onSubmit={sendMessage}
               className="p-4 border-t border-border shrink-0"
@@ -362,9 +356,14 @@ export function PublicChatWidget() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Stel je vraag..."
                   disabled={isLoading}
-                  className="flex-1"
+                  className="flex-1 rounded-full px-4"
                 />
-                <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+                <Button 
+                  type="submit" 
+                  size="icon" 
+                  disabled={isLoading || !input.trim()}
+                  className="rounded-full bg-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]"
+                >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
