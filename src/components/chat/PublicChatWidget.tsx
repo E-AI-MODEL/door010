@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Message {
   role: "user" | "assistant";
@@ -47,6 +48,7 @@ const FOLLOW_UP_REPLIES: Record<string, string[]> = {
 };
 
 export function PublicChatWidget() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -199,6 +201,11 @@ export function PublicChatWidget() {
 
   // Get the latest quick replies
   const latestQuickReplies = messages[messages.length - 1]?.quickReplies;
+
+  // Don't show widget for logged-in users
+  if (user) {
+    return null;
+  }
 
   return (
     <>
