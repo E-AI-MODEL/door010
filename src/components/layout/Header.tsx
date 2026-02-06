@@ -13,50 +13,40 @@ const navigation = [
   { name: "Vacatures", href: "/vacatures" },
 ];
 
-// DOORai mascot SVG component
-function DOORaiMascot() {
+// Elegant DOORai hint - minimal text badge instead of cartoon mascot
+function DOORaiHint() {
   return (
     <motion.div
-      animate={{ y: [0, -4, 0] }}
-      transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-      className="flex items-center gap-2"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex items-center gap-3"
     >
-      <svg width="32" height="36" viewBox="0 0 60 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Body */}
-        <rect x="12" y="25" width="36" height="35" rx="8" fill="hsl(var(--primary))" />
-        {/* Head */}
-        <rect x="15" y="8" width="30" height="22" rx="6" fill="hsl(var(--primary))" />
-        {/* Antenna */}
-        <circle cx="30" cy="4" r="4" fill="hsl(var(--accent))" />
-        <rect x="28" y="4" width="4" height="6" fill="hsl(var(--primary))" />
-        {/* Eyes - blinking */}
-        <motion.ellipse
-          cx="22"
-          cy="18"
-          rx="4"
-          ry="4"
-          fill="white"
-          animate={{ scaleY: [1, 0.1, 1] }}
-          transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
-        />
-        <motion.ellipse
-          cx="38"
-          cy="18"
-          rx="4"
-          ry="4"
-          fill="white"
-          animate={{ scaleY: [1, 0.1, 1] }}
-          transition={{ repeat: Infinity, duration: 3, repeatDelay: 2 }}
-        />
-        {/* Pupils */}
-        <circle cx="23" cy="18" r="2" fill="hsl(var(--secondary))" />
-        <circle cx="39" cy="18" r="2" fill="hsl(var(--secondary))" />
-        {/* Smile */}
-        <path d="M24 24 Q30 28 36 24" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none" />
-      </svg>
+      {/* Elegant arrow icon matching the logo style */}
+      <div className="flex items-center justify-center">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="20" cy="20" r="18" stroke="hsl(var(--primary))" strokeWidth="2" fill="none" />
+          <motion.path 
+            d="M14 20L22 20M22 20L18 16M22 20L18 24" 
+            stroke="hsl(var(--primary))" 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+            animate={{ x: [0, 2, 0] }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+          />
+          <motion.circle 
+            cx="28" 
+            cy="20" 
+            r="2" 
+            fill="hsl(var(--primary))"
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+          />
+        </svg>
+      </div>
       <div className="flex flex-col leading-tight">
-        <span className="text-xs font-medium text-muted-foreground">Vraag het aan</span>
-        <span className="text-sm font-bold text-primary">DOORai</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Hulp nodig?</span>
+        <span className="text-lg font-bold text-primary uppercase tracking-tight">DOORai</span>
       </div>
     </motion.div>
   );
@@ -148,7 +138,7 @@ export function Header() {
                 exit={{ opacity: 0, scale: 0.8, rotate: 10 }}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
               >
-                <DOORaiMascot />
+                <DOORaiHint />
               </motion.div>
             ) : (
               <motion.div
