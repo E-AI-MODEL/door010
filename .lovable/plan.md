@@ -119,12 +119,12 @@ ALTER TABLE profiles ADD COLUMN test_results jsonb DEFAULT '{}'::jsonb;
 
 ## Implementatie Volgorde
 
-1. Database migratie uitvoeren (nieuwe velden + storage bucket)
-2. AIWidgetSection verwijderen van homepage
-3. Upload componenten bouwen (Avatar + CV)
-4. Profile pagina uitbreiden met nieuwe functionaliteit
-5. Interessetest component bouwen
-6. Dashboard uitbreiden met feed en nieuwe cards
-7. Backoffice uitbreiden met kandidaat-details
-8. RLS policies aanpassen voor adviseur-toegang
-9. End-to-end testen van volledige flow
+1. ✅ Database migratie uitvoeren (nieuwe velden + storage bucket)
+2. ✅ AIWidgetSection verwijderen van homepage
+3. ✅ Upload componenten bouwen (Avatar + CV)
+4. ✅ Profile pagina uitbreiden met nieuwe functionaliteit
+5. ✅ Interessetest component bouwen
+6. ✅ Dashboard uitbreiden met feed en nieuwe cards
+7. ✅ Backoffice uitbreiden met kandidaat-details
+8. ✅ RLS policies aanpassen voor adviseur-toegang (via storage policies)
+9. ⏳ End-to-end testen van volledige flow

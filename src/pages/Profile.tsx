@@ -7,23 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { AvatarUpload } from "@/components/profile/AvatarUpload";
+import { CVUpload } from "@/components/profile/CVUpload";
+import { InterestTest } from "@/components/profile/InterestTest";
 import { 
   User, 
   Mail, 
   Phone, 
   GraduationCap, 
-  Briefcase,
-  MapPin,
-  Calendar,
   Save,
   ArrowLeft,
   CheckCircle2,
-  Target
+  Target,
+  FileText
 } from "lucide-react";
 
 type OrientationPhase = 'interesseren' | 'orienteren' | 'beslissen' | 'matchen' | 'voorbereiden';
@@ -36,6 +36,11 @@ interface Profile {
   phone: string | null;
   current_phase: OrientationPhase | null;
   preferred_sector: string | null;
+  avatar_url: string | null;
+  cv_url: string | null;
+  bio: string | null;
+  test_completed: boolean;
+  test_results: unknown;
 }
 
 const phases: { value: OrientationPhase; label: string; description: string }[] = [
@@ -67,9 +72,13 @@ export default function Profile() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [bio, setBio] = useState("");
   const [currentPhase, setCurrentPhase] = useState<OrientationPhase>("interesseren");
   const [preferredSector, setPreferredSector] = useState("");
-
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [cvUrl, setCvUrl] = useState<string | null>(null);
+  const [testCompleted, setTestCompleted] = useState(false);
+  const [testResults, setTestResults] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth");
@@ -96,8 +105,13 @@ export default function Profile() {
       setFirstName(data.first_name || "");
       setLastName(data.last_name || "");
       setPhone(data.phone || "");
+      setBio(data.bio || "");
       setCurrentPhase(data.current_phase || "interesseren");
       setPreferredSector(data.preferred_sector || "");
+      setAvatarUrl(data.avatar_url);
+      setCvUrl(data.cv_url);
+      setTestCompleted(data.test_completed || false);
+      setTestResults(data.test_results as Record<string, unknown> | null);
     } catch (error) {
       console.error("Error fetching profile:", error);
     } finally {
@@ -116,6 +130,7 @@ export default function Profile() {
           first_name: firstName.trim() || null,
           last_name: lastName.trim() || null,
           phone: phone.trim() || null,
+          bio: bio.trim() || null,
           current_phase: currentPhase,
           preferred_sector: preferredSector || null,
         })
@@ -202,7 +217,18 @@ export default function Profile() {
                     Vul je basisgegevens in zodat adviseurs je kunnen bereiken
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
+                  {/* Avatar Upload */}
+                  <div className="flex justify-center pb-4 border-b">
+                    <AvatarUpload
+                      userId={user.id}
+                      currentAvatarUrl={avatarUrl}
+                      firstName={firstName}
+                      lastName={lastName}
+                      onAvatarChange={setAvatarUrl}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">Voornaam</Label>
@@ -245,6 +271,17 @@ export default function Profile() {
                         className="pl-10"
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bio">Over jezelf</Label>
+                    <Textarea
+                      id="bio"
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      placeholder="Vertel kort iets over jezelf en je motivatie voor het onderwijs..."
+                      rows={3}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -336,11 +373,44 @@ export default function Profile() {
               </Card>
             </motion.div>
 
-            {/* Submit */}
+            {/* CV Upload */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              <CVUpload
+                userId={user.id}
+                currentCVUrl={cvUrl}
+                onCVChange={setCvUrl}
+              />
+            </motion.div>
+
+            {/* Interest Test */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
+            >
+              <InterestTest
+                userId={user.id}
+                testCompleted={testCompleted}
+                testResults={testResults}
+                onTestComplete={(results) => {
+                  setTestCompleted(true);
+                  setTestResults(results);
+                  if (results.recommendedSector) {
+                    setPreferredSector(results.recommendedSector as string);
+                  }
+                }}
+              />
+            </motion.div>
+
+            {/* Submit */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
               className="flex justify-end gap-3"
             >
               <Button
