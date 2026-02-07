@@ -15,37 +15,93 @@ interface Message {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/homepage-coach`;
 
-// Quick reply suggestions - focused doorvragen
-const INITIAL_QUICK_REPLIES = [
-  "Ik wil leraar worden",
-  "Welke sector past bij mij?",
-  "Ik werk al, kan ik overstappen?",
-];
-
-const FOLLOW_UP_REPLIES: Record<string, string[]> = {
+// Context-aware quick reply pools
+const QUICK_REPLY_POOLS = {
+  initial: [
+    "Ik wil leraar worden",
+    "Welke sector past bij mij?",
+    "Ik werk al, kan ik overstappen?",
+  ],
+  opleidingen: [
+    "Hoe lang duurt een opleiding?",
+    "Wat kost het?",
+    "Kan ik parttime studeren?",
+  ],
+  vacatures: [
+    "In welke wijken zijn vacatures?",
+    "Hoeveel verdient een leraar?",
+    "Kan ik stage lopen?",
+  ],
+  events: [
+    "Wanneer is de volgende open dag?",
+    "Zijn er webinars?",
+    "Kan ik vrijblijvend langskomen?",
+  ],
   sector: [
     "Basisonderwijs (PO)",
     "Middelbare school (VO)",
     "Beroepsonderwijs (MBO)",
   ],
-  background: [
-    "Ik heb een hbo/wo diploma",
-    "Ik heb werkervaring",
-    "Ik wil studeren",
-  ],
   routes: [
-    "Zij-instroom, hoe werkt dat?",
-    "Kan ik leren en werken combineren?",
+    "Hoe werkt zij-instroom?",
+    "Wat is een leraar-in-opleiding?",
+    "Welke diploma's heb ik nodig?",
   ],
-  practical: [
-    "Waar vind ik vacatures?",
-    "Hoe zit het met salaris?",
+  account: [
+    "Wat kan Doortje voor mij doen?",
+    "Is een account gratis?",
+    "Bekijk de kennisbank",
   ],
-  next: [
-    "Wat is mijn volgende stap?",
-    "Ik wil een account maken",
+  general: [
+    "Vertel meer over jullie",
+    "Ik heb nog een vraag",
+    "Bedankt!",
   ],
 };
+
+// Smart reply detection based on response content AND links mentioned
+function detectQuickReplies(content: string): string[] {
+  const lowerContent = content.toLowerCase();
+  const replies: string[] = [];
+  
+  // Check which links/topics are mentioned
+  const mentionsOpleidingen = lowerContent.includes("/opleidingen") || lowerContent.includes("opleiding");
+  const mentionsVacatures = lowerContent.includes("/vacatures") || lowerContent.includes("vacatur");
+  const mentionsEvents = lowerContent.includes("/events") || lowerContent.includes("evenement") || lowerContent.includes("open dag");
+  const mentionsAccount = lowerContent.includes("/auth") || lowerContent.includes("account") || lowerContent.includes("doortje");
+  const mentionsSector = lowerContent.includes("sector") || lowerContent.includes("basisonderwijs") || lowerContent.includes("voortgezet");
+  const mentionsRoutes = lowerContent.includes("zij-instroom") || lowerContent.includes("route") || lowerContent.includes("traject");
+  
+  // Add contextual follow-ups (pick 1 from each relevant category, max 3 total)
+  if (mentionsOpleidingen && replies.length < 3) {
+    replies.push(QUICK_REPLY_POOLS.opleidingen[Math.floor(Math.random() * QUICK_REPLY_POOLS.opleidingen.length)]);
+  }
+  if (mentionsVacatures && replies.length < 3) {
+    replies.push(QUICK_REPLY_POOLS.vacatures[Math.floor(Math.random() * QUICK_REPLY_POOLS.vacatures.length)]);
+  }
+  if (mentionsEvents && replies.length < 3) {
+    replies.push(QUICK_REPLY_POOLS.events[Math.floor(Math.random() * QUICK_REPLY_POOLS.events.length)]);
+  }
+  if (mentionsSector && replies.length < 3) {
+    replies.push(QUICK_REPLY_POOLS.sector[Math.floor(Math.random() * QUICK_REPLY_POOLS.sector.length)]);
+  }
+  if (mentionsRoutes && replies.length < 3) {
+    replies.push(QUICK_REPLY_POOLS.routes[Math.floor(Math.random() * QUICK_REPLY_POOLS.routes.length)]);
+  }
+  if (mentionsAccount && replies.length < 3) {
+    replies.push(QUICK_REPLY_POOLS.account[Math.floor(Math.random() * QUICK_REPLY_POOLS.account.length)]);
+  }
+  
+  // If we still need more, add general options
+  while (replies.length < 3) {
+    const generalOption = QUICK_REPLY_POOLS.general[Math.floor(Math.random() * QUICK_REPLY_POOLS.general.length)];
+    if (!replies.includes(generalOption)) {
+      replies.push(generalOption);
+    }
+  }
+  
+  return replies.slice(0, 3);
+}
 
 export function PublicChatWidget() {
   const { user } = useAuth();
@@ -54,7 +110,7 @@ export function PublicChatWidget() {
     {
       role: "assistant",
       content: `Hoi! 👋 Ik ben DOORai, je gids op deze website. Wat wil je weten of waar kan ik je mee helpen?`,
-      quickReplies: INITIAL_QUICK_REPLIES,
+      quickReplies: QUICK_REPLY_POOLS.initial,
     },
   ]);
   const [input, setInput] = useState("");
@@ -163,18 +219,8 @@ export function PublicChatWidget() {
         }
       }
 
-      const lowerContent = assistantContent.toLowerCase();
-      let quickReplies = FOLLOW_UP_REPLIES.next;
-      
-      if (lowerContent.includes("sector") || lowerContent.includes("leeftijd") || lowerContent.includes("groep")) {
-        quickReplies = FOLLOW_UP_REPLIES.sector;
-      } else if (lowerContent.includes("diploma") || lowerContent.includes("achtergrond") || lowerContent.includes("opleiding")) {
-        quickReplies = FOLLOW_UP_REPLIES.background;
-      } else if (lowerContent.includes("zij-instroom") || lowerContent.includes("route") || lowerContent.includes("traject")) {
-        quickReplies = FOLLOW_UP_REPLIES.routes;
-      } else if (lowerContent.includes("vacature") || lowerContent.includes("salaris") || lowerContent.includes("verdien")) {
-        quickReplies = FOLLOW_UP_REPLIES.practical;
-      }
+      // Use smart detection for contextual quick replies
+      const quickReplies = detectQuickReplies(assistantContent);
 
       setMessages((prev) => {
         const updated = [...prev];
@@ -193,7 +239,7 @@ export function PublicChatWidget() {
         {
           role: "assistant",
           content: "Sorry, er ging iets mis. Probeer het later opnieuw.",
-          quickReplies: INITIAL_QUICK_REPLIES,
+          quickReplies: QUICK_REPLY_POOLS.initial,
         },
       ]);
       setShowQuickReplies(true);
