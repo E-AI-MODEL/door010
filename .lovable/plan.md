@@ -1,56 +1,48 @@
 
 
-# Plan: Knoplabels verlengen en informatiever maken
+# Plan: Knoppen strak en consistent maken
 
 ## Probleem
-De huidige `MAX_LABEL_LEN = 26` kapt labels af tot korte, cryptische teksten. Nu de knoppen `rounded-2xl` en `break-words` ondersteunen, mogen labels gerust langer en duidelijker.
+De knoppen in de chat widget wrappen nu over meerdere regels met `rounded-2xl` en `break-words`, wat lelijke, ongelijke pill-vormen oplevert. De set oogt rommelig en inconsistent.
+
+## Oplossing
+Knoppen worden altijd 1 regel hoog, met vaste hoogte en nette afkapping via `truncate` + `max-w-[260px]`.
 
 ## Wijzigingen in `src/components/chat/PublicChatWidget.tsx`
 
-### 1. MAX_LABEL_LEN verhogen
-Van `26` naar `48` zodat labels meer ruimte krijgen.
+### 1. baseClass vervangen (regel 527)
 
-### 2. Alle labels herschrijven naar duidelijke, menselijke zinnen
+**Oud:**
+```
+px-3 py-2 text-sm rounded-2xl transition-colors border leading-snug text-center whitespace-normal break-words max-w-[220px]
+```
 
-**Initieel (welkomstscherm):**
-| Oud | Nieuw |
-|-----|-------|
-| Welke route past? | Welke route past bij mij? |
-| Welke sector past? | Help me kiezen: PO, VO of MBO |
-| Ik werk al---overstap? | Ik werk al en wil overstappen |
+**Nieuw:**
+```
+px-4 py-2 text-sm rounded-full transition-colors border h-10 inline-flex items-center justify-center
+```
 
-**Doorvragen (sector/opleiding onbekend):**
-| Oud | Nieuw |
-|-----|-------|
-| Kies sector (PO/VO/MBO) | Help me kiezen tussen PO, VO en MBO |
-| Mijn opleiding (MBO/HBO/WO) | Wat betekent mijn opleidingsniveau? |
-| Ik wil PO | Ik wil naar het basisonderwijs (PO) |
-| Ik heb HBO | Ik heb een HBO-diploma |
+- `h-10` zorgt voor gelijke hoogte
+- `rounded-full` werkt weer netjes bij 1 regel
+- `inline-flex items-center justify-center` voor nette centrering
+- Weg: `whitespace-normal`, `break-words`, `max-w-[220px]`, `leading-snug`, `text-center`
 
-**Intent-specifiek:**
-| Oud | Nieuw |
-|-----|-------|
-| Hoe werkt zij-instroom? | Hoe werkt zij-instroom precies? |
-| Welke diploma's nodig? | Welke diploma's heb ik nodig? |
-| Vacatures bij mij in buurt | Vacatures bij mij in de buurt |
-| Wanneer zijn events? | Wanneer zijn er open dagen? |
-| Welke route past bij mij? | Welke route past het best bij mij? |
+### 2. Label-tekst wrappen in truncate-span
+Alle drie de button-varianten (ask, Link, a) krijgen de label in:
+```html
+<span className="max-w-[260px] truncate">{action.label}</span>
+```
 
-**Navigatie:**
-| Oud | Nieuw |
-|-----|-------|
-| Bekijk vacatures | Bekijk alle vacatures |
-| Bekijk events | Bekijk aankomende events |
-| Bekijk opleidingen | Bekijk opleidingsroutes |
-| Kennisbank | Bekijk de kennisbank |
+Dit geldt voor:
+- **ask-knop** (regel 538): `{action.label}` wordt `<span ...>`
+- **Link** (regel 553): `{action.label}` wordt `<span ...>`
+- **a** (regel 567): `{action.label}` wordt `<span ...>`
 
-**CTA en overig:**
-| Oud | Nieuw |
-|-----|-------|
-| Maak gratis profiel | Maak een gratis profiel aan |
-| Vertel me de opties | Vat mijn opties samen |
-| Probeer opnieuw | Kun je dat nog eens proberen? |
+## Resultaat
+- Altijd gelijke hoogte (h-10)
+- Pill-vorm blijft mooi (1 regel)
+- Langere teksten worden netjes afgekapt met "..."
+- Geen rare multi-line pill blobs meer
 
-## Geen andere bestanden wijzigen
-Alleen `src/components/chat/PublicChatWidget.tsx` wordt aangepast.
-
+## Alleen dit bestand wijzigt
+`src/components/chat/PublicChatWidget.tsx` -- alleen het actions-renderblok (regels 527-569).
