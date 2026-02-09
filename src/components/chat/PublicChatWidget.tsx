@@ -498,7 +498,7 @@ export function PublicChatWidget() {
                         className="flex flex-wrap gap-2 pt-2"
                       >
                         {message.actions.filter(isActionValid).map((action, i) => {
-                          const baseClass = "px-3 py-1.5 text-sm rounded-full transition-colors border";
+                          const baseClass = "px-3 py-2 text-sm rounded-2xl transition-colors border leading-snug text-center whitespace-normal break-words max-w-[220px]";
                           const ctaClass = "bg-[hsl(152,100%,33%)] text-white border-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]";
                           const outlineClass = "bg-white border-[hsl(152,100%,33%)]/30 text-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,33%)]/10";
 
