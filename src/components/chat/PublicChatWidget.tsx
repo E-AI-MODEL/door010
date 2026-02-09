@@ -235,6 +235,15 @@ export function PublicChatWidget() {
     },
   ]);
 
+  const latestActions = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant" && messages[i].actions?.length) {
+        return messages[i].actions!;
+      }
+    }
+    return [];
+  }, [messages]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -486,64 +495,6 @@ export function PublicChatWidget() {
                     </div>
                   </div>
 
-                  {/* Action buttons — only for latest assistant message */}
-                  {message.role === "assistant" &&
-                    message.actions?.length &&
-                    index === messages.length - 1 &&
-                    showActions &&
-                    !isLoading && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex flex-wrap gap-2 pt-2"
-                      >
-                        {message.actions.filter(isActionValid).map((action, i) => {
-                          const baseClass = "px-3 py-2 text-sm rounded-2xl transition-colors border leading-snug text-center whitespace-normal break-words max-w-[220px]";
-                          const ctaClass = "bg-[hsl(152,100%,33%)] text-white border-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]";
-                          const outlineClass = "bg-white border-[hsl(152,100%,33%)]/30 text-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,33%)]/10";
-
-                          if (action.kind === "ask") {
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => handleActionClick(action)}
-                                className={`${baseClass} ${outlineClass}`}
-                              >
-                                {action.label}
-                              </button>
-                            );
-                          }
-
-                          const className = `${baseClass} ${action.kind === "cta" ? ctaClass : outlineClass}`;
-
-                          if (isInternalHref(action.href)) {
-                            return (
-                              <Link
-                                key={i}
-                                to={action.href!}
-                                className={className}
-                                onClick={() => setIsOpen(false)}
-                              >
-                                {action.label}
-                              </Link>
-                            );
-                          }
-
-                          return (
-                            <a
-                              key={i}
-                              href={action.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={className}
-                              onClick={() => setIsOpen(false)}
-                            >
-                              {action.label}
-                            </a>
-                          );
-                        })}
-                      </motion.div>
-                    )}
                 </div>
               ))}
 
@@ -563,9 +514,65 @@ export function PublicChatWidget() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Contextual conversion strip */}
-            <div className="px-4 py-2.5 bg-muted/50 border-t border-border shrink-0">
-              <div className="flex items-center justify-between gap-2">
+            {/* Bottom area: actions + tip + input — anchored */}
+            <div className="shrink-0 border-t border-border bg-white">
+              {/* Action buttons */}
+              {latestActions.length > 0 && showActions && !isLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-wrap gap-2 px-4 pt-3 pb-1"
+                >
+                  {latestActions.filter(isActionValid).map((action, i) => {
+                    const baseClass = "px-3 py-2 text-sm rounded-2xl transition-colors border leading-snug text-center whitespace-normal break-words max-w-[220px]";
+                    const ctaClass = "bg-[hsl(152,100%,33%)] text-white border-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]";
+                    const outlineClass = "bg-white border-[hsl(152,100%,33%)]/30 text-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,33%)]/10";
+
+                    if (action.kind === "ask") {
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => handleActionClick(action)}
+                          className={`${baseClass} ${outlineClass}`}
+                        >
+                          {action.label}
+                        </button>
+                      );
+                    }
+
+                    const className = `${baseClass} ${action.kind === "cta" ? ctaClass : outlineClass}`;
+
+                    if (isInternalHref(action.href)) {
+                      return (
+                        <Link
+                          key={i}
+                          to={action.href!}
+                          className={className}
+                          onClick={() => setIsOpen(false)}
+                        >
+                          {action.label}
+                        </Link>
+                      );
+                    }
+
+                    return (
+                      <a
+                        key={i}
+                        href={action.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={className}
+                        onClick={() => setIsOpen(false)}
+                      >
+                        {action.label}
+                      </a>
+                    );
+                  })}
+                </motion.div>
+              )}
+
+              {/* Contextual tip */}
+              <div className="flex items-center justify-between gap-2 px-4 py-2">
                 <p className="text-xs text-muted-foreground">
                   {signals.hasEnoughContext
                     ? "Tip: met een gratis profiel krijg je een persoonlijk stappenplan."
@@ -580,28 +587,28 @@ export function PublicChatWidget() {
                   Maak profiel
                 </Link>
               </div>
-            </div>
 
-            {/* Input */}
-            <form onSubmit={sendMessage} className="p-4 border-t border-border shrink-0">
-              <div className="flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Stel je vraag…"
-                  disabled={isLoading}
-                  className="flex-1 rounded-full px-4"
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={isLoading || !input.trim()}
-                  className="rounded-full bg-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-            </form>
+              {/* Input */}
+              <form onSubmit={sendMessage} className="px-4 pb-4 pt-1">
+                <div className="flex gap-2">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Stel je vraag…"
+                    disabled={isLoading}
+                    className="flex-1 rounded-full px-4"
+                  />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={isLoading || !input.trim()}
+                    className="rounded-full bg-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </form>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
