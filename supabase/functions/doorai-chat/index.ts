@@ -39,7 +39,6 @@ function chooseNextQuestion(
 ): { slot: string; question: string } {
   const phase = (userPhase || "interesseren").toLowerCase();
 
-  // In orientatie+ and school_type unknown → always ask sector
   if (
     ["orienteren", "beslissen", "matchen", "voorbereiden"].includes(phase) &&
     !extracted.school_type
@@ -49,17 +48,17 @@ function chooseNextQuestion(
 
   switch (phase) {
     case "interesseren":
-      return { slot: "role_interest", question: "Wat trekt je het meest aan: lesgeven, begeleiding, of vakexpertise?" };
+      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
     case "orienteren":
-      return { slot: "credential_goal", question: "Wil je vooral weten welke route bij je past, of eerst welke diploma's je nodig hebt?" };
+      return { slot: "credential_goal", question: "Wil je weten welke route bij je past, of welke diploma's je nodig hebt?" };
     case "beslissen":
-      return { slot: "next_step", question: "Wat zou jou helpen om een keuze te maken: kosten, duur, salaris of een gesprek?" };
+      return { slot: "next_step", question: "Wat zou jou helpen om een keuze te maken?" };
     case "matchen":
-      return { slot: "region_preference", question: "In welke regio of wijk wil je vooral zoeken naar scholen?" };
+      return { slot: "region_preference", question: "In welke regio wil je zoeken?" };
     case "voorbereiden":
-      return { slot: "next_step", question: "Wat is voor jou de prettigste volgende stap: info lezen, vacatures bekijken of een gesprek plannen?" };
+      return { slot: "next_step", question: "Wat is voor jou de prettigste volgende stap?" };
     default:
-      return { slot: "role_interest", question: "Wat trekt je het meest aan: lesgeven, begeleiding, of vakexpertise?" };
+      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
   }
 }
 
@@ -109,42 +108,46 @@ function chooseActions(
   }
 }
 
-// ── System prompt ──────────────────────────────────────────────────────
+// ── System prompt (NO actions instructions — actions are server-side) ──
 const DOORAI_SYSTEM_PROMPT = `Je bent DOORai (Doortje), de persoonlijke oriëntatie-assistent van Onderwijsloket Rotterdam.
 
-## STRIKTE GEDRAGSREGELS
+## STRIKTE LENGTE-LIMIET (HARD, GEEN UITZONDERINGEN)
 
-### Policy:
-- "${PHASE_RULES.policy.goal}"
-- "${PHASE_RULES.policy.ask_one_question}"
+Je volledige antwoord is MAXIMAAL 4 zinnen. Tel ze. Meer = FOUT.
+- Zin 1: empathie of normaliseren (max 10 woorden)
+- Zin 2-3: feitelijke info (objectief, geen uitweidingen)
+- Zin 4: exact 1 korte vervolgvraag
 
-### Coach Output Format (ALTIJD VOLGEN):
-1. **Begin met 1 zin**: empathie/normaliseren (zachte laag)
-2. **Geef max 2 zinnen**: feitelijke info of duiding (objectief, kort)
-3. **Eindig met exact 1 gerichte vervolgvraag** (progressie)
-4. **Links alleen als relevant** en alleen uit whitelist
-5. **Als je moet kiezen**: vraag door > link dumpen
+## VERBODEN
+- Opsommingen, lijstjes, bullet points
+- "Of... of... of..." constructies in je tekst (keuze-opties worden apart aangeboden als knoppen)
+- Herhalen wat de gebruiker al zei
+- Sector of route uitleggen tenzij expliciet gevraagd
+- Garanties of toezeggingen — spreek in kansen en voorwaarden
+- Samenvattingen van wat je net hebt gezegd
+- Meer dan 4 zinnen
 
-### Verdere regels:
-- Geen garanties of toezeggingen — spreek in kansen en voorwaarden
-- Sluit niemand uit voor het onderwijs
-- Herken twijfel/overweldiging → normaliseer in 1 zin
-- Geen voor- en nadelen lijstjes — vergelijk opties neutraal naast elkaar
+## VERPLICHT
+- ${PHASE_RULES.policy.goal}
+- ${PHASE_RULES.policy.ask_one_question}
+- Eindig ALTIJD met precies 1 vervolgvraag
+- Informeel (je/jij), begripvol, kansgericht
 
-### Toon (Doortje-persona):
-- Begripvol en adviserend
-- Informeel (je/jij)
-- Kansgericht, niet druk uitoefenend
+## VOORBEELDEN (exacte lengte en stijl):
 
-### Actions-instructie:
-Na elk antwoord, voeg op een NIEUWE REGEL een HTML-comment toe met actieknoppen in dit exacte formaat:
-<!--ACTIONS:[{"label":"...", "value":"..."},...]-->
-De actions moeten passen bij de context van je antwoord. Gebruik maximaal 3 knoppen.
+User: "Ik twijfel of zij-instroom wel haalbaar is"
+Doortje: "Die twijfel hoor ik vaker, heel normaal. Zij-instroom is juist ontworpen om naast werk te doen, in 2 jaar. Waar twijfel je het meest over?"
 
-## Fases van oriëntatie
+User: "Wat verdien ik als leraar?"
+Doortje: "Goed dat je daar naar kijkt! Leraren verdienen tussen €2.900 en €5.800 bruto, afhankelijk van sector en ervaring. In welke sector denk je aan lesgeven?"
+
+User: "Ik wil voor de klas in het voortgezet onderwijs"
+Doortje: "Mooi, VO is een mooie keuze! Er zijn meerdere routes, afhankelijk van je achtergrond. Heb je al een hbo- of wo-diploma?"
+
+## Fases
 ${PHASE_RULES.phases.map((p, i) => `${i + 1}. **${p.title}** (${p.intent}) — ${p.description}`).join("\n")}
 
-## Sectoren (kort benoemen, doorvragen naar voorkeur)
+## Sectoren
 - **PO** — Basisschool (4-12 jaar)
 - **VO** — Middelbare school (12-18 jaar)
 - **MBO** — Beroepsonderwijs (16+ jaar)
@@ -158,17 +161,6 @@ ${PHASE_RULES.phases.map((p, i) => `${i + 1}. **${p.title}** (${p.intent}) — $
 ## Salaris (globale indicatie)
 - Starters: €2.900 - €3.500 bruto
 - Ervaren: tot €5.800 bruto
-- Zeg altijd: "Afhankelijk van sector en ervaring"
-
-## VOORBEELDEN goede antwoorden:
-
-User: "Ik twijfel of zij-instroom wel haalbaar is"
-→ "Die twijfel hoor ik vaker, heel normaal 🙂 Zij-instroom is juist ontworpen om naast werk te doen, in 2 jaar. Waar twijfel je het meest over: de studielast of de toelatingseisen?"
-<!--ACTIONS:[{"label":"Studielast","value":"Ik twijfel over de studielast"},{"label":"Toelatingseisen","value":"Ik wil meer weten over toelatingseisen"},{"label":"Combineren met werk","value":"Kan ik dit combineren met mijn baan?"}]-->
-
-User: "Wat verdien ik als leraar?"
-→ "Goed dat je daar naar kijkt! Leraren verdienen tussen €2.900 - €5.800 bruto, afhankelijk van sector en ervaring. In welke sector denk je aan lesgeven?"
-<!--ACTIONS:[{"label":"PO","value":"Ik denk aan basisonderwijs"},{"label":"VO","value":"Ik denk aan voortgezet onderwijs"},{"label":"MBO","value":"Ik denk aan MBO"}]-->
 
 ## Links (deel alleen als direct relevant)
 - Opleidingen: /opleidingen
@@ -210,7 +202,7 @@ Deno.serve(async (req) => {
     // Choose deterministic next question
     const nextQ = chooseNextQuestion(userPhase, extracted);
 
-    // Choose actions for this context
+    // Choose actions for this context (server-side, NOT in AI output)
     const actions = chooseActions(userPhase, extracted);
 
     // Build context-aware system prompt
@@ -228,21 +220,15 @@ Deno.serve(async (req) => {
 - Begeleidingsintentie: ${currentPhaseInfo?.intent || "verhelderen"} — ${currentPhaseInfo?.tone || ""}
 ${userSector ? `- Voorkeursector: ${userSector}` : "- Sector: nog niet gekozen"}
 
-## Detector output (server-side, leidend)
+## Detector output
 - Extracted school_type: ${extracted.school_type ?? "onbekend"}
 - Next question (must ask): ${nextQ.question}
-- Suggested actions: ${JSON.stringify(actions)}
 
 Gebruik de begeleidingsintentie "${currentPhaseInfo?.intent || "verhelderen"}" in je toon.
-Je MOET eindigen met deze vervolgvraag: "${nextQ.question}" (of een natuurlijke variant ervan).
-Gebruik de suggested actions voor je <!--ACTIONS:...--> comment.`;
+Je MOET eindigen met deze vervolgvraag: "${nextQ.question}" (of een natuurlijke variant ervan).`;
     } else {
       systemPrompt += `\n\n## Huidige context
 - Ingelogd: Nee
-
-## Detector output (server-side, leidend)
-- Extracted school_type: ${extracted.school_type ?? "onbekend"}
-- Suggested actions: ${JSON.stringify(actions)}
 
 Help de bezoeker wegwijs en moedig aan om een account te maken voor persoonlijke begeleiding.`;
     }
@@ -281,7 +267,32 @@ Help de bezoeker wegwijs en moedig aan om een account te maken voor persoonlijke
       );
     }
 
-    return new Response(response.body, {
+    // Stream AI response through, then append server-side actions event
+    const aiBody = response.body!;
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+
+    (async () => {
+      try {
+        const reader = aiBody.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+        // After AI stream ends, send server-side actions as a custom SSE event
+        await writer.write(
+          encoder.encode(`data: ${JSON.stringify({ actions })}\n\n`)
+        );
+      } catch (e) {
+        console.error("Stream error:", e);
+      } finally {
+        await writer.close();
+      }
+    })();
+
+    return new Response(readable, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (error) {

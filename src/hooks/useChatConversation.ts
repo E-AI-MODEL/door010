@@ -103,16 +103,13 @@ export function useChatConversation(userId: string | undefined, profile: Profile
         if (msgs && msgs.length > 0) {
           const loaded = msgs.map((m) => ({
             role: m.role as "user" | "assistant",
-            content: parseActions(m.content).cleanContent,
+            // Strip any legacy <!--ACTIONS:...--> from stored messages
+            content: m.content
+              .replace(/<!--ACTIONS:\[.*?\]-->/s, "")
+              .replace(/<!--ACTIONS:[\s\S]*$/, "")
+              .trimEnd(),
           }));
           setMessages(loaded);
-
-          // Parse actions from last assistant message
-          const lastAssistant = [...loaded].reverse().find((m) => m.role === "assistant");
-          if (lastAssistant) {
-            const { actions } = parseActions(lastAssistant.content);
-            setLatestActions(actions);
-          }
           return;
         }
       }
