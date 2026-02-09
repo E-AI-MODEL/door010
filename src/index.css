@@ -66,6 +66,14 @@
     --door-green-light: 152 80% 45%;
     --door-black: 0 0% 15%;
     --door-magenta: 330 85% 60%;
+    --door-teal: 170 60% 40%;
+    --door-navy: 220 50% 25%;
+    --door-navy-light: 220 40% 35%;
+    --door-orange: 25 90% 55%;
+    
+    --door-shadow: 0 4px 14px -2px hsl(0 0% 0% / 0.08);
+    --door-shadow: 0 4px 14px -2px hsl(0 0% 0% / 0.08);
+    --door-shadow-lg: 0 10px 30px -5px hsl(0 0% 0% / 0.12);
   }
 
   .dark {

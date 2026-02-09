@@ -20,9 +20,10 @@ Deno.serve(async (req) => {
     });
 
     const adminUsers = [
-      { email: "admin@doorai.nl", password: "admin010", role: "admin" as const },
-      { email: "backoffice@doorai.nl", password: "admin010", role: "advisor" as const },
-      { email: "test@doorai.nl", password: "admin010", role: "candidate" as const },
+      { email: "admin@doorai.nl", password: "admin010", role: "admin" as const, firstName: "Admin", lastName: "DOOR" },
+      { email: "backoffice@doorai.nl", password: "admin010", role: "advisor" as const, firstName: "Backoffice", lastName: "DOOR" },
+      { email: "test@doorai.nl", password: "admin010", role: "candidate" as const, firstName: "Test", lastName: "DOOR" },
+      { email: "test1@doorai.nl", password: "admin010", role: "candidate" as const, firstName: "Test1", lastName: "DOOR" },
     ];
 
     const results = [];
@@ -67,9 +68,9 @@ Deno.serve(async (req) => {
       // Create profile
       await supabase.from("profiles").insert({
         user_id: authData.user.id,
-        first_name: user.role === "admin" ? "Admin" : "Backoffice",
-        last_name: "DOOR",
-        current_phase: "voorbereiden",
+        first_name: user.firstName,
+        last_name: user.lastName,
+        current_phase: user.role === "candidate" ? "interesseren" : "voorbereiden",
       });
 
       // Assign role

@@ -40,7 +40,7 @@ export const phaseData: Record<OrientationPhase, PhaseInfo> = {
     title: "Interesseren",
     subtitle: "Ontdek of het onderwijs bij je past",
     icon: Lightbulb,
-    color: "bg-amber-500",
+    color: "bg-primary",
     actions: [
       { label: "Praat met DOORai", href: "/chat", icon: MessageCircle, description: "Stel je eerste vragen" },
       { label: "Bekijk sectoren", href: "/kennisbank", icon: BookOpen, description: "PO, VO of MBO?" },
@@ -56,7 +56,7 @@ export const phaseData: Record<OrientationPhase, PhaseInfo> = {
     title: "Oriënteren",
     subtitle: "Onderzoek de routes naar het leraarschap",
     icon: Target,
-    color: "bg-blue-500",
+    color: "bg-door-teal",
     actions: [
       { label: "Routes bekijken", href: "/opleidingen", icon: GraduationCap, description: "Pabo, zij-instroom, PDG..." },
       { label: "Bespreek met DOORai", href: "/chat", icon: MessageCircle, description: "Welke route past bij mij?" },
@@ -88,7 +88,7 @@ export const phaseData: Record<OrientationPhase, PhaseInfo> = {
     title: "Matchen",
     subtitle: "Vind de juiste school of opleiding",
     icon: Briefcase,
-    color: "bg-purple-500",
+    color: "bg-accent",
     actions: [
       { label: "Vacatures bekijken", href: "/vacatures", icon: Briefcase, description: "Scholen in Rotterdam" },
       { label: "Events & banenmarkten", href: "/events", icon: Calendar, description: "Ontmoet werkgevers" },
@@ -104,7 +104,7 @@ export const phaseData: Record<OrientationPhase, PhaseInfo> = {
     title: "Voorbereiden",
     subtitle: "Klaar voor de start!",
     icon: GraduationCap,
-    color: "bg-emerald-500",
+    color: "bg-emerald-700",
     actions: [
       { label: "Praktische zaken", href: "/kennisbank", icon: BookOpen, description: "Wat moet je regelen?" },
       { label: "Contact onderhouden", href: "/chat", icon: MessageCircle, description: "Laatste vragen?" },
