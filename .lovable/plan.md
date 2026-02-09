@@ -1,78 +1,56 @@
 
 
-# Plan: PublicChatWidget upgraden met funnel-logica
+# Plan: Knoplabels verlengen en informatiever maken
 
-Vervang de huidige keyword-detectie + random pool selectie door een deterministische funnel-aanpak met conversation signals.
+## Probleem
+De huidige `MAX_LABEL_LEN = 26` kapt labels af tot korte, cryptische teksten. Nu de knoppen `rounded-2xl` en `break-words` ondersteunen, mogen labels gerust langer en duidelijker.
 
----
+## Wijzigingen in `src/components/chat/PublicChatWidget.tsx`
 
-## Wat verandert
+### 1. MAX_LABEL_LEN verhogen
+Van `26` naar `48` zodat labels meer ruimte krijgen.
 
-### 1. Nieuw type-systeem voor acties
-De huidige `quickReplies: string[]` wordt vervangen door typed actions:
-- **ask**: stuurt een vraag in de chat (doorvraag)
-- **nav**: navigeert naar een pagina (sluit chat)
-- **cta**: conversie-actie zoals "Maak gratis profiel"
+### 2. Alle labels herschrijven naar duidelijke, menselijke zinnen
 
-### 2. Conversation Signals (state machine)
-Bijhouden wat de bezoeker al heeft aangegeven:
-- **intent**: route / toelating / vacatures / events / account / general
-- **sector**: PO / VO / MBO / onbekend
-- **studyLevel**: MBO / HBO / WO / onbekend
-- **hasEnoughContext**: true wanneer sector + studieniveau bekend zijn
+**Initieel (welkomstscherm):**
+| Oud | Nieuw |
+|-----|-------|
+| Welke route past? | Welke route past bij mij? |
+| Welke sector past? | Help me kiezen: PO, VO of MBO |
+| Ik werk al---overstap? | Ik werk al en wil overstappen |
 
-Dit zorgt ervoor dat vervolgknoppen steeds specifieker worden naarmate het gesprek vordert.
+**Doorvragen (sector/opleiding onbekend):**
+| Oud | Nieuw |
+|-----|-------|
+| Kies sector (PO/VO/MBO) | Help me kiezen tussen PO, VO en MBO |
+| Mijn opleiding (MBO/HBO/WO) | Wat betekent mijn opleidingsniveau? |
+| Ik wil PO | Ik wil naar het basisonderwijs (PO) |
+| Ik heb HBO | Ik heb een HBO-diploma |
 
-### 3. Deterministische knoppen (geen Math.random meer)
-De functie `computeNextActions()` kiest altijd 3 knoppen:
-1. Beste doorvraag op basis van ontbrekende info
-2. Relevante pagina-link op basis van intent
-3. Conversie-CTA zodra er genoeg context is
+**Intent-specifiek:**
+| Oud | Nieuw |
+|-----|-------|
+| Hoe werkt zij-instroom? | Hoe werkt zij-instroom precies? |
+| Welke diploma's nodig? | Welke diploma's heb ik nodig? |
+| Vacatures bij mij in buurt | Vacatures bij mij in de buurt |
+| Wanneer zijn events? | Wanneer zijn er open dagen? |
+| Welke route past bij mij? | Welke route past het best bij mij? |
 
-### 4. Contextual conversion strip
-De statische "Log in voor persoonlijke begeleiding" wordt vervangen door een dynamische tip die verandert op basis van hoe ver de bezoeker is in het gesprek.
+**Navigatie:**
+| Oud | Nieuw |
+|-----|-------|
+| Bekijk vacatures | Bekijk alle vacatures |
+| Bekijk events | Bekijk aankomende events |
+| Bekijk opleidingen | Bekijk opleidingsroutes |
+| Kennisbank | Bekijk de kennisbank |
 
-### 5. Link-validatie
-Alle links worden gevalideerd voordat ze gerenderd worden. Geen lege href's, geen kapotte knoppen.
+**CTA en overig:**
+| Oud | Nieuw |
+|-----|-------|
+| Maak gratis profiel | Maak een gratis profiel aan |
+| Vertel me de opties | Vat mijn opties samen |
+| Probeer opnieuw | Kun je dat nog eens proberen? |
 
-### 6. Toekomstbestendig: backend meta support
-Optionele ondersteuning voor structured follow-ups vanuit de Edge Function. Werkt nu zonder, maar kan later aangestuurd worden door het backend.
-
----
-
-## Route-correcties
-De voorgestelde versie verwijst naar `/routes` en `/contact` die niet bestaan in de app. Deze worden gecorrigeerd:
-- `/routes` wordt `/opleidingen`
-- `/contact` wordt verwijderd uit de ROUTES map
-
----
-
-## Bestanden die wijzigen
-
-| Bestand | Actie |
-|---------|-------|
-| `src/components/chat/PublicChatWidget.tsx` | Volledig herschreven met funnel-logica |
-
-Geen database-wijzigingen. Geen nieuwe bestanden. Geen Edge Function wijzigingen nodig.
-
----
-
-## Technische details
-
-### Nieuwe interfaces
-```text
-QuickAction { kind: "ask" | "nav" | "cta", label: string, text?: string, href?: string }
-ConversationSignals { intent, sector, studyLevel, region, hasEnoughContext }
-```
-
-### Kernfuncties
-- `inferSignalsFromUserText()` — regex-gebaseerd, update signals na elke user message
-- `computeNextActions()` — deterministische 3-knop selectie op basis van signals
-- `isValidHref()` / `isInternalHref()` — link-validatie helpers
-- `parseBackendMeta()` / `actionsFromMeta()` — optionele backend structured output
-
-### Visuele wijzigingen
-- Knoppen krijgen visueel onderscheid: ask = outline, nav = outline, cta = filled green
-- Conversion strip toont dynamische tip in plaats van statische login-link
-- Bestaande styling (kleuren, border-radius, animaties) blijft behouden
+## Geen andere bestanden wijzigen
+Alleen `src/components/chat/PublicChatWidget.tsx` wordt aangepast.
 
