@@ -526,7 +526,7 @@ export function PublicChatWidget() {
                   <p className="text-xs text-muted-foreground mb-2">Suggesties</p>
                   <div className="flex flex-wrap gap-2">
                   {latestActions.filter(isActionValid).map((action, i) => {
-                    const baseClass = "px-4 py-2 text-sm rounded-full transition-colors border h-10 inline-flex items-center justify-center";
+                    const baseClass = "px-3 py-1 text-xs rounded-full transition-colors border h-7 inline-flex items-center justify-center";
                     const ctaClass = "bg-[hsl(152,100%,33%)] text-white border-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]";
                     const outlineClass = "bg-white border-[hsl(152,100%,33%)]/30 text-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,33%)]/10";
 
