@@ -18,8 +18,10 @@ export function ChatActions({ actions, onActionClick, disabled }: ChatActionsPro
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-wrap gap-2 px-4 py-3 border-t border-border"
+      className="container max-w-3xl mx-auto py-3"
     >
+      <p className="text-xs text-muted-foreground mb-2">Suggesties</p>
+      <div className="flex flex-wrap gap-2">
       {actions.map((action, i) => (
         <button
           key={i}
@@ -30,6 +32,7 @@ export function ChatActions({ actions, onActionClick, disabled }: ChatActionsPro
           <span className="max-w-[260px] truncate">{action.label}</span>
         </button>
       ))}
+      </div>
     </motion.div>
   );
 }
