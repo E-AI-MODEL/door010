@@ -101,7 +101,10 @@ export function useChatConversation(userId: string | undefined, profile: Profile
           .order("created_at", { ascending: true });
 
         if (msgs && msgs.length > 0) {
-          const loaded = msgs.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+          const loaded = msgs.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: parseActions(m.content).cleanContent,
+          }));
           setMessages(loaded);
 
           // Parse actions from last assistant message
