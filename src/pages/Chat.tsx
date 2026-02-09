@@ -265,16 +265,14 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* Actions */}
-        <ChatActions
-          actions={latestActions}
-          onActionClick={handleActionClick}
-          disabled={isLoading}
-        />
-
-        {/* Input */}
-        <div className="border-t border-border bg-background py-4">
-          <div className="container max-w-3xl mx-auto">
+        {/* Footer: actions + input */}
+        <div className="border-t border-border bg-background">
+          <ChatActions
+            actions={latestActions}
+            onActionClick={handleActionClick}
+            disabled={isLoading}
+          />
+          <div className="container max-w-3xl mx-auto py-4">
             <form onSubmit={handleSubmit} className="flex gap-3">
               <Input
                 value={input}
