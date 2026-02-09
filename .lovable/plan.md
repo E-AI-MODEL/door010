@@ -1,135 +1,66 @@
 
+# Plan: DOORai antwoorden drastisch inkorten
 
-# Plan: DOORai upgraden naar coach-niveau
+## Probleem
+De chatbot geeft te lange antwoorden (4-6 zinnen info + een lange vervolgvraag met 3 opties inline). Het "Coach Output Format" in het system prompt wordt genegeerd door het LLM.
 
-## Samenvatting
-De ingelogde chatbot (DOORai) wordt omgebouwd van een "vraag-antwoordmachine" naar een digitale begeleider die meeleeft met waar iemand mentaal staat. Dit raakt twee bestanden: de backend-functie en de ingelogde chatpagina.
+## Oorzaak
+Het huidige prompt zegt "max 2 zinnen" maar:
+- Er staan geen harde woordlimieten
+- Er is geen expliciet verbod op uitweidingen
+- De voorbeelden in het prompt zijn zelf al te lang
+- Het LLM vult graag context aan als het niet hard wordt begrensd
 
-## Wat er nu mis is
+## Oplossing: prompt aanscherpen in `supabase/functions/doorai-chat/index.ts`
 
-1. **System prompt is te rigide** -- "max 2-3 zinnen" en "nooit samenvatten" blokkeren empathische begeleiding
-2. **Slots worden niet bijgehouden** -- de edge function ontvangt `userPhase` maar doet er niets determiners mee
-3. **Geen doorvraag-sturing** -- het LLM kiest zelf een willekeurige vraag i.p.v. de meest progressieve
-4. **Geen knoppen** -- de ingelogde chat heeft geen guided actions (de publieke widget wel)
-5. **Geen gesprekspersistentie** -- conversations/messages tabellen bestaan maar worden niet gebruikt
+### 1. Coach Output Format verscherpen (regel 121-126)
 
-## Aanpak in 3 stappen
-
-### Stap 1: Edge function `doorai-chat` upgraden
-
-**A. Coach Output Format (vervangt de huidige "output regels")**
-
-Het huidige blok met "Maximaal 2-3 zinnen / Nooit samenvatten / Geen voor- en nadelen" wordt vervangen door:
-
+Huidige instructie:
 ```
-1. Begin met 1 zin: empathie/normaliseren (zachte laag)
-2. Geef max 2 zinnen: feitelijke info of duiding (objectief, kort)
-3. Eindig met exact 1 gerichte vervolgvraag (progressie)
-4. Links alleen als relevant en alleen uit whitelist
-5. Als je moet kiezen: vraag door > link dumpen
+1. Begin met 1 zin: empathie/normaliseren
+2. Geef max 2 zinnen: feitelijke info
+3. Eindig met exact 1 gerichte vervolgvraag
 ```
 
-**B. Slot extraction (server-side, deterministisch)**
-
-Eenvoudige regex-extractie van `school_type` uit de laatste user-message:
-
-```text
-PO  <-- als tekst "po", "basisonderwijs", "primair" bevat
-VO  <-- als tekst "vo", "voortgezet", "middelbare" bevat
-MBO <-- als tekst "mbo", "beroepsonderwijs" bevat
+Nieuwe instructie (veel strikter):
+```
+### LENGTE-LIMIET (HARD, GEEN UITZONDERINGEN):
+- Je volledige antwoord is MAXIMAAL 4 zinnen (inclusief de vervolgvraag)
+- Zin 1: empathie/normaliseren (kort, max 10 woorden)
+- Zin 2-3: feitelijke info (objectief, geen uitweidingen)
+- Zin 4: exact 1 korte vervolgvraag (GEEN opsomming van 3 opties in de vraagtekst)
+- NOOIT meer dan 4 zinnen. Tel ze. Als het er meer zijn, schrap.
+- Opsommingen en lijstjes zijn VERBODEN in je antwoord
+- De vervolgvraag bevat GEEN "of... of... of..." constructie -- die opties staan in de ACTIONS knoppen
 ```
 
-**C. Deterministische vraagkeuze (`chooseNextQuestion`)**
+### 2. Voorbeelden in prompt inkorten (rond regel 160-175)
 
-Op basis van fase + ontbrekende slots wordt 1 concrete vervolgvraag gekozen:
-
-| Fase | Ontbrekend | Vraag |
-|------|-----------|-------|
-| interesse | -- | "Wat trekt je het meest aan: lesgeven, begeleiding, of vakexpertise?" |
-| orientatie+ | school_type | "In welke sector wil je je orienteren: PO, VO of MBO?" |
-| orientatie | school_type bekend | "Wil je vooral weten welke route bij je past, of eerst welke diploma's je nodig hebt?" |
-| beslissing | -- | "Wat zou jou helpen om een keuze te maken: kosten, duur, salaris of een gesprek?" |
-| matching | -- | "In welke regio of wijk wil je vooral zoeken naar scholen?" |
-| voorbereiding | -- | "Wat is voor jou de prettigste volgende stap?" |
-
-Deze vraag wordt als harde instructie in het system prompt geinjecteerd:
+Huidige voorbeelden zijn te lang. Vervangen door:
 
 ```
-## Detector output (server-side, leidend)
-- Extracted school_type: PO | VO | MBO | onbekend
-- Next question (must ask): [de gekozen vraag]
+User: "Ik twijfel of zij-instroom wel haalbaar is"
+-> "Die twijfel hoor ik vaker, heel normaal. Zij-instroom is juist ontworpen om naast werk te doen, in 2 jaar. Waar twijfel je het meest over?"
+<!--ACTIONS:[{"label":"Studielast","value":"Ik twijfel over de studielast"},{"label":"Toelatingseisen","value":"Ik wil meer weten over toelatingseisen"},{"label":"Combineren met werk","value":"Kan ik dit combineren met mijn baan?"}]-->
+
+User: "Wat verdien ik als leraar?"
+-> "Goed dat je daar naar kijkt! Leraren verdienen tussen 2.900 - 5.800 bruto, afhankelijk van sector en ervaring. In welke sector denk je aan lesgeven?"
+<!--ACTIONS:[{"label":"PO","value":"Ik denk aan basisonderwijs"},{"label":"VO","value":"Ik denk aan voortgezet onderwijs"},{"label":"MBO","value":"Ik denk aan MBO"}]-->
 ```
 
-**D. Actions via HTML-comment in stream**
+### 3. Anti-uitweiding regel toevoegen
 
-Het system prompt krijgt een instructie om aan het einde van elk antwoord een verborgen comment te plaatsen:
-
+Na de "Verdere regels" sectie, toevoegen:
 ```
-<!--ACTIONS:[{"label":"PO","value":"Ik wil PO"},...]-->
-```
-
-De actions worden bepaald op basis van fase en slots, bv.:
-- Sector onbekend: PO / VO / MBO knoppen
-- Sector bekend, fase beslissing: "Kosten bekijken" / "Vacatures" / "Gesprek plannen"
-
-### Stap 2: Chat.tsx upgraden (ingelogde chat)
-
-**A. Actions parser**
-
-Na het streamen van een bericht wordt de `<!--ACTIONS:[...]-->` comment geparsed, uit de zichtbare tekst verwijderd, en als knoppen gerenderd -- exact dezelfde stijl als de publieke widget (pill buttons, h-10, truncate).
-
-**B. Knoppen rendering**
-
-Onder het berichtengebied (boven het invoerveld) komen de guided action buttons:
-
-```text
-[Ik wil PO]  [Ik wil VO]  [Ik wil MBO]
+- NOOIT de sector of route uitleggen tenzij de gebruiker er expliciet om vraagt
+- NOOIT herhalen wat de gebruiker al zei
+- Keuze-opties horen in de ACTIONS knoppen, NIET in je antwoord-tekst
 ```
 
-Klikken stuurt de `value` als user-bericht.
+## Resultaat
+- Antwoorden worden max 4 zinnen (was 6-8)
+- Geen inline "of X, of Y, of Z" meer in de vraagtekst (die staan in de knoppen)
+- Strakke, coachende toon zonder informatiedumps
 
-**C. Gesprekspersistentie**
-
-Bij eerste bericht: maak een `conversations` record aan.
-Bij elk bericht: sla op in `messages` tabel (role, content, metadata met slot_state).
-Bij terugkeer: laad de laatste conversatie uit de database i.p.v. een hardcoded welkomstbericht.
-
-**D. Welkomstbericht verbeteren**
-
-Het huidige statische welkomstbericht met bullet-list wordt vervangen door een coachend bericht:
-
-```
-Welkom terug! Fijn dat je er bent.
-Je zit nu in de [fase]-fase. [1 zin context over deze fase].
-Waar kan ik je vandaag mee helpen?
-```
-
-Plus guided action buttons passend bij de fase.
-
-### Stap 3: Fase-specifieke toon in prompt
-
-Per fase wordt een "begeleidingsintentie" meegegeven:
-
-| Fase | Intentie | Voorbeeld toon |
-|------|----------|---------------|
-| interesse | verhelderen | "Logisch dat je benieuwd bent!" |
-| orientatie | geruststellen | "Die twijfel hoor ik vaker, heel normaal." |
-| beslissing | structureren | "Laten we het overzichtelijk maken." |
-| matching | activeren | "Goed dat je concrete stappen wilt zetten!" |
-| voorbereiding | borgen | "Je bent er bijna, even de puntjes op de i." |
-
----
-
-## Bestanden die wijzigen
-
-| Bestand | Wat |
-|---------|-----|
-| `supabase/functions/doorai-chat/index.ts` | System prompt herschrijven, slot extraction, vraagkeuze, actions-instructie |
-| `src/pages/Chat.tsx` | Actions parser, knoppen, gesprekspersistentie, welkomstbericht |
-
-## Wat NIET wijzigt
-
-- `PublicChatWidget.tsx` -- de publieke widget blijft ongewijzigd
-- `homepage-coach` edge function -- die heeft een andere rol
-- Database schema -- `conversations` en `messages` tabellen bestaan al
-
+## Bestand dat wijzigt
+- `supabase/functions/doorai-chat/index.ts` -- alleen het system prompt blok
