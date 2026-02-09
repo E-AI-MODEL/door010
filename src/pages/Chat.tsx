@@ -1,18 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Send, ArrowLeft } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import { useChatConversation, parseActions } from "@/hooks/useChatConversation";
+import { ChatActions } from "@/components/chat/ChatActions";
 
 interface Profile {
   current_phase: string;
@@ -24,11 +20,22 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`
 export default function Chat() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const {
+    messages,
+    setMessages,
+    latestActions,
+    setLatestActions,
+    isLoading,
+    setIsLoading,
+    loadConversation,
+    ensureConversation,
+    saveMessage,
+  } = useChatConversation(user?.id, profile);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -38,64 +45,56 @@ export default function Chat() {
 
   useEffect(() => {
     if (user) {
+      const fetchProfile = async () => {
+        try {
+          const { data } = await supabase
+            .from("profiles")
+            .select("current_phase, preferred_sector")
+            .eq("user_id", user.id)
+            .single();
+          if (data) setProfile(data);
+        } catch (error) {
+          console.error("Error fetching profile:", error);
+        } finally {
+          setProfileLoaded(true);
+        }
+      };
       fetchProfile();
-      loadConversation();
     }
   }, [user]);
 
-  const fetchProfile = async () => {
-    try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("current_phase, preferred_sector")
-        .eq("user_id", user!.id)
-        .single();
-      if (data) setProfile(data);
-    } catch (error) {
-      console.error("Error fetching profile:", error);
+  useEffect(() => {
+    if (profileLoaded && user) {
+      loadConversation();
     }
-  };
+  }, [profileLoaded, user, loadConversation]);
 
-  const loadConversation = async () => {
-    // For now, start with a welcome message
-    // Later we can load from database
-    const phaseText = profile?.current_phase || "interesseren";
-    setMessages([
-      {
-        role: "assistant",
-        content: `Welkom terug! 👋 
-
-Ik zie dat je in de **${phaseText}** fase zit. Laten we samen kijken wat de volgende stap is.
-
-Wat wil je vandaag bespreken?
-- Routes naar het leraarschap
-- Subsidies en financiering
-- Scholen in Rotterdam
-- Iets anders?`,
-      },
-    ]);
-  };
-
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
-    const userMessage: Message = { role: "user", content: input };
+    const userMessage = { role: "user" as const, content: text };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setLatestActions([]);
 
     let assistantContent = "";
 
     try {
+      // Ensure conversation exists in DB
+      const convId = await ensureConversation();
+      if (convId) {
+        await saveMessage(convId, "user", text);
+      }
+
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -163,21 +162,40 @@ Wat wil je vandaag bespreken?
         }
       }
 
-      // Save message to database
-      // TODO: Implement conversation persistence
+      // Parse actions from completed message
+      const { cleanContent, actions } = parseActions(assistantContent);
+      if (actions.length > 0) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: "assistant", content: cleanContent };
+          return updated;
+        });
+        setLatestActions(actions);
+      }
 
+      // Save assistant message to DB
+      if (convId) {
+        await saveMessage(convId, "assistant", assistantContent);
+      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: "Sorry, er ging iets mis. Probeer het later opnieuw.",
-        },
+        { role: "assistant", content: "Sorry, er ging iets mis. Probeer het later opnieuw." },
       ]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage(input);
+  };
+
+  const handleActionClick = (value: string) => {
+    setLatestActions([]);
+    sendMessage(value);
   };
 
   if (authLoading) {
@@ -206,12 +224,8 @@ Wat wil je vandaag bespreken?
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-lg font-semibold text-primary-foreground">
-                DOORai
-              </h1>
-              <p className="text-sm text-primary-foreground/80">
-                Je persoonlijke oriëntatie-assistent
-              </p>
+              <h1 className="text-lg font-semibold text-primary-foreground">DOORai</h1>
+              <p className="text-sm text-primary-foreground/80">Je persoonlijke oriëntatie-assistent</p>
             </div>
           </div>
         </div>
@@ -222,9 +236,7 @@ Wat wil je vandaag bespreken?
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex ${
-                  message.role === "user" ? "justify-end" : "justify-start"
-                }`}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
                   className={`max-w-[80%] rounded-lg px-4 py-3 ${
@@ -248,14 +260,8 @@ Wat wil je vandaag bespreken?
                 <div className="bg-muted rounded-lg px-4 py-3">
                   <div className="flex gap-1">
                     <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
-                    <span
-                      className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.1s" }}
-                    />
-                    <span
-                      className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    />
+                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
                   </div>
                 </div>
               </div>
@@ -264,10 +270,17 @@ Wat wil je vandaag bespreken?
           </div>
         </div>
 
+        {/* Actions */}
+        <ChatActions
+          actions={latestActions}
+          onActionClick={handleActionClick}
+          disabled={isLoading}
+        />
+
         {/* Input */}
-        <div className="border-t border-border bg-white py-4">
+        <div className="border-t border-border bg-background py-4">
           <div className="container max-w-3xl mx-auto">
-            <form onSubmit={sendMessage} className="flex gap-3">
+            <form onSubmit={handleSubmit} className="flex gap-3">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
