@@ -521,8 +521,10 @@ export function PublicChatWidget() {
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-wrap gap-2 px-4 pt-3 pb-1"
+                  className="px-4 pt-3 pb-1"
                 >
+                  <p className="text-xs text-muted-foreground mb-2">Suggesties</p>
+                  <div className="flex flex-wrap gap-2">
                   {latestActions.filter(isActionValid).map((action, i) => {
                     const baseClass = "px-4 py-2 text-sm rounded-full transition-colors border h-10 inline-flex items-center justify-center";
                     const ctaClass = "bg-[hsl(152,100%,33%)] text-white border-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]";
@@ -568,6 +570,7 @@ export function PublicChatWidget() {
                       </a>
                     );
                   })}
+                  </div>
                 </motion.div>
               )}
 
