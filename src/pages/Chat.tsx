@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Send, ArrowLeft } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { useChatConversation, parseActions } from "@/hooks/useChatConversation";
+import { useChatConversation } from "@/hooks/useChatConversation";
 import { ChatActions } from "@/components/chat/ChatActions";
 
 interface Profile {
@@ -89,7 +89,6 @@ export default function Chat() {
     let assistantContent = "";
 
     try {
-      // Ensure conversation exists in DB
       const convId = await ensureConversation();
       if (convId) {
         await saveMessage(convId, "user", text);
@@ -139,23 +138,25 @@ export default function Chat() {
           if (!line.startsWith("data: ")) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") break;
+          if (jsonStr === "[DONE]") continue;
 
           try {
             const parsed = JSON.parse(jsonStr);
+
+            // Check if this is the server-side actions event
+            if (parsed.actions && Array.isArray(parsed.actions)) {
+              setLatestActions(parsed.actions);
+              continue;
+            }
+
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               assistantContent += content;
-              // Strip any partial or complete ACTIONS comment from displayed text
-              const displayContent = assistantContent
-                .replace(/<!--ACTIONS:\[.*?\]-->/s, "")
-                .replace(/<!--ACTIONS:[\s\S]*$/, "")
-                .trimEnd();
               setMessages((prev) => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
                   role: "assistant",
-                  content: displayContent,
+                  content: assistantContent,
                 };
                 return updated;
               });
@@ -165,17 +166,6 @@ export default function Chat() {
             break;
           }
         }
-      }
-
-      // Parse actions from completed message
-      const { cleanContent, actions } = parseActions(assistantContent);
-      if (actions.length > 0) {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: "assistant", content: cleanContent };
-          return updated;
-        });
-        setLatestActions(actions);
       }
 
       // Save assistant message to DB
