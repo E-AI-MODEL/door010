@@ -57,7 +57,7 @@ const ROUTES = {
   kennisbank: "/kennisbank",
 } as const;
 
-const MAX_LABEL_LEN = 26;
+const MAX_LABEL_LEN = 48;
 
 // ===== Helpers =====
 
@@ -127,37 +127,37 @@ function computeNextActions(signals: ConversationSignals): QuickAction[] {
 
   // 1) Best next question based on missing info
   if (signals.sector === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Kies sector (PO/VO/MBO)"), text: "Ik twijfel tussen PO/VO/MBO — kun je me helpen kiezen?" });
+    actions.push({ kind: "ask", label: shortLabel("Help me kiezen tussen PO, VO en MBO"), text: "Ik twijfel tussen PO/VO/MBO — kun je me helpen kiezen?" });
   } else if (signals.studyLevel === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Mijn opleiding (MBO/HBO/WO)"), text: "Mijn hoogste opleiding is: (MBO/HBO/WO). Wat betekent dat voor mijn route?" });
+    actions.push({ kind: "ask", label: shortLabel("Wat betekent mijn opleidingsniveau?"), text: "Mijn hoogste opleiding is: (MBO/HBO/WO). Wat betekent dat voor mijn route?" });
   } else {
     const intentQuestions: Record<string, QuickAction> = {
-      route: { kind: "ask", label: shortLabel("Hoe werkt zij-instroom?"), text: "Hoe werkt zij-instroom voor mij, stap voor stap?" },
-      toelating: { kind: "ask", label: shortLabel("Welke diploma's nodig?"), text: "Welke diploma's of bevoegdheid heb ik nodig in mijn situatie?" },
-      vacatures: { kind: "ask", label: shortLabel("Vacatures bij mij in buurt"), text: "Welke vacatures passen bij mij (en waar)?" },
-      events: { kind: "ask", label: shortLabel("Wanneer zijn events?"), text: "Wanneer zijn er open dagen of webinars?" },
+      route: { kind: "ask", label: shortLabel("Hoe werkt zij-instroom precies?"), text: "Hoe werkt zij-instroom voor mij, stap voor stap?" },
+      toelating: { kind: "ask", label: shortLabel("Welke diploma's heb ik nodig?"), text: "Welke diploma's of bevoegdheid heb ik nodig in mijn situatie?" },
+      vacatures: { kind: "ask", label: shortLabel("Vacatures bij mij in de buurt"), text: "Welke vacatures passen bij mij (en waar)?" },
+      events: { kind: "ask", label: shortLabel("Wanneer zijn er open dagen?"), text: "Wanneer zijn er open dagen of webinars?" },
     };
-    actions.push(intentQuestions[signals.intent] ?? { kind: "ask", label: shortLabel("Welke route past bij mij?"), text: "Welke route past het beste bij mij?" });
+    actions.push(intentQuestions[signals.intent] ?? { kind: "ask", label: shortLabel("Welke route past het best bij mij?"), text: "Welke route past het beste bij mij?" });
   }
 
   // 2) Relevant internal nav
   const navMap: Record<string, QuickAction> = {
-    vacatures: { kind: "nav", label: shortLabel("Bekijk vacatures"), href: ROUTES.vacatures },
-    events: { kind: "nav", label: shortLabel("Bekijk events"), href: ROUTES.events },
-    toelating: { kind: "nav", label: shortLabel("Bekijk opleidingen"), href: ROUTES.opleidingen },
-    route: { kind: "nav", label: shortLabel("Bekijk opleidingen"), href: ROUTES.opleidingen },
+    vacatures: { kind: "nav", label: shortLabel("Bekijk alle vacatures"), href: ROUTES.vacatures },
+    events: { kind: "nav", label: shortLabel("Bekijk aankomende events"), href: ROUTES.events },
+    toelating: { kind: "nav", label: shortLabel("Bekijk opleidingsroutes"), href: ROUTES.opleidingen },
+    route: { kind: "nav", label: shortLabel("Bekijk opleidingsroutes"), href: ROUTES.opleidingen },
   };
-  actions.push(navMap[signals.intent] ?? { kind: "nav", label: shortLabel("Kennisbank"), href: ROUTES.kennisbank });
+  actions.push(navMap[signals.intent] ?? { kind: "nav", label: shortLabel("Bekijk de kennisbank"), href: ROUTES.kennisbank });
 
   // 3) CTA or fallback question
   if (signals.hasEnoughContext) {
-    actions.push({ kind: "cta", label: shortLabel("Maak gratis profiel"), href: ROUTES.auth });
+    actions.push({ kind: "cta", label: shortLabel("Maak een gratis profiel aan"), href: ROUTES.auth });
   } else if (signals.sector === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Ik wil PO"), text: "Ik wil richting basisonderwijs (PO)." });
+    actions.push({ kind: "ask", label: shortLabel("Ik wil naar het basisonderwijs (PO)"), text: "Ik wil richting basisonderwijs (PO)." });
   } else if (signals.studyLevel === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Ik heb HBO"), text: "Ik heb een HBO-diploma. Wat zijn mijn opties?" });
+    actions.push({ kind: "ask", label: shortLabel("Ik heb een HBO-diploma"), text: "Ik heb een HBO-diploma. Wat zijn mijn opties?" });
   } else {
-    actions.push({ kind: "ask", label: shortLabel("Vertel me de opties"), text: "Kun je mijn opties samenvatten?" });
+    actions.push({ kind: "ask", label: shortLabel("Vat mijn opties samen"), text: "Kun je mijn opties samenvatten?" });
   }
 
   return capActions(uniqByLabel(actions.filter(isActionValid)), 3);
@@ -220,9 +220,9 @@ export function PublicChatWidget() {
 
   const initialActions = useMemo<QuickAction[]>(
     () => [
-      { kind: "ask", label: shortLabel("Welke route past?"), text: "Welke route past bij mij om leraar te worden?" },
-      { kind: "ask", label: shortLabel("Welke sector past?"), text: "Welke sector past bij mij (PO/VO/MBO)?" },
-      { kind: "ask", label: shortLabel("Ik werk al—overstap?"), text: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
+      { kind: "ask", label: shortLabel("Welke route past bij mij?"), text: "Welke route past bij mij om leraar te worden?" },
+      { kind: "ask", label: shortLabel("Help me kiezen: PO, VO of MBO"), text: "Welke sector past bij mij (PO/VO/MBO)?" },
+      { kind: "ask", label: shortLabel("Ik werk al en wil overstappen"), text: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
     ],
     []
   );
@@ -365,9 +365,9 @@ export function PublicChatWidget() {
           role: "assistant",
           content: "Sorry, er ging iets mis. Probeer het zo nog eens 🙏",
           actions: [
-            { kind: "ask", label: shortLabel("Probeer opnieuw"), text: "Kun je dat nog eens uitleggen?" },
-            { kind: "nav", label: shortLabel("Kennisbank"), href: ROUTES.kennisbank },
-            { kind: "cta", label: shortLabel("Maak gratis profiel"), href: ROUTES.auth },
+            { kind: "ask", label: shortLabel("Kun je dat nog eens proberen?"), text: "Kun je dat nog eens uitleggen?" },
+            { kind: "nav", label: shortLabel("Bekijk de kennisbank"), href: ROUTES.kennisbank },
+            { kind: "cta", label: shortLabel("Maak een gratis profiel aan"), href: ROUTES.auth },
           ],
         },
       ]);
