@@ -1,66 +1,139 @@
 
-# Plan: DOORai antwoorden drastisch inkorten
 
-## Probleem
-De chatbot geeft te lange antwoorden (4-6 zinnen info + een lange vervolgvraag met 3 opties inline). Het "Coach Output Format" in het system prompt wordt genegeerd door het LLM.
+# Plan: Test-account + Professionele profielpagina met dynamische tijdlijn
 
-## Oorzaak
-Het huidige prompt zegt "max 2 zinnen" maar:
-- Er staan geen harde woordlimieten
-- Er is geen expliciet verbod op uitweidingen
-- De voorbeelden in het prompt zijn zelf al te lang
-- Het LLM vult graag context aan als het niet hard wordt begrensd
+## Deel 1: Test-account toevoegen
 
-## Oplossing: prompt aanscherpen in `supabase/functions/doorai-chat/index.ts`
+Het `seed-admin-users` edge function wordt uitgebreid met:
 
-### 1. Coach Output Format verscherpen (regel 121-126)
+| Email | Wachtwoord | Rol | Profiel |
+|-------|-----------|-----|---------|
+| `test1@doorai.nl` | `admin010` | candidate | first_name: "Test1", last_name: "DOOR", current_phase: "interesseren" |
 
-Huidige instructie:
+---
+
+## Deel 2: Gele kleur verwijderen uit kleurenpalet
+
+In `dashboard-phases.ts` staat `bg-amber-500` als kleur voor de "interesseren" fase. Deze past niet bij het Rotterdam Groen / Magenta designsysteem. Alle fasekleuren worden aangepast naar tinten die binnen het palet vallen:
+
+| Fase | Oud | Nieuw |
+|------|-----|-------|
+| Interesseren | `bg-amber-500` (geel) | `bg-primary` (Rotterdam Groen) |
+| Orienteren | `bg-blue-500` | `bg-door-teal` of `bg-emerald-600` |
+| Beslissen | `bg-primary` | `bg-primary` (blijft) |
+| Matchen | `bg-purple-500` | `bg-accent` (Magenta) |
+| Voorbereiden | `bg-emerald-500` | `bg-emerald-700` (donkerder groen voor contrast) |
+
+Hierdoor gebruikt het hele platform alleen Rotterdam Groen en Magenta varianten -- geen losstaande kleuren meer.
+
+---
+
+## Deel 3: Profielpagina redesign
+
+### Nieuwe componenten
+
+**A. ProfileHero -- visuele header met completheid**
+
+Vervangt de huidige simpele groene balk. Toont:
+- Grotere avatar (centraal, 96px)
+- Naam + fase-badge + sector-badge
+- Voortgangsbalk "Profiel compleetheid" met percentage
+
+Berekening compleetheid (gewogen):
+- Naam ingevuld: 20%
+- Telefoon: 10%
+- Bio: 10%
+- Sector gekozen: 20%
+- Interessetest voltooid: 20%
+- CV geupload: 20%
+
+**B. ProfileTimeline -- dynamische verticale tijdlijn**
+
+Verticale tijdlijn die de 5 fasen visualiseert met real-time data:
+
+```text
+  (v) Interesseren     [voltooid - checkmark]
+   |
+  (*) Orienteren       [huidige fase - primary kleur, actief]
+   |   > "3 gesprekken gevoerd"
+   |   > "Sector: VO"
+   |   > Tip: "Vergelijk voltijd en deeltijd"
+   |
+  ( ) Beslissen        [nog niet bereikt - grijs]
+   |
+  ( ) Matchen          [vergrendeld - grijs]
+   |
+  ( ) Voorbereiden     [vergrendeld - grijs]
 ```
-1. Begin met 1 zin: empathie/normaliseren
-2. Geef max 2 zinnen: feitelijke info
-3. Eindig met exact 1 gerichte vervolgvraag
+
+Per fase:
+- Voltooide fasen: checkmark, korte samenvatting
+- Huidige fase: primary kleur, dynamische info uit profiel + gesprekscount (query op `conversations` tabel)
+- Toekomstige fasen: subtiel grijs met preview van wat er komt
+- Tips uit bestaande `dashboard-phases.ts` SSOT data
+
+**C. ProfileCompleteness -- losse voortgangscomponent**
+
+Herbruikbare balk met segmenten per categorie, gebruikt in de ProfileHero.
+
+### Layout herindeling
+
+Desktop: 2-kolom layout
+
+```text
+Links (40%):                Rechts (60%):
++---------------------+    +-----------------------------+
+| ProfileHero         |    | Dynamische Tijdlijn         |
+| - Avatar            |    | - 5 fasen verticaal         |
+| - Naam/badges       |    | - Chat-stats per fase       |
+| - Compleetheid %    |    | - Tips en acties            |
++---------------------+    +-----------------------------+
+| Persoonlijke        |
+| gegevens formulier  |
+| (naam, tel, bio)    |
++---------------------+
+| Sector keuze        |
++---------------------+
+| CV Upload           |
++---------------------+
+| Interessetest       |
++---------------------+
 ```
 
-Nieuwe instructie (veel strikter):
-```
-### LENGTE-LIMIET (HARD, GEEN UITZONDERINGEN):
-- Je volledige antwoord is MAXIMAAL 4 zinnen (inclusief de vervolgvraag)
-- Zin 1: empathie/normaliseren (kort, max 10 woorden)
-- Zin 2-3: feitelijke info (objectief, geen uitweidingen)
-- Zin 4: exact 1 korte vervolgvraag (GEEN opsomming van 3 opties in de vraagtekst)
-- NOOIT meer dan 4 zinnen. Tel ze. Als het er meer zijn, schrap.
-- Opsommingen en lijstjes zijn VERBODEN in je antwoord
-- De vervolgvraag bevat GEEN "of... of... of..." constructie -- die opties staan in de ACTIONS knoppen
-```
+Mobiel: gestapeld (hero, tijdlijn, formulier, rest).
 
-### 2. Voorbeelden in prompt inkorten (rond regel 160-175)
+### Stijlverbeteringen
 
-Huidige voorbeelden zijn te lang. Vervangen door:
+- `rounded-3xl` voor hoofdkaarten (conform branding richtlijn)
+- Subtiele gradient achtergronden in plaats van vlakke kleuren
+- Framer Motion staggered animaties voor kaarten en tijdlijn-nodes
+- Geen geel meer -- alleen Rotterdam Groen en Magenta tinten
+- Consistente `shadow-door` schaduw op kaarten
+- Professionelere typografie: sectietitels met `tracking-wide uppercase` stijl (zoals al op het dashboard)
 
-```
-User: "Ik twijfel of zij-instroom wel haalbaar is"
--> "Die twijfel hoor ik vaker, heel normaal. Zij-instroom is juist ontworpen om naast werk te doen, in 2 jaar. Waar twijfel je het meest over?"
-<!--ACTIONS:[{"label":"Studielast","value":"Ik twijfel over de studielast"},{"label":"Toelatingseisen","value":"Ik wil meer weten over toelatingseisen"},{"label":"Combineren met werk","value":"Kan ik dit combineren met mijn baan?"}]-->
+---
 
-User: "Wat verdien ik als leraar?"
--> "Goed dat je daar naar kijkt! Leraren verdienen tussen 2.900 - 5.800 bruto, afhankelijk van sector en ervaring. In welke sector denk je aan lesgeven?"
-<!--ACTIONS:[{"label":"PO","value":"Ik denk aan basisonderwijs"},{"label":"VO","value":"Ik denk aan voortgezet onderwijs"},{"label":"MBO","value":"Ik denk aan MBO"}]-->
-```
+## Technische details
 
-### 3. Anti-uitweiding regel toevoegen
+### Nieuwe bestanden
 
-Na de "Verdere regels" sectie, toevoegen:
-```
-- NOOIT de sector of route uitleggen tenzij de gebruiker er expliciet om vraagt
-- NOOIT herhalen wat de gebruiker al zei
-- Keuze-opties horen in de ACTIONS knoppen, NIET in je antwoord-tekst
-```
+| Bestand | Doel |
+|---------|------|
+| `src/components/profile/ProfileTimeline.tsx` | Verticale fase-tijdlijn met dynamische data |
+| `src/components/profile/ProfileHero.tsx` | Hero-sectie met avatar, badges, completheid |
+| `src/components/profile/ProfileCompleteness.tsx` | Voortgangsbalk component |
 
-## Resultaat
-- Antwoorden worden max 4 zinnen (was 6-8)
-- Geen inline "of X, of Y, of Z" meer in de vraagtekst (die staan in de knoppen)
-- Strakke, coachende toon zonder informatiedumps
+### Gewijzigde bestanden
 
-## Bestand dat wijzigt
-- `supabase/functions/doorai-chat/index.ts` -- alleen het system prompt blok
+| Bestand | Wijziging |
+|---------|-----------|
+| `supabase/functions/seed-admin-users/index.ts` | test1@doorai.nl toevoegen |
+| `src/data/dashboard-phases.ts` | Geel (amber) vervangen door on-brand kleuren |
+| `src/pages/Profile.tsx` | Volledige layout herindeling met nieuwe componenten |
+
+### Data die de tijdlijn gebruikt
+
+- `profiles` tabel: current_phase, preferred_sector, test_completed, test_results, cv_url
+- `conversations` tabel: COUNT(*) per user_id voor "aantal gesprekken"
+- `dashboard-phases.ts`: fase-titels, tips, acties (bestaande SSOT)
+
