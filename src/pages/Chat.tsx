@@ -146,11 +146,16 @@ export default function Chat() {
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               assistantContent += content;
+              // Strip any partial or complete ACTIONS comment from displayed text
+              const displayContent = assistantContent
+                .replace(/<!--ACTIONS:\[.*?\]-->/s, "")
+                .replace(/<!--ACTIONS:[\s\S]*$/, "")
+                .trimEnd();
               setMessages((prev) => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
                   role: "assistant",
-                  content: assistantContent,
+                  content: displayContent,
                 };
                 return updated;
               });
