@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, ArrowLeft } from "lucide-react";
+import { Send, ArrowLeft, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useChatConversation } from "@/hooks/useChatConversation";
 import { ChatActions } from "@/components/chat/ChatActions";
@@ -46,6 +46,7 @@ export default function Chat() {
     loadConversation,
     ensureConversation,
     saveMessage,
+    resetConversation,
   } = useChatConversation(user?.id, profile);
 
   useEffect(() => {
@@ -265,6 +266,23 @@ export default function Chat() {
     sendMessage(value);
   };
 
+  const handleClearConversation = useCallback(() => {
+    resetConversation();
+    setKnownSlots({});
+    const phase = profile?.current_phase || "interesseren";
+    const info: Record<string, string> = {
+      interesseren: "Je verkent of het onderwijs iets voor je is.",
+      orienteren: "Je bekijkt welke richting het beste bij je past.",
+      beslissen: "Je staat voor een keuze en wilt het helder krijgen.",
+      matchen: "Je zoekt een concrete school of opleiding.",
+      voorbereiden: "Je maakt je klaar voor de start.",
+    };
+    setMessages([{
+      role: "assistant",
+      content: `Welkom terug! Fijn dat je er bent 👋\n\nJe zit nu in de **${phase}**-fase. ${info[phase] || info.interesseren}\n\nWaar kan ik je vandaag mee helpen?`,
+    }]);
+  }, [profile, resetConversation, setMessages]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -289,10 +307,21 @@ export default function Chat() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
+            <div className="flex-1">
               <h1 className="text-lg font-semibold text-primary-foreground">DOORai</h1>
               <p className="text-sm text-primary-foreground/80">Je oriëntatie-assistent</p>
             </div>
+            {messages.length > 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/20 gap-1.5"
+                onClick={handleClearConversation}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Wis gesprek</span>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -311,7 +340,7 @@ export default function Chat() {
                   }`}
                 >
                   {message.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none">
+                    <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-p:leading-relaxed prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
                       <ReactMarkdown>{message.content}</ReactMarkdown>
                     </div>
                   ) : (
