@@ -168,10 +168,52 @@ ${PHASE_RULES.phases.map((p, i) => `${i + 1}. **${p.title}** (${p.intent}) — $
 - Vacatures: /vacatures
 - Events: /events`;
 
+// ── Auth system prompt (higher level, only for ingelogde chat) ─────────
+const DOORAI_SYSTEM_PROMPT_AUTH = `Je bent Doortje, de nuchtere en warme gids van DOOR.
+
+Schrijfstijl
+- Direct, menselijk, zonder verkooppraat.
+- Geen automatische bevestigingen (zoals "goed dat je dit vraagt") en geen standaard samenvattingen.
+- Geen vragen stellen in je antwoord. Gebruik geen vraagteken.
+- Maximaal 110 woorden. Korte alinea's. Geen lange uitleg.
+- Geen emdash (— of –). Gebruik punt of een gewone streep (-).
+
+Inhoud
+- Geef objectieve info. Maak het concreet met 2 routes of 2 scenario's als dat helpt.
+- Als details afhangen van sector, regio of school: zeg dat erbij.
+- Als het maatwerk wordt: benoem dat een gesprek met het loket handig is.
+
+Je sluit NIET af met een vraag. Wij voegen exact 1 SSOT vervolgvraag toe.`;
+
 // ── Types ──────────────────────────────────────────────────────────────
 interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+}
+
+type SlotKey =
+  | "school_type"
+  | "role_interest"
+  | "credential_goal"
+  | "admission_requirements"
+  | "duration_info"
+  | "costs_info"
+  | "salary_info"
+  | "region_preference"
+  | "next_step";
+
+interface DetectorPayload {
+  audience: string;
+  phase_current: string;
+  phase_current_ui: string;
+  phase_confidence: number;
+  evidence: string[];
+  known_slots: Partial<Record<SlotKey, string>>;
+  missing_slots: SlotKey[];
+  next_slot_key: SlotKey;
+  next_question_id: string;
+  next_question: string;
+  next_phase_target?: string;
 }
 
 interface RequestBody {
@@ -179,6 +221,89 @@ interface RequestBody {
   mode?: "public" | "authenticated";
   userPhase?: string;
   userSector?: string;
+  detector?: DetectorPayload;
+}
+
+// ── Actions based on next slot (for authenticated flow) ────────────────
+function actionsForNextSlot(
+  slot: SlotKey,
+): Array<{ label: string; value: string }> {
+  if (slot === "school_type") {
+    return [
+      { label: "PO (basisonderwijs)", value: "PO" },
+      { label: "VO (voortgezet)", value: "VO" },
+      { label: "MBO (beroepsonderwijs)", value: "MBO" },
+    ];
+  }
+  if (slot === "role_interest") {
+    return [
+      { label: "Lesgeven", value: "Ik wil lesgeven" },
+      { label: "Begeleiden", value: "Ik wil begeleiden" },
+      { label: "Vakexpertise", value: "Ik wil mijn vak inzetten" },
+    ];
+  }
+  if (slot === "credential_goal") {
+    return [
+      { label: "Route naar bevoegdheid", value: "Ik wil routes naar bevoegdheid zien" },
+      { label: "Eerst verkennen", value: "Ik wil eerst verkennen wat bij me past" },
+    ];
+  }
+  if (slot === "admission_requirements") {
+    return [
+      { label: "MBO", value: "Ik heb mbo" },
+      { label: "HBO", value: "Ik heb hbo" },
+      { label: "WO", value: "Ik heb wo" },
+      { label: "Anders", value: "Anders" },
+    ];
+  }
+  if (slot === "region_preference") {
+    return [
+      { label: "Regio Rotterdam", value: "Regio Rotterdam" },
+      { label: "Andere regio", value: "Andere regio" },
+    ];
+  }
+  if (slot === "next_step") {
+    return [
+      { label: "Vacatures", value: "Ik wil vacatures bekijken" },
+      { label: "Gesprek plannen", value: "Ik wil een gesprek plannen" },
+      { label: "Events", value: "Ik wil events bekijken" },
+    ];
+  }
+  return [];
+}
+
+// ── Stream filter: replace emdash/en-dash in SSE chunks ─────────────────
+function streamReplaceDashes(input: ReadableStream<Uint8Array>) {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const reader = input.getReader();
+
+      const pump = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunkText = decoder.decode(value, { stream: true });
+            const replaced = chunkText.replace(/[—–]/g, "-");
+            controller.enqueue(encoder.encode(replaced));
+          }
+
+          const tail = decoder.decode();
+          if (tail) controller.enqueue(encoder.encode(tail.replace(/[—–]/g, "-")));
+          controller.close();
+        } catch (e) {
+          console.error("Stream transform error:", e);
+          controller.close();
+        }
+      };
+
+      pump();
+    },
+  });
 }
 
 // ── Handler ────────────────────────────────────────────────────────────
@@ -188,49 +313,39 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, mode = "public", userPhase, userSector }: RequestBody = await req.json();
+    const { messages, mode = "public", userPhase, userSector, detector }: RequestBody = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Extract slots from last user message
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
     const extracted = extractSlots(lastUserMsg);
 
-    // Choose deterministic next question
-    const nextQ = chooseNextQuestion(userPhase, extracted);
+    // Public / legacy next question + actions (blijft zoals het nu is)
+    const legacyNextQ = chooseNextQuestion(userPhase, extracted);
+    const legacyActions = chooseActions(userPhase, extracted);
 
-    // Choose actions for this context (server-side, NOT in AI output)
-    const actions = chooseActions(userPhase, extracted);
+    // Auth SSOT next question + actions
+    const authNextQ = detector?.next_question && detector?.next_slot_key
+      ? { slot: detector.next_slot_key, question: detector.next_question }
+      : legacyNextQ;
 
-    // Build context-aware system prompt
-    let systemPrompt = DOORAI_SYSTEM_PROMPT;
+    const authActions = detector?.next_slot_key
+      ? actionsForNextSlot(detector.next_slot_key)
+      : legacyActions;
 
-    if (mode === "authenticated" && userPhase) {
-      const currentPhaseInfo = PHASE_RULES.phases.find(
-        (p) => p.code === userPhase || p.title.toLowerCase() === userPhase.toLowerCase(),
-      );
+    // System prompt
+    let systemPrompt = mode === "authenticated" ? DOORAI_SYSTEM_PROMPT_AUTH : DOORAI_SYSTEM_PROMPT;
 
-      systemPrompt += `\n\n## Huidige gebruiker context
-- Ingelogd: Ja
-- Huidige fase: ${currentPhaseInfo?.title || userPhase}
-- Fase-beschrijving: ${currentPhaseInfo?.description || "Onbekend"}
-- Begeleidingsintentie: ${currentPhaseInfo?.intent || "verhelderen"} — ${currentPhaseInfo?.tone || ""}
-${userSector ? `- Voorkeursector: ${userSector}` : "- Sector: nog niet gekozen"}
-
-## Detector output
-- Extracted school_type: ${extracted.school_type ?? "onbekend"}
-- Next question (must ask): ${nextQ.question}
-
-Gebruik de begeleidingsintentie "${currentPhaseInfo?.intent || "verhelderen"}" in je toon.
-Je MOET eindigen met deze vervolgvraag: "${nextQ.question}" (of een natuurlijke variant ervan).`;
+    if (mode === "authenticated") {
+      systemPrompt += `\n\nContext\n- Ingelogd: ja\n- Fase: ${detector?.phase_current_ui || userPhase || "interesseren"}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}\n- Next question_id: ${detector?.next_question_id || "onbekend"}\n- Next slot: ${authNextQ.slot}\n- SSOT vraag (server appends): ${authNextQ.question}\n`;
+      if (userSector) systemPrompt += `- Voorkeursector: ${userSector}\n`;
+      if (detector?.evidence?.length) systemPrompt += `- Evidence: ${detector.evidence.slice(0, 3).join(" | ")}\n`;
     } else {
-      systemPrompt += `\n\n## Huidige context
-- Ingelogd: Nee
-
-Help de bezoeker wegwijs en moedig aan om een account te maken voor persoonlijke begeleiding.`;
+      // Public context blijft kort
+      systemPrompt += `\n\n## Huidige context\n- Ingelogd: Nee\n`;
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -267,24 +382,33 @@ Help de bezoeker wegwijs en moedig aan om een account te maken voor persoonlijke
       );
     }
 
-    // Stream AI response through, then append server-side actions event
     const aiBody = response.body!;
+    const filtered = streamReplaceDashes(aiBody);
+
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const encoder = new TextEncoder();
 
     (async () => {
       try {
-        const reader = aiBody.getReader();
+        const reader = filtered.getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           await writer.write(value);
         }
-        // After AI stream ends, send server-side actions as a custom SSE event
-        await writer.write(
-          encoder.encode(`data: ${JSON.stringify({ actions })}\n\n`)
-        );
+
+        // Auth: append exact 1 SSOT question, so the model never paraphrases it
+        if (mode === "authenticated") {
+          const qChunk = {
+            choices: [{ delta: { content: `\n\n${authNextQ.question}` } }],
+          };
+          await writer.write(encoder.encode(`data: ${JSON.stringify(qChunk)}\n\n`));
+        }
+
+        // Always append server-side actions event
+        const actions = mode === "authenticated" ? authActions : legacyActions;
+        await writer.write(encoder.encode(`data: ${JSON.stringify({ actions })}\n\n`));
       } catch (e) {
         console.error("Stream error:", e);
       } finally {

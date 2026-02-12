@@ -9,13 +9,23 @@ import { Send, ArrowLeft } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useChatConversation } from "@/hooks/useChatConversation";
 import { ChatActions } from "@/components/chat/ChatActions";
+import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
 
 interface Profile {
-  current_phase: string;
+  current_phase: UiPhaseCode | null;
   preferred_sector: string | null;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
+
+function sectorToSchoolType(sector: string | null | undefined): string | undefined {
+  if (!sector) return undefined;
+  const s = sector.toLowerCase();
+  if (s.includes("po")) return "PO";
+  if (s.includes("vo")) return "VO";
+  if (s.includes("mbo")) return "MBO";
+  return undefined;
+}
 
 export default function Chat() {
   const { user, loading: authLoading } = useAuth();
@@ -23,6 +33,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -52,7 +63,12 @@ export default function Chat() {
             .select("current_phase, preferred_sector")
             .eq("user_id", user.id)
             .single();
-          if (data) setProfile(data);
+          if (data) {
+            setProfile(data);
+            // Seed known slots from profile
+            const schoolType = sectorToSchoolType(data.preferred_sector);
+            if (schoolType) setKnownSlots((prev) => ({ ...prev, school_type: schoolType }));
+          }
         } catch (error) {
           console.error("Error fetching profile:", error);
         } finally {
@@ -77,11 +93,53 @@ export default function Chat() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  const maybePersistProfile = useCallback(
+    async (detector: ReturnType<typeof runPhaseDetector>) => {
+      if (!user) return;
+
+      const updates: Record<string, unknown> = {};
+
+      // Update current_phase only when confidence is reasonable
+      if (profile?.current_phase && detector.phase_current_ui !== profile.current_phase && detector.phase_confidence >= 0.75) {
+        updates.current_phase = detector.phase_current_ui;
+      }
+
+      // Update preferred sector when we have a concrete school_type
+      const st = detector.known_slots.school_type;
+      if (st && typeof st === "string") {
+        const sector = st === "PO" ? "po" : st === "VO" ? "vo" : st === "MBO" ? "mbo" : null;
+        if (sector && sector !== profile?.preferred_sector) {
+          updates.preferred_sector = sector;
+        }
+      }
+
+      if (Object.keys(updates).length === 0) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .update(updates)
+          .eq("user_id", user.id)
+          .select("current_phase, preferred_sector")
+          .single();
+
+        if (!error && data) {
+          setProfile(data);
+        }
+      } catch (e) {
+        console.warn("Profile update skipped:", e);
+      }
+    },
+    [user, profile],
+  );
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
     const userMessage = { role: "user" as const, content: text };
-    setMessages((prev) => [...prev, userMessage]);
+    const outgoingMessages = [...messages, userMessage];
+
+    setMessages(outgoingMessages);
     setInput("");
     setIsLoading(true);
     setLatestActions([]);
@@ -94,6 +152,23 @@ export default function Chat() {
         await saveMessage(convId, "user", text);
       }
 
+      // Phase Detector: alleen voor ingelogde chat
+      const conversationTurns: ConversationTurn[] = outgoingMessages
+        .slice(-30)
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, text: m.content }));
+
+      const detector = runPhaseDetector({
+        conversation: conversationTurns,
+        known_slots: knownSlots,
+        current_phase_ui: profile?.current_phase || "interesseren",
+      });
+
+      setKnownSlots(detector.known_slots);
+
+      // Optioneel profiel bijwerken (alleen bij voldoende confidence)
+      await maybePersistProfile(detector);
+
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -101,13 +176,11 @@ export default function Chat() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: outgoingMessages.map((m) => ({ role: m.role, content: m.content })),
           mode: "authenticated",
-          userPhase: profile?.current_phase || "interesseren",
+          userPhase: detector.phase_current_ui,
           userSector: profile?.preferred_sector,
+          detector, // SSOT: next_question_id + next_question + next_slot_key + evidence
         }),
       });
 
@@ -143,7 +216,7 @@ export default function Chat() {
           try {
             const parsed = JSON.parse(jsonStr);
 
-            // Check if this is the server-side actions event
+            // Server-side actions event
             if (parsed.actions && Array.isArray(parsed.actions)) {
               setLatestActions(parsed.actions);
               continue;
@@ -168,7 +241,6 @@ export default function Chat() {
         }
       }
 
-      // Save assistant message to DB
       if (convId) {
         await saveMessage(convId, "assistant", assistantContent);
       }
@@ -207,7 +279,6 @@ export default function Chat() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 flex flex-col">
-        {/* Chat header */}
         <div className="bg-primary py-4 border-b border-primary/20">
           <div className="container flex items-center gap-4">
             <Button
@@ -220,12 +291,11 @@ export default function Chat() {
             </Button>
             <div>
               <h1 className="text-lg font-semibold text-primary-foreground">DOORai</h1>
-              <p className="text-sm text-primary-foreground/80">Je persoonlijke oriëntatie-assistent</p>
+              <p className="text-sm text-primary-foreground/80">Je oriëntatie-assistent</p>
             </div>
           </div>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto">
           <div className="container py-6 space-y-4 max-w-3xl mx-auto">
             {messages.map((message, index) => (
@@ -265,19 +335,14 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* Footer: actions + input */}
         <div className="border-t border-border bg-background">
-          <ChatActions
-            actions={latestActions}
-            onActionClick={handleActionClick}
-            disabled={isLoading}
-          />
+          <ChatActions actions={latestActions} onActionClick={handleActionClick} disabled={isLoading} />
           <div className="container max-w-3xl mx-auto py-4">
             <form onSubmit={handleSubmit} className="flex gap-3">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Stel je vraag aan DOORai..."
+                placeholder="Stel je vraag..."
                 disabled={isLoading}
                 className="flex-1"
               />
