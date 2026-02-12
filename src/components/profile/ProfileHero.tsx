@@ -42,39 +42,40 @@ export function ProfileHero(props: ProfileHeroProps) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-3xl bg-gradient-to-br from-primary/5 via-card to-accent/5 border shadow-door p-6 space-y-5"
+      className="rounded-3xl bg-gradient-to-br from-primary/5 via-card to-accent/5 border shadow-door p-5"
     >
-      {/* Back button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => navigate("/dashboard")}
-        className="text-muted-foreground -ml-2"
-      >
-        <ArrowLeft className="h-4 w-4 mr-1" />
-        Dashboard
-      </Button>
+      <div className="flex items-start gap-4">
+        {/* Back button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate("/dashboard")}
+          className="text-muted-foreground shrink-0 h-8 w-8"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
 
-      {/* Avatar + Name */}
-      <div className="flex flex-col items-center text-center space-y-3">
-        <Avatar className="h-24 w-24 border-4 border-primary/20">
+        {/* Avatar */}
+        <Avatar className="h-14 w-14 border-2 border-primary/20 shrink-0">
           {props.avatarUrl && <AvatarImage src={props.avatarUrl} alt="Avatar" />}
-          <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+          <AvatarFallback className="text-lg font-bold bg-primary/10 text-primary">
             {initials}
           </AvatarFallback>
         </Avatar>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">
+
+        {/* Name + badges */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold text-foreground truncate">
             {props.firstName || "Nieuw"} {props.lastName || "Profiel"}
           </h1>
-          <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
             {props.currentPhase && (
-              <Badge className="bg-primary/15 text-primary border-0 text-xs">
+              <Badge className="bg-primary/15 text-primary border-0 text-[10px]">
                 {phaseLabels[props.currentPhase] || props.currentPhase}
               </Badge>
             )}
             {props.preferredSector && props.preferredSector !== "onbekend" && (
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-[10px]">
                 {sectorLabels[props.preferredSector] || props.preferredSector}
               </Badge>
             )}
@@ -82,15 +83,17 @@ export function ProfileHero(props: ProfileHeroProps) {
         </div>
       </div>
 
-      {/* Completeness */}
-      <ProfileCompleteness
-        firstName={props.firstName}
-        phone={props.phone}
-        bio={props.bio}
-        preferredSector={props.preferredSector}
-        testCompleted={props.testCompleted}
-        cvUrl={props.cvUrl}
-      />
+      {/* Completeness - compact */}
+      <div className="mt-4">
+        <ProfileCompleteness
+          firstName={props.firstName}
+          phone={props.phone}
+          bio={props.bio}
+          preferredSector={props.preferredSector}
+          testCompleted={props.testCompleted}
+          cvUrl={props.cvUrl}
+        />
+      </div>
     </motion.div>
   );
 }

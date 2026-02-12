@@ -21,13 +21,21 @@ function sectorToSchoolType(sector: string | null | undefined): string | undefin
   return undefined;
 }
 
+interface ProfileMeta {
+  first_name?: string | null;
+  bio?: string | null;
+  test_completed?: boolean | null;
+  test_results?: unknown;
+}
+
 interface DashboardChatProps {
   userId: string;
   currentPhase: UiPhaseCode;
   preferredSector: string | null;
+  profileMeta?: ProfileMeta;
 }
 
-export function DashboardChat({ userId, currentPhase, preferredSector }: DashboardChatProps) {
+export function DashboardChat({ userId, currentPhase, preferredSector, profileMeta }: DashboardChatProps) {
   const [input, setInput] = useState("");
   const [knownSlots, setKnownSlots] = useState<KnownSlots>(() => {
     const st = sectorToSchoolType(preferredSector);
@@ -162,6 +170,12 @@ export function DashboardChat({ userId, currentPhase, preferredSector }: Dashboa
           userSector: preferredSector,
           detector,
           phase_transition: phaseTransition,
+          profileMeta: profileMeta ? {
+            first_name: profileMeta.first_name,
+            bio: profileMeta.bio,
+            test_completed: profileMeta.test_completed,
+            test_results: profileMeta.test_results,
+          } : undefined,
         }),
       });
 
