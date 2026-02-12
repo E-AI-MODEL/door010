@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { MessageCircle, X, Send, ArrowRight, ExternalLink } from "lucide-react";
+import { MessageCircle, X, Send, ArrowRight, ExternalLink, Bot, Mail, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
@@ -431,13 +431,38 @@ export function PublicChatWidget() {
                   <p className="text-[10px] text-primary-foreground/70">Je gids naar het onderwijs</p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-1 hover:bg-primary-foreground/20 rounded-full transition-colors"
-                aria-label="Sluit chat"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <a
+                  href="https://doortje-embedded-bot.replit.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Chat met Doortje"
+                  className="p-1 hover:bg-primary-foreground/20 rounded-full transition-colors"
+                >
+                  <Bot className="h-4 w-4" />
+                </a>
+                <a
+                  href="mailto:info@onderwijsloketrotterdam.nl"
+                  title="E-mail ons"
+                  className="p-1 hover:bg-primary-foreground/20 rounded-full transition-colors"
+                >
+                  <Mail className="h-4 w-4" />
+                </a>
+                <a
+                  href="tel:+31107940000"
+                  title="Bel ons"
+                  className="p-1 hover:bg-primary-foreground/20 rounded-full transition-colors"
+                >
+                  <Phone className="h-4 w-4" />
+                </a>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-1 hover:bg-primary-foreground/20 rounded-full transition-colors"
+                  aria-label="Sluit chat"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
