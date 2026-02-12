@@ -1,72 +1,65 @@
 
+# A/B Test Onboarding: Pop-up, Testinfo & Auto-login
 
-# Mini-chat wisknop + Volledig gesprek herontwerp
+## Overzicht
 
-## Drie onderdelen
+Drie onderdelen worden gebouwd:
 
-### 1. Wisknop in de mini-chat (DashboardChat)
+1. **Blocking pop-up op de homepage** -- verschijnt bij eerste bezoek, toont uitleg over de A/B test en wijst een uniek testaccount toe (test2-test30). Gebruiker kan pas verder na inloggen.
+2. **"Testinfo" knop in de header** -- altijd zichtbaar, opent een modal met dezelfde uitleg maar zonder logingegevens.
+3. **Testaccount toewijzing** -- per apparaat wordt een account (test2-test30) toegewezen via `localStorage` en blijft bij terugkomen hetzelfde.
 
-De mini-chat op het dashboard mist een "wis gesprek" knop. Toevoegen als klein Trash2-icoon naast het invoerveld (links), identiek aan hoe het in Chat.tsx werkt. Gebruikt `resetConversation` uit de `useChatConversation` hook (die al beschikbaar is maar niet geimporteerd).
+---
 
-### 2. Volledig gesprek (/chat) visueel gelijktrekken met mini-chat
+## Technische details
 
-De `/chat` pagina gebruikt nu:
-- Solid green header balk
-- `rounded-lg` bubbles
-- Geen card-container
-- Platte layout zonder shadow
+### Nieuw bestand: `src/components/onboarding/TestOnboardingPopup.tsx`
 
-Dit wordt visueel consistent gemaakt met de mini-chat:
-- Groene header wordt een compacte bar met DOORai label + terugknop (binnen een card-achtige container)
-- Bubbles worden `rounded-2xl` (zelfde als mini)
-- De hele chat zit in een `rounded-3xl border bg-card shadow-door` container (zelfde styling)
-- Suggestieknoppen (`ChatActions`) krijgen dezelfde compacte pill-styling als de mini-chat
-- Input area styling wordt consistent
+- Blocking dialog (AlertDialog, geen close-mogelijkheid behalve via de CTA).
+- Toont de 5 tekstblokken uit het plan (Hallo, Wat test je, A/B uitleg, Placeholders, Jouw testlogin).
+- Account toewijzing: kiest random getal 2-30, slaat op in `localStorage` key `doorai_test_account_index`. Bij terugkomen wordt hetzelfde getal opgehaald.
+- "Kopieer email" en "Kopieer wachtwoord" knoppen (navigator.clipboard).
+- CTA "Start met testen (log in)" roept `signIn(email, password)` aan uit AuthContext en navigeert naar `/dashboard`.
+- Zichtbaarheidslogica: alleen tonen als `localStorage` key `doorai_onboarding_seen` niet `"true"` is EN gebruiker niet ingelogd is.
+- Na succesvol inloggen wordt `doorai_onboarding_seen` op `"true"` gezet.
+- ScrollArea voor de lange tekst zodat het op kleinere schermen ook werkt.
 
-### 3. Gesprekssuggesties als interactieve timeline-feed
+### Nieuw bestand: `src/components/onboarding/TestInfoModal.tsx`
 
-Na elk assistant-antwoord worden de server-side `actions` al ontvangen. Deze worden nu alleen als tekst-pills getoond. Het plan is om deze suggesties te verrijken met visuele context:
+- Gewone Dialog component.
+- Toont dezelfde tekstblokken als de pop-up, maar zonder Blok 5 (logingegevens).
+- Wordt getriggerd vanuit de Header.
 
-- **Link-suggesties**: als een actie een pad bevat (bijv. `/vacatures`, `/opleidingen`, `/events`), toon dit als een klikbare kaart met icoon en korte beschrijving
-- **Tool-suggesties**: als een actie verwijst naar de interessetest of CV-upload, toon een compact kaartje met een actie-icoon
-- **Gewone suggesties**: blijven als pill-knoppen (huidige vorm)
+### Wijziging: `src/components/layout/Header.tsx`
 
-Dit wordt gedaan door een nieuw component `ChatSuggestions` dat de `actions` array parseert en de juiste weergave kiest op basis van het type.
+- Import `TestInfoModal` en `Info` icon van lucide.
+- Voeg een "Testinfo" knop toe in de desktop navigatie (rechts, naast login/dashboard knoppen).
+- Voeg dezelfde knop toe in het mobiele menu.
+- State `testInfoOpen` voor het openen/sluiten van de modal.
 
-## Technische wijzigingen per bestand
+### Wijziging: `src/pages/Index.tsx`
 
-### `src/components/dashboard/DashboardChat.tsx`
-- Import `Trash2` van lucide-react
-- Import `resetConversation` uit de hook (al beschikbaar, niet gebruikt)
-- Voeg Trash2 knop toe links van het invoerveld (alleen zichtbaar als messages.length > 1)
-- Reset ook `knownSlots` bij wissen
+- Import en render `TestOnboardingPopup` component.
+- De pop-up verschijnt bovenop de homepage content.
 
-### `src/pages/Chat.tsx`
-- Verwijder de solid green header balk
-- Wrap de hele chat in een `rounded-3xl border bg-card shadow-door` container binnen een `container max-w-3xl mx-auto`
-- Compacte header: DOORai label + terugknop + wisknop (in de card header, niet apart)
-- Bubbles: `rounded-2xl` i.p.v. `rounded-lg`
-- Vervang `ChatActions` door het nieuwe `ChatSuggestions` component
-- Input styling consistent met mini-chat (`rounded-xl`, `h-9`)
+### Geen database wijzigingen nodig
 
-### `src/components/chat/ChatSuggestions.tsx` (nieuw)
-- Vervangt `ChatActions` voor de volledige chatpagina
-- Parseert de actions array:
-  - Als `value` een intern pad bevat (`/vacatures`, `/opleidingen`, `/events`, `/kennisbank`): toon als link-kaart met route-icoon (Briefcase, GraduationCap, Calendar, BookOpen) en korte beschrijving
-  - Als `value` verwijst naar test/CV: toon als actie-kaart met icoon
-  - Anders: toon als pill-knop (bestaande styling)
-- Link-kaarten zijn klikbaar en navigeren direct (geen chat-bericht)
-- Pill-knoppen sturen het bericht zoals nu
+- Account toewijzing is puur client-side via localStorage.
+- De testaccounts (test2-test30@doorai.nl) moeten wel bestaan in de auth database -- dit valt buiten scope van de code maar moet handmatig of via seed worden aangemaakt.
 
-### `src/components/chat/ChatActions.tsx`
-- Blijft bestaan voor de mini-chat (compactere variant)
-- Geen wijzigingen
+---
 
 ## Bestanden
 
-| Bestand | Wijziging |
-|---------|-----------|
-| `src/components/dashboard/DashboardChat.tsx` | Wisknop toevoegen |
-| `src/pages/Chat.tsx` | Layout herontwerp, consistent met mini-chat |
-| `src/components/chat/ChatSuggestions.tsx` | Nieuw: verrijkte suggesties met link-kaarten |
+| Bestand | Actie |
+|---------|-------|
+| `src/components/onboarding/TestOnboardingPopup.tsx` | Nieuw |
+| `src/components/onboarding/TestInfoModal.tsx` | Nieuw |
+| `src/components/layout/Header.tsx` | Wijzigen (Testinfo knop) |
+| `src/pages/Index.tsx` | Wijzigen (pop-up toevoegen) |
 
+---
+
+## Gedeelde tekst-constanten
+
+Beide modals delen dezelfde tekstblokken. De tekst wordt als constanten gedefinieerd in de pop-up component en geexporteerd zodat de TestInfoModal dezelfde content kan hergebruiken (minus blok 5).
