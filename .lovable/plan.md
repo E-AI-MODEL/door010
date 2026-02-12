@@ -1,109 +1,100 @@
+# Format contract + typografie fix voor AUTH chat
+
+## Drie wijzigingen
+
+### 1. Format contract toevoegen aan AUTH prompt (`doorai-chat/index.ts`)
+
+In de `DOORAI_SYSTEM_PROMPT_AUTH`, onder "NA INLOG MODUS" (rond regel 257-261), het bestaande blok vervangen door een ander  format, een formatkeuze op basis van intent en fase. Dus: één van een paar sjablonen, en alleen bullets als er echt iets te kiezen of te vergelijken valt.  
+  
+Zo zou ik het aanscherpen, zonder dat je opmaak weer lelijk wordt.  
+  
+Nieuwe FORMAT regels (flexibel, maar strak)  
+  
+Gebruik dit als vervanging van je huidige blok:  
+  
+FORMAT (flexibel, maar strak)  
+Kies precies één van deze vormen:  
+  
+  
+VORM A: Kort antwoord (meest gebruikt)  
+- 1 korte openingszin (max 12 woorden).  
+- 1 tot 2 korte zinnen uitleg (geen bullets).  
+- 1 korte vervolgstap zonder vraagteken.  
+  
+  
+VORM B: Keuzehulp (alleen als er echt 2 routes/opties zijn)  
+- 1 korte openingszin (max 12 woorden).  
+- Maximaal 2 bullets met opties. Gebruik "- " markdown. Gebruik nooit het woord "Scenario".  
+- 1 korte vervolgstap zonder vraagteken.  
+  
+  
+VORM C: Doorverwijzen (als maatwerk of risico op advies)  
+- 1 korte openingszin (max 12 woorden).  
+- 1 zin waarom dit kan verschillen of maatwerk is.  
+- 1 duidelijke vervolgstap zonder vraagteken (verwijs naar consult of vaste pagina).  
+  
+  
+Regels die altijd gelden  
+- Geen emojis, geen vraagtekens.  
+- Max 90 woorden totaal.  
+- Gebruik alleen alinea's en bullets met "- ".  
+- Als next_question_text aanwezig is: wij voegen die exact toe. Jij schrijft alleen het statement.  
+- Als next_question_text ontbreekt: eindig met een duidelijke vervolgstap zonder vraagteken.  
+  
+Kies VORM B alleen als de gebruiker duidelijk om vergelijken/keuze vraagt  
+(woorden als: verschil, kiezen, A of B, welke route, zij-instroom vs deeltijd).  
+Anders gebruik VORM A.  
+Gebruik VORM C bij salaris/inschaling/regels of als het maatwerk wordt.  
+  
+Waarom dit werkt  
+Je houdt de opmaak strak (geen rare regels), maar je forceert niet altijd bullets.  
+VORM A voorkomt dat elk antwoord een mini-vergelijking wordt.  
+VORM B zorgt dat wanneer er wél keuze is, het er netjes uitziet.  
+VORM C voorkomt dat je per ongeluk “advies” gaat geven en houdt het bij verwijzing.  
+  
+Mini voorbeelden (om het gedrag te zetten)  
+  
+VORM A voorbeeld  
+Gebruiker: “Ik zoek een school voor onderdaad.”  
+Doortje: “Dan focussen we op een concrete plek vinden. Kijk eerst wat er openstaat in jouw regio en sector, dan kun je scholen vergelijken op cultuur en begeleiding. Ga naar vacatures en zet een filter op sector en plaats.”  
+  
+VORM B voorbeeld  
+Gebruiker: “Zij-instroom of deeltijd, wat past beter?”  
+Doortje: “Er zijn twee routes die vaak logisch zijn.”  
+  
+Zij-instroom: sneller richting werk, met begeleiding op school  
+  
+Deeltijdopleiding: meer vaste opbouw, met stages en studiebelasting  
+Kies eerst je sector en niveau, dan maken we het concreet.  
+  
+VORM C voorbeeld  
+Gebruiker: “Wat verdien ik precies in het VO?”  
+Doortje: “Dit hangt af van functie en inschaling. Voor exacte bedragen is de CAO leidend en kan het per situatie verschillen. Check de VO CAO tabellen en kom terug met je functietype als je wil vergelijken.”
+
+Ook "Scenario" toevoegen aan de verboden-zinnen lijst.
+
+### 2. Prose margins verkleinen (`Chat.tsx` en `DashboardChat.tsx`)
+
+**Chat.tsx regel 338**: van `prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5` naar `prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0`
+
+**DashboardChat.tsx regel 260**: al redelijk strak, maar ook naar `prose-p:my-1 prose-ul:my-1 prose-li:my-0` voor consistentie.
+
+### 3. normalizeMarkdown functie toevoegen
+
+Een helper functie die:
+
+- Em-dashes vervangt door streepjes
+- Opeenvolgende lege regels samenvoegt
+- Losse regels (geen bullet, heading of quote) samenvoegt tot alinea's
+
+Toevoegen als gedeeld utility, gebruikt in zowel `Chat.tsx` als `DashboardChat.tsx` bij het renderen van assistant berichten.
+
+## Bestanden
 
 
-# Dashboard herontwerp: rustiger, logischer, connected
-
-## Wat er nu mis is
-
-1. **Tips en Snelle Links** nemen elk een volledig kaartblok in beslag, terwijl de inhoud minimaal is (3 bullets / 4 links)
-2. **DOORai-kaart** is een dode link-kaart die naar /chat stuurt - voelt niet connected
-3. **Oriëntatietraject** (tijdlijn) staat op de profielpagina, terwijl dat het hart is van het dashboard
-4. **Fase-overgang wordt niet meegegeven aan de LLM** als de phase detector een verschuiving detecteert
-
-## Nieuwe dashboard-indeling
-
-```text
-+------------------------------------------------------+
-| Header                                                |
-+------------------------------------------------------+
-| Welkom, Frans!                          [Uitloggen]   |
-| Interesse: vo                                         |
-+------------------------------------------------------+
-| Fase-stappen balk (bestaand)                         |
-+------------------------------------------------------+
-|                          |                            |
-|  ORIËNTATIETRAJECT       |  INLINE DOORai CHAT        |
-|  (tijdlijn, verplaatst   |  (mini chatvenster met     |
-|   vanuit profiel)        |   laatste paar berichten,  |
-|                          |   invoerveld, suggesties)  |
-|  FASE-KAART (compact)    |                            |
-|  (header + acties,       |                            |
-|   geen apart tips-blok)  |                            |
-|                          |                            |
-|  PROFIEL (compact)       |                            |
-|  + Rotterdam info        |                            |
-|  (samengevoegd, klein)   |                            |
-|                          |                            |
-+------------------------------------------------------+
-| Footer                                                |
-+------------------------------------------------------+
-```
-
-### Wat verdwijnt / krimpt
-
-- **PhaseTips**: wordt opgenomen als subtiele regel onder de PhaseCard acties (niet apart kaartblok)
-- **QuickLinksCard**: verdwijnt als apart blok. De links zitten al in de fase-acties en de header-navigatie
-- **DOORaiCard** (link-kaart): vervangen door inline chat
-- **RotterdamInfoCard**: wordt compact onderdeel van het profielblok
-
-### Wat wordt verplaatst
-
-- **ProfileTimeline**: van `/profile` naar het dashboard (linkerkolom, bovenaan)
-- **ProfileTimeline** blijft ook beschikbaar op de profielpagina (herbruikbaar component)
-
-### Wat nieuw is
-
-- **Inline DOORai mini-chat** in de rechterkolom: toont de laatste berichten, een invoerveld en suggestieknoppen. Gebruikt dezelfde `useChatConversation` hook en dezelfde edge function. Link naar /chat voor volledige weergave.
-
-## Fase-overgang meegeven aan LLM
-
-Wanneer de phase detector een fase-verschuiving detecteert (confidence >= 0.75 en nieuwe fase != huidige fase), wordt dit als extra context meegegeven:
-
-### In `src/pages/Chat.tsx` (en straks ook dashboard mini-chat)
-
-Bij het verzenden naar de edge function wordt een extra veld `phase_transition` toegevoegd aan de detector payload als er een verschuiving is gedetecteerd.
-
-### In `supabase/functions/doorai-chat/index.ts`
-
-De system prompt krijgt een extra contextblok als `phase_transition` aanwezig is:
-
-```
-- Fase-verschuiving: van [oude fase] naar [nieuwe fase]. 
-  Erken dit kort en positief (bijv. "Je bent een stap verder"). 
-  Pas je begeleiding aan op de nieuwe fase.
-```
-
-## Technische wijzigingen per bestand
-
-### `src/pages/Dashboard.tsx`
-- Verwijder imports: `PhaseTips`, `DOORaiCard`, `QuickLinksCard`, `RotterdamInfoCard`
-- Voeg imports toe: `ProfileTimeline`, nieuwe `DashboardChat` component
-- Haal extra profielvelden op (test_completed, preferred_sector)
-- Layout: 2-koloms grid. Links: tijdlijn + compacte fase-kaart + compact profiel. Rechts: inline chat
-
-### `src/components/dashboard/DashboardCards.tsx`
-- Verwijder `DOORaiCard`, `QuickLinksCard`, `RotterdamInfoCard`
-- `ProfileCard` uitbreiden met Rotterdam-info (compacte link onderaan)
-- Behoud `WelcomeHeader`
-
-### `src/components/dashboard/PhaseCard.tsx`
-- Integreer tips als subtiele tekst onder de acties (1 regel, geen apart blok)
-- Verwijder `PhaseTips` export
-
-### `src/components/dashboard/DashboardChat.tsx` (nieuw)
-- Mini-chatvenster: toont laatste 5-6 berichten
-- Invoerveld + suggestieknoppen
-- Gebruikt `useChatConversation` hook
-- "Bekijk volledig gesprek" link naar /chat
-- Zelfde streaming logica als Chat.tsx maar compacter
-- Phase detector draait ook hier, zodat fase-overgangen live gedetecteerd worden
-
-### `src/pages/Chat.tsx`
-- Voeg `phase_transition` veld toe aan de request body wanneer detector een verschuiving detecteert
-
-### `supabase/functions/doorai-chat/index.ts`
-- Accepteer `phase_transition` veld in RequestBody
-- Voeg fase-overgang context toe aan de system prompt als dit veld aanwezig is
-
-### `src/pages/Profile.tsx`
-- ProfileTimeline blijft ook hier staan (component is herbruikbaar)
-
+| Bestand                                      | Wijziging                                                         |
+| -------------------------------------------- | ----------------------------------------------------------------- |
+| `supabase/functions/doorai-chat/index.ts`    | Format contract in AUTH prompt, "Scenario" toevoegen aan verboden |
+| `src/pages/Chat.tsx`                         | Prose margins verkleinen, normalizeMarkdown toepassen             |
+| `src/components/dashboard/DashboardChat.tsx` | Prose margins uniformeren, normalizeMarkdown toepassen            |
+| `src/utils/normalizeMarkdown.ts`             | Nieuw: gedeelde helper functie                                    |
