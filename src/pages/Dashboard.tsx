@@ -82,7 +82,6 @@ export default function Dashboard() {
     <div className="min-h-screen flex flex-col bg-muted/30">
       <Header />
       <main className="flex-1">
-        <WelcomeHeader profile={profile} onSignOut={handleSignOut} />
         <PhaseProgress currentPhase={currentPhase} />
 
         <div className="container py-6 md:py-8">

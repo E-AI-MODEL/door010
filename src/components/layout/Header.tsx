@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Menu, X, User, Shield } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Menu, X, User, Shield, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,7 +77,8 @@ function RegularLogo() {
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [showMascot, setShowMascot] = useState(false);
   const [isAdvisorOrAdmin, setIsAdvisorOrAdmin] = useState(false);
 
@@ -187,16 +188,25 @@ export function Header() {
           )}
         </div>
 
-        {/* Desktop CTA */}
-        <div className="hidden lg:flex lg:items-center lg:gap-3">
+        <div className="hidden lg:flex lg:items-center lg:gap-2">
           {!loading && (
             user ? (
-              <Button size="sm" className="font-medium" asChild>
-                <Link to="/dashboard">
-                  <User className="mr-2 h-4 w-4" />
-                  Dashboard
-                </Link>
-              </Button>
+              <>
+                <Button size="sm" className="font-medium" asChild>
+                  <Link to="/dashboard">
+                    <User className="mr-2 h-4 w-4" />
+                    Dashboard
+                  </Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={async () => { await signOut(); navigate("/"); }}
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </>
             ) : (
               <Button size="sm" className="font-medium" asChild>
                 <Link to="/auth">Inloggen</Link>
@@ -245,15 +255,25 @@ export function Header() {
                   Backoffice
                 </Link>
               )}
-              <div className="pt-4 border-t border-border">
+              <div className="pt-4 border-t border-border space-y-2">
                 {!loading && (
                   user ? (
-                    <Button className="w-full" asChild>
-                      <Link to="/dashboard">
-                        <User className="mr-2 h-4 w-4" />
-                        Dashboard
-                      </Link>
-                    </Button>
+                    <>
+                      <Button className="w-full" asChild>
+                        <Link to="/dashboard">
+                          <User className="mr-2 h-4 w-4" />
+                          Dashboard
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="w-full text-muted-foreground hover:text-destructive"
+                        onClick={async () => { await signOut(); navigate("/"); setMobileMenuOpen(false); }}
+                      >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Uitloggen
+                      </Button>
+                    </>
                   ) : (
                     <Button className="w-full" asChild>
                       <Link to="/auth">Inloggen</Link>
