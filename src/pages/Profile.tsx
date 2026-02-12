@@ -16,6 +16,10 @@ import { CVUpload } from "@/components/profile/CVUpload";
 import { InterestTest } from "@/components/profile/InterestTest";
 import { ProfileHero } from "@/components/profile/ProfileHero";
 import { ProfileTimeline } from "@/components/profile/ProfileTimeline";
+import { NotesTile } from "@/components/profile/NotesTile";
+import { SavedVacanciesTile } from "@/components/profile/SavedVacanciesTile";
+import { SavedEventsTile } from "@/components/profile/SavedEventsTile";
+import { AppointmentTile } from "@/components/profile/AppointmentTile";
 import {
   User,
   Mail,
@@ -337,11 +341,31 @@ export default function Profile() {
                 <CVUpload userId={user.id} currentCVUrl={cvUrl} onCVChange={setCvUrl} />
               </motion.div>
 
-              {/* Tile 6: Timeline (spans full width on lg) */}
+              {/* Tile 6: Notities */}
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                <NotesTile userId={user.id} />
+              </motion.div>
+
+              {/* Tile 7: Favoriete vacatures */}
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+                <SavedVacanciesTile userId={user.id} />
+              </motion.div>
+
+              {/* Tile 8: Mijn events */}
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+                <SavedEventsTile userId={user.id} />
+              </motion.div>
+
+              {/* Tile 9: Contact / Afspraak */}
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+                <AppointmentTile userId={user.id} />
+              </motion.div>
+
+              {/* Tile 10: Timeline */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: 0.5 }}
                 className="md:col-span-2 lg:col-span-1"
               >
                 <ProfileTimeline
