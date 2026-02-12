@@ -153,6 +153,13 @@ export function useChatConversation(userId: string | undefined, profile: Profile
     await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
   }, []);
 
+  const resetConversation = useCallback(() => {
+    setConversationId(null);
+    setMessages([]);
+    setLatestActions([]);
+    setInitialized(false);
+  }, []);
+
   return {
     messages,
     setMessages,
@@ -164,5 +171,6 @@ export function useChatConversation(userId: string | undefined, profile: Profile
     ensureConversation,
     saveMessage,
     parseActions,
+    resetConversation,
   };
 }
