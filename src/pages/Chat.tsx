@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import { useChatConversation } from "@/hooks/useChatConversation";
 import { ChatActions } from "@/components/chat/ChatActions";
 import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
+import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
 
 interface Profile {
   current_phase: UiPhaseCode | null;
@@ -335,8 +336,8 @@ export default function Chat() {
                   }`}
                 >
                   {message.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-p:leading-relaxed prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:leading-relaxed prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0">
+                      <ReactMarkdown>{normalizeMarkdown(message.content)}</ReactMarkdown>
                     </div>
                   ) : (
                     <p>{message.content}</p>

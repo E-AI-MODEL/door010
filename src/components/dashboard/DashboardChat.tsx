@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { useChatConversation } from "@/hooks/useChatConversation";
+import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
 import { supabase } from "@/integrations/supabase/client";
 import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
 
@@ -257,8 +258,8 @@ export function DashboardChat({ userId, currentPhase, preferredSector }: Dashboa
               }`}
             >
               {message.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-p:leading-relaxed prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0">
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:leading-relaxed prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0">
+                  <ReactMarkdown>{normalizeMarkdown(message.content)}</ReactMarkdown>
                 </div>
               ) : (
                 <p>{message.content}</p>
