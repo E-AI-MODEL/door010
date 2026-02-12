@@ -59,36 +59,47 @@ export function ProfileCard({ profile, phaseTitle }: ProfileCardProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
-      className="bg-card rounded-lg border border-border p-4"
+      className="rounded-3xl border bg-card shadow-door p-6"
     >
-      <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">
+      <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-5">
         Mijn profiel
-      </h3>
-      <div className="space-y-3 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Naam</span>
-          <span className="font-medium text-foreground">
-            {profile?.first_name || "Niet ingevuld"}
-          </span>
+      </h2>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-primary/10 rounded-full p-2.5">
+            <User className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate">
+              {profile?.first_name
+                ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ""}`
+                : "Niet ingevuld"}
+            </p>
+            <p className="text-xs text-muted-foreground">Naam</p>
+          </div>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Sector</span>
-          <span className="font-medium text-foreground">
-            {profile?.preferred_sector || "Nog niet gekozen"}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Fase</span>
-          <span className="font-medium text-primary">{phaseTitle}</span>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-muted/50 p-3">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Sector</p>
+            <p className="text-sm font-medium text-foreground">
+              {profile?.preferred_sector ? profile.preferred_sector.toUpperCase() : "Onbekend"}
+            </p>
+          </div>
+          <div className="rounded-xl bg-muted/50 p-3">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Fase</p>
+            <p className="text-sm font-medium text-primary">{phaseTitle}</p>
+          </div>
         </div>
       </div>
-      <Button variant="outline" size="sm" className="w-full mt-4" asChild>
+
+      <Button variant="outline" size="sm" className="w-full mt-5 rounded-xl" asChild>
         <Link to="/profile">
           Profiel bewerken
         </Link>
       </Button>
 
-      {/* Rotterdam info compact */}
       <div className="mt-4 pt-3 border-t border-border">
         <div className="flex items-center gap-2">
           <MapPin className="h-3.5 w-3.5 text-primary" />

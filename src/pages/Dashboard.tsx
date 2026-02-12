@@ -4,7 +4,6 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { PhaseCard } from "@/components/dashboard/PhaseCard";
 import { PhaseProgress } from "@/components/dashboard/PhaseProgress";
 import { WelcomeHeader, ProfileCard } from "@/components/dashboard/DashboardCards";
 import { ProfileTimeline } from "@/components/profile/ProfileTimeline";
@@ -96,7 +95,6 @@ export default function Dashboard() {
                 preferredSector={profile?.preferred_sector || null}
                 testCompleted={profile?.test_completed || false}
               />
-              <PhaseCard phaseInfo={phaseInfo} />
               <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
             </div>
 
