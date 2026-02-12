@@ -201,7 +201,7 @@ export function Header() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted"
                   onClick={async () => { await signOut(); navigate("/"); }}
                 >
                   <LogOut className="h-4 w-4" />
@@ -267,7 +267,7 @@ export function Header() {
                       </Button>
                       <Button
                         variant="ghost"
-                        className="w-full text-muted-foreground hover:text-destructive"
+                        className="w-full text-muted-foreground hover:text-foreground hover:bg-muted"
                         onClick={async () => { await signOut(); navigate("/"); setMobileMenuOpen(false); }}
                       >
                         <LogOut className="mr-2 h-4 w-4" />
