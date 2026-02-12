@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          advisor_notes: string | null
+          created_at: string
+          id: string
+          message: string | null
+          preferred_date: string | null
+          preferred_time: string | null
+          status: string
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          advisor_notes?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          advisor_notes?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string
@@ -128,6 +167,69 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_events: {
+        Row: {
+          created_at: string
+          event_date: string | null
+          event_source: string | null
+          event_title: string
+          event_url: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_date?: string | null
+          event_source?: string | null
+          event_title: string
+          event_url?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_date?: string | null
+          event_source?: string | null
+          event_title?: string
+          event_url?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saved_vacancies: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          organization: string | null
+          sector: string | null
+          title: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization?: string | null
+          sector?: string | null
+          title: string
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization?: string | null
+          sector?: string | null
+          title?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       scraped_events: {
         Row: {
           created_at: string
@@ -158,6 +260,33 @@ export type Database = {
           source_name?: string
           source_url?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
