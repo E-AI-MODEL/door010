@@ -1,65 +1,77 @@
 
-# A/B Test Onboarding: Pop-up, Testinfo & Auto-login
 
-## Overzicht
+## Versleepbare profieltegels
 
-Drie onderdelen worden gebouwd:
+### Wat wordt er gebouwd?
+De tegels op de profielpagina worden versleepbaar, zodat gebruikers ze in een volgorde kunnen zetten die voor hen prettig is. De gekozen volgorde wordt opgeslagen in de database zodat het onthouden wordt tussen sessies.
 
-1. **Blocking pop-up op de homepage** -- verschijnt bij eerste bezoek, toont uitleg over de A/B test en wijst een uniek testaccount toe (test2-test30). Gebruiker kan pas verder na inloggen.
-2. **"Testinfo" knop in de header** -- altijd zichtbaar, opent een modal met dezelfde uitleg maar zonder logingegevens.
-3. **Testaccount toewijzing** -- per apparaat wordt een account (test2-test30) toegewezen via `localStorage` en blijft bij terugkomen hetzelfde.
+### Hoe werkt het voor de gebruiker?
+- Elke tegel krijgt een klein sleepicoon (griphandle) in de header
+- Door te klikken en slepen kan de gebruiker tegels omhoog/omlaag verplaatsen
+- De nieuwe volgorde wordt automatisch opgeslagen
+- Bij een volgend bezoek staat alles nog op dezelfde plek
 
----
+### Aanpak
 
-## Technische details
+**1. Database: volgorde opslaan**
+- Een nieuw veld `tile_order` (JSON array) toevoegen aan de `profiles` tabel
+- Hierin wordt de volgorde als lijst van tegel-ID's opgeslagen, bijv. `["personal","sector","phase","test","cv","notes","vacancies","events","appointment","timeline"]`
 
-### Nieuw bestand: `src/components/onboarding/TestOnboardingPopup.tsx`
+**2. Reorder met framer-motion (geen extra pakket nodig)**
+- `framer-motion` heeft een ingebouwde `Reorder.Group` en `Reorder.Item` API
+- De tegels worden als een verticale lijst gerenderd (in plaats van een CSS grid), waarbinnen de gebruiker kan slepen
+- Elke tegel wordt gewrapped in een `Reorder.Item` component
+- Op mobiel wordt de lijst single-column, op desktop blijft het visueel compact via CSS columns of een flex-wrap layout
 
-- Blocking dialog (AlertDialog, geen close-mogelijkheid behalve via de CTA).
-- Toont de 5 tekstblokken uit het plan (Hallo, Wat test je, A/B uitleg, Placeholders, Jouw testlogin).
-- Account toewijzing: kiest random getal 2-30, slaat op in `localStorage` key `doorai_test_account_index`. Bij terugkomen wordt hetzelfde getal opgehaald.
-- "Kopieer email" en "Kopieer wachtwoord" knoppen (navigator.clipboard).
-- CTA "Start met testen (log in)" roept `signIn(email, password)` aan uit AuthContext en navigeert naar `/dashboard`.
-- Zichtbaarheidslogica: alleen tonen als `localStorage` key `doorai_onboarding_seen` niet `"true"` is EN gebruiker niet ingelogd is.
-- Na succesvol inloggen wordt `doorai_onboarding_seen` op `"true"` gezet.
-- ScrollArea voor de lange tekst zodat het op kleinere schermen ook werkt.
+**3. Tegel-registratie**
+- Elke tegel krijgt een unieke string-ID (bijv. `"personal"`, `"sector"`, `"notes"`)
+- Een configuratie-array koppelt elke ID aan het bijbehorende React-component
+- De volgorde uit de database bepaalt de render-volgorde
 
-### Nieuw bestand: `src/components/onboarding/TestInfoModal.tsx`
+**4. Automatisch opslaan**
+- Bij elke herschikking wordt de nieuwe volgorde met een korte debounce naar de `profiles` tabel geschreven
+- Geen extra "opslaan" actie nodig: het gebeurt direct
 
-- Gewone Dialog component.
-- Toont dezelfde tekstblokken als de pop-up, maar zonder Blok 5 (logingegevens).
-- Wordt getriggerd vanuit de Header.
-
-### Wijziging: `src/components/layout/Header.tsx`
-
-- Import `TestInfoModal` en `Info` icon van lucide.
-- Voeg een "Testinfo" knop toe in de desktop navigatie (rechts, naast login/dashboard knoppen).
-- Voeg dezelfde knop toe in het mobiele menu.
-- State `testInfoOpen` voor het openen/sluiten van de modal.
-
-### Wijziging: `src/pages/Index.tsx`
-
-- Import en render `TestOnboardingPopup` component.
-- De pop-up verschijnt bovenop de homepage content.
-
-### Geen database wijzigingen nodig
-
-- Account toewijzing is puur client-side via localStorage.
-- De testaccounts (test2-test30@doorai.nl) moeten wel bestaan in de auth database -- dit valt buiten scope van de code maar moet handmatig of via seed worden aangemaakt.
+**5. Visuele feedback**
+- Een `GripVertical` icoon verschijnt linksboven in elke tegel-header
+- Tijdens het slepen krijgt de tegel een lichte schaduw en schaalvergroting
+- Andere tegels schuiven vloeiend op via framer-motion animatie
 
 ---
 
-## Bestanden
+### Technische details
 
-| Bestand | Actie |
-|---------|-------|
-| `src/components/onboarding/TestOnboardingPopup.tsx` | Nieuw |
-| `src/components/onboarding/TestInfoModal.tsx` | Nieuw |
-| `src/components/layout/Header.tsx` | Wijzigen (Testinfo knop) |
-| `src/pages/Index.tsx` | Wijzigen (pop-up toevoegen) |
+**Database migratie:**
+```sql
+ALTER TABLE profiles ADD COLUMN tile_order jsonb DEFAULT NULL;
+```
 
----
+**Render-logica (pseudocode):**
+```typescript
+import { Reorder } from "framer-motion";
 
-## Gedeelde tekst-constanten
+const defaultOrder = ["personal","sector","phase","test","cv","notes","vacancies","events","appointment","timeline"];
 
-Beide modals delen dezelfde tekstblokken. De tekst wordt als constanten gedefinieerd in de pop-up component en geexporteerd zodat de TestInfoModal dezelfde content kan hergebruiken (minus blok 5).
+const tileComponents = {
+  personal: <PersonalInfoTile />,
+  sector: <SectorTile />,
+  // ...
+};
+
+const [order, setOrder] = useState(profile.tile_order ?? defaultOrder);
+
+<Reorder.Group axis="y" values={order} onReorder={handleReorder}>
+  {order.map(id => (
+    <Reorder.Item key={id} value={id}>
+      {tileComponents[id]}
+    </Reorder.Item>
+  ))}
+</Reorder.Group>
+```
+
+**Bestanden die worden aangepast/aangemaakt:**
+- `profiles` tabel: nieuw `tile_order` veld (migratie)
+- `src/pages/Profile.tsx`: refactor grid naar `Reorder.Group`, tegel-configuratie, opslaan logica
+- `src/integrations/supabase/types.ts`: wordt automatisch bijgewerkt
+
+**Beperking:** `Reorder.Group` werkt het best op een enkele as (verticaal). Voor een multi-kolom grid-layout met vrije positie-swap zou een zwaardere library nodig zijn (bijv. `dnd-kit`). De voorgestelde aanpak gebruikt een responsive kolom-layout via CSS *binnen* de verticale sleeplijst, wat visueel hetzelfde resultaat geeft met minimale complexiteit.
