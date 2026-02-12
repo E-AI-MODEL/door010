@@ -71,39 +71,39 @@ function chooseActions(
 
   if (!extracted.school_type && phase !== "interesseren") {
     return [
-      { label: "PO (basisonderwijs)", value: "Ik wil me oriënteren op PO" },
-      { label: "VO (voortgezet)", value: "Ik wil me oriënteren op VO" },
-      { label: "MBO (beroepsonderwijs)", value: "Ik wil me oriënteren op MBO" },
+      { label: "PO (basisonderwijs)", value: "Basisonderwijs lijkt me wat" },
+      { label: "VO (voortgezet)", value: "Voortgezet onderwijs, denk ik" },
+      { label: "MBO (beroepsonderwijs)", value: "MBO spreekt me aan" },
     ];
   }
 
   switch (phase) {
     case "interesseren":
       return [
-        { label: "Lesgeven", value: "Ik ben geïnteresseerd in lesgeven" },
-        { label: "Begeleiding", value: "Ik ben geïnteresseerd in begeleiding" },
-        { label: "Vakexpertise", value: "Ik ben geïnteresseerd in vakexpertise" },
+        { label: "Lesgeven", value: "Lesgeven trekt me" },
+        { label: "Begeleiding", value: "Leerlingen begeleiden lijkt me wat" },
+        { label: "Vakexpertise", value: "Mijn vak inzetten in het onderwijs" },
       ];
     case "beslissen":
       return [
-        { label: "Kosten bekijken", value: "Ik wil meer weten over de kosten" },
-        { label: "Vacatures", value: "Ik wil vacatures bekijken" },
-        { label: "Gesprek plannen", value: "Ik wil een gesprek plannen" },
+        { label: "Kosten bekijken", value: "Wat kost het eigenlijk" },
+        { label: "Vacatures", value: "Laat me vacatures zien" },
+        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
       ];
     case "matchen":
       return [
-        { label: "Scholen zoeken", value: "Ik wil scholen zoeken in mijn regio" },
-        { label: "Vacatures", value: "Ik wil vacatures bekijken" },
+        { label: "Scholen zoeken", value: "Welke scholen zitten in mijn buurt" },
+        { label: "Vacatures", value: "Laat me vacatures zien" },
       ];
     case "voorbereiden":
       return [
-        { label: "Checklist bekijken", value: "Wat moet ik nog regelen?" },
-        { label: "Gesprek plannen", value: "Ik wil een gesprek plannen" },
+        { label: "Checklist bekijken", value: "Wat moet ik nog regelen" },
+        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
       ];
     default:
       return [
-        { label: "Routes bekijken", value: "Welke routes zijn er naar het leraarschap?" },
-        { label: "Opleidingen", value: "Welke opleidingen zijn er?" },
+        { label: "Routes bekijken", value: "Hoe word je eigenlijk leraar" },
+        { label: "Opleidingen", value: "Welke opleidingen zijn er" },
       ];
   }
 }
@@ -230,43 +230,43 @@ function actionsForNextSlot(
 ): Array<{ label: string; value: string }> {
   if (slot === "school_type") {
     return [
-      { label: "PO (basisonderwijs)", value: "PO" },
-      { label: "VO (voortgezet)", value: "VO" },
-      { label: "MBO (beroepsonderwijs)", value: "MBO" },
+      { label: "PO (basisonderwijs)", value: "Basisonderwijs lijkt me wat" },
+      { label: "VO (voortgezet)", value: "Voortgezet onderwijs, denk ik" },
+      { label: "MBO (beroepsonderwijs)", value: "MBO spreekt me aan" },
     ];
   }
   if (slot === "role_interest") {
     return [
-      { label: "Lesgeven", value: "Ik wil lesgeven" },
-      { label: "Begeleiden", value: "Ik wil begeleiden" },
-      { label: "Vakexpertise", value: "Ik wil mijn vak inzetten" },
+      { label: "Lesgeven", value: "Lesgeven trekt me" },
+      { label: "Begeleiden", value: "Leerlingen begeleiden, dat lijkt me wat" },
+      { label: "Vakexpertise", value: "Mijn vak inzetten in het onderwijs" },
     ];
   }
   if (slot === "credential_goal") {
     return [
-      { label: "Route naar bevoegdheid", value: "Ik wil routes naar bevoegdheid zien" },
-      { label: "Eerst verkennen", value: "Ik wil eerst verkennen wat bij me past" },
+      { label: "Route naar bevoegdheid", value: "Hoe krijg ik een bevoegdheid" },
+      { label: "Eerst verkennen", value: "Ik wil eerst verkennen" },
     ];
   }
   if (slot === "admission_requirements") {
     return [
-      { label: "MBO", value: "Ik heb mbo" },
-      { label: "HBO", value: "Ik heb hbo" },
-      { label: "WO", value: "Ik heb wo" },
-      { label: "Anders", value: "Anders" },
+      { label: "MBO", value: "Mijn achtergrond is mbo" },
+      { label: "HBO", value: "Mijn achtergrond is hbo" },
+      { label: "WO", value: "Mijn achtergrond is wo" },
+      { label: "Anders", value: "Mijn achtergrond is anders" },
     ];
   }
   if (slot === "region_preference") {
     return [
-      { label: "Regio Rotterdam", value: "Regio Rotterdam" },
-      { label: "Andere regio", value: "Andere regio" },
+      { label: "Regio Rotterdam", value: "Rotterdam en omgeving" },
+      { label: "Andere regio", value: "Ergens anders in Nederland" },
     ];
   }
   if (slot === "next_step") {
     return [
-      { label: "Vacatures", value: "Ik wil vacatures bekijken" },
-      { label: "Gesprek plannen", value: "Ik wil een gesprek plannen" },
-      { label: "Events", value: "Ik wil events bekijken" },
+      { label: "Vacatures", value: "Laat me vacatures zien" },
+      { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
+      { label: "Events", value: "Zijn er events binnenkort" },
     ];
   }
   return [];
@@ -340,7 +340,10 @@ Deno.serve(async (req) => {
     let systemPrompt = mode === "authenticated" ? DOORAI_SYSTEM_PROMPT_AUTH : DOORAI_SYSTEM_PROMPT;
 
     if (mode === "authenticated") {
-      systemPrompt += `\n\nContext\n- Ingelogd: ja\n- Fase: ${detector?.phase_current_ui || userPhase || "interesseren"}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}\n- Next question_id: ${detector?.next_question_id || "onbekend"}\n- Next slot: ${authNextQ.slot}\n- SSOT vraag (server appends): ${authNextQ.question}\n`;
+      const knownSlotsInfo = detector?.known_slots
+        ? Object.entries(detector.known_slots).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(", ")
+        : "";
+      systemPrompt += `\n\nContext\n- Ingelogd: ja\n- Fase: ${detector?.phase_current_ui || userPhase || "interesseren"}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}\n${knownSlotsInfo ? `- Bekende info: ${knownSlotsInfo}\n` : ""}`;
       if (userSector) systemPrompt += `- Voorkeursector: ${userSector}\n`;
       if (detector?.evidence?.length) systemPrompt += `- Evidence: ${detector.evidence.slice(0, 3).join(" | ")}\n`;
     } else {
