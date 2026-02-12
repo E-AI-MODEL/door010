@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X, User, Shield, LogOut } from "lucide-react";
+import { Menu, X, User, Shield, LogOut, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { TestInfoModal } from "@/components/onboarding/TestInfoModal";
 
 const navigation = [
   { name: "Ontdek het onderwijs", href: "/kennisbank" },
@@ -81,7 +82,7 @@ export function Header() {
   const navigate = useNavigate();
   const [showMascot, setShowMascot] = useState(false);
   const [isAdvisorOrAdmin, setIsAdvisorOrAdmin] = useState(false);
-
+  const [testInfoOpen, setTestInfoOpen] = useState(false);
   // Check if user has advisor or admin role
   useEffect(() => {
     if (user) {
@@ -189,6 +190,15 @@ export function Header() {
         </div>
 
         <div className="hidden lg:flex lg:items-center lg:gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted"
+            onClick={() => setTestInfoOpen(true)}
+          >
+            <Info className="mr-1.5 h-4 w-4" />
+            Testinfo
+          </Button>
           {!loading && (
             user ? (
               <>
@@ -256,6 +266,14 @@ export function Header() {
                 </Link>
               )}
               <div className="pt-4 border-t border-border space-y-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted"
+                  onClick={() => { setTestInfoOpen(true); setMobileMenuOpen(false); }}
+                >
+                  <Info className="mr-2 h-4 w-4" />
+                  Testinfo
+                </Button>
                 {!loading && (
                   user ? (
                     <>
@@ -285,6 +303,7 @@ export function Header() {
           </motion.div>
         )}
       </AnimatePresence>
+      <TestInfoModal open={testInfoOpen} onOpenChange={setTestInfoOpen} />
     </header>
   );
 }
