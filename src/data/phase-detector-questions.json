@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-02-05T11:30:49Z",
+  "generated_at": "2026-02-12T20:21:10Z",
   "slots": [
     "school_type",
     "role_interest",
@@ -14,6 +14,10 @@
   ],
   "slot_to_questions": {
     "school_type": [
+      {
+        "question_id": "S00001",
+        "question_text": "Welke sector bedoel je: PO, VO of MBO?"
+      },
       {
         "question_id": "Q00107",
         "question_text": "Hoe kies ik tusseen mbo en po, en hoe zien de routes er uit?"
@@ -1237,6 +1241,10 @@
     ],
     "admission_requirements": [
       {
+        "question_id": "S00004",
+        "question_text": "Welke vooropleiding heb je: mbo, hbo, wo of anders?"
+      },
+      {
         "question_id": "Q00127",
         "question_text": "Welke route past het beste bij mijn vooropleiding?"
       },
@@ -1326,6 +1334,10 @@
       }
     ],
     "credential_goal": [
+      {
+        "question_id": "S00003",
+        "question_text": "Wil je vooral routes naar bevoegdheid zien, of eerst verkennen wat bij je past?"
+      },
       {
         "question_id": "Q00173",
         "question_text": "Ik wil graag in het vo of mbo lesgeven, welke bevoegdheid heb ik nodig en wat is voor mij de beste route?"
@@ -1593,6 +1605,10 @@
     ],
     "duration_info": [
       {
+        "question_id": "S00005",
+        "question_text": "Wil je een globale indicatie van de duur, of de stappen in grote lijnen?"
+      },
+      {
         "question_id": "Q00294",
         "question_text": "Een zij-instroomtraject of een verkorte deeltijdpabo?"
       },
@@ -1698,6 +1714,10 @@
       }
     ],
     "role_interest": [
+      {
+        "question_id": "S00002",
+        "question_text": "Waar gaat je interesse het meest naar uit: lesgeven, begeleiding of vakexpertise?"
+      },
       {
         "question_id": "Q00594",
         "question_text": "Hoe word ik schoolleider? Welke routes zijn er om leraar te worden voor LO?"
@@ -2457,6 +2477,10 @@
     ],
     "region_preference": [
       {
+        "question_id": "S00008",
+        "question_text": "In welke regio wil je je richten?"
+      },
+      {
         "question_id": "R00657",
         "question_text": "Wie moet ik contacten als ik meer wil weten (over toelaatbaarheid, startmomenten etc.) voor zij-instroom po / zij-instroom vo / deeltijdopleiding po / deeltijdopleiding vo / kopopleiding / empo in deze regio etc."
       },
@@ -2499,6 +2523,10 @@
     ],
     "salary_info": [
       {
+        "question_id": "S00007",
+        "question_text": "Wil je een globale indicatie van salaris en inschaling? Dit kan per sector verschillen."
+      },
+      {
         "question_id": "R00670",
         "question_text": "Wat zijn de ervaringen van andere zij-instromers in deze regio (als het gaat om studiebelasting, salaris, combinatie werk/prive?"
       },
@@ -2533,11 +2561,23 @@
     ],
     "next_step": [
       {
+        "question_id": "S00009",
+        "question_text": "Wat wil je als volgende stap: vacatures bekijken, een gesprek plannen of eerst meer info?"
+      },
+      {
+        "question_id": "S00000",
+        "question_text": "Waar wil je nu mee beginnen: route, eisen, duur, kosten, salaris of vacatures?"
+      },
+      {
         "question_id": "Q00375",
         "question_text": "Wat zijn de vervolgstappen voor het doen van een zij-instroomtraject in het po?"
       }
     ],
     "costs_info": [
+      {
+        "question_id": "S00006",
+        "question_text": "Wil je een globale indicatie van de kosten, of info over regelingen?"
+      },
       {
         "question_id": "Q00650",
         "question_text": "Hoe kan ik zsm en kosteneffectief docent NT2 worden?"
@@ -9419,6 +9459,106 @@
       "theme": "Route",
       "subtheme": null,
       "fills_slots": []
+    },
+    "S00000": {
+      "question_id": "S00000",
+      "question_text": "Waar wil je nu mee beginnen: route, eisen, duur, kosten, salaris of vacatures?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "next_step"
+      ]
+    },
+    "S00001": {
+      "question_id": "S00001",
+      "question_text": "Welke sector bedoel je: PO, VO of MBO?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "school_type"
+      ]
+    },
+    "S00002": {
+      "question_id": "S00002",
+      "question_text": "Waar gaat je interesse het meest naar uit: lesgeven, begeleiding of vakexpertise?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "role_interest"
+      ]
+    },
+    "S00003": {
+      "question_id": "S00003",
+      "question_text": "Wil je vooral routes naar bevoegdheid zien, of eerst verkennen wat bij je past?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "credential_goal"
+      ]
+    },
+    "S00004": {
+      "question_id": "S00004",
+      "question_text": "Welke vooropleiding heb je: mbo, hbo, wo of anders?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "admission_requirements"
+      ]
+    },
+    "S00005": {
+      "question_id": "S00005",
+      "question_text": "Wil je een globale indicatie van de duur, of de stappen in grote lijnen?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "duration_info"
+      ]
+    },
+    "S00006": {
+      "question_id": "S00006",
+      "question_text": "Wil je een globale indicatie van de kosten, of info over regelingen?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "costs_info"
+      ]
+    },
+    "S00007": {
+      "question_id": "S00007",
+      "question_text": "Wil je een globale indicatie van salaris en inschaling? Dit kan per sector verschillen.",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "salary_info"
+      ]
+    },
+    "S00008": {
+      "question_id": "S00008",
+      "question_text": "In welke regio wil je je richten?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "region_preference"
+      ]
+    },
+    "S00009": {
+      "question_id": "S00009",
+      "question_text": "Wat wil je als volgende stap: vacatures bekijken, een gesprek plannen of eerst meer info?",
+      "phase_code": "orientatie",
+      "theme": null,
+      "subtheme": null,
+      "fills_slots": [
+        "next_step"
+      ]
     }
   }
 }
