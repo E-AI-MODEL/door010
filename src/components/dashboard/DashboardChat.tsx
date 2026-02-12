@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Send, ArrowRight } from "lucide-react";
+import { Send, ArrowRight, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
@@ -46,7 +46,25 @@ export function DashboardChat({ userId, currentPhase, preferredSector }: Dashboa
     loadConversation,
     ensureConversation,
     saveMessage,
+    resetConversation,
   } = useChatConversation(userId, profile);
+
+  const handleClearConversation = useCallback(() => {
+    resetConversation();
+    setKnownSlots({});
+    const phase = currentPhase || "interesseren";
+    const info: Record<string, string> = {
+      interesseren: "Je verkent of het onderwijs iets voor je is.",
+      orienteren: "Je bekijkt welke richting het beste bij je past.",
+      beslissen: "Je staat voor een keuze en wilt het helder krijgen.",
+      matchen: "Je zoekt een concrete school of opleiding.",
+      voorbereiden: "Je maakt je klaar voor de start.",
+    };
+    setMessages([{
+      role: "assistant",
+      content: `Welkom terug! Fijn dat je er bent 👋\n\nJe zit nu in de **${phase}**-fase. ${info[phase] || info.interesseren}\n\nWaar kan ik je vandaag mee helpen?`,
+    }]);
+  }, [currentPhase, resetConversation, setMessages]);
 
   const [profileLoaded, setProfileLoaded] = useState(false);
 
@@ -304,7 +322,18 @@ export function DashboardChat({ userId, currentPhase, preferredSector }: Dashboa
 
       {/* Input */}
       <div className="px-4 pb-4 pt-2 border-t border-border">
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="flex gap-2 items-center">
+          {messages.length > 1 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={handleClearConversation}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
