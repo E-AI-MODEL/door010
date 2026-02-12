@@ -15,7 +15,7 @@ interface Message {
 const initialMessage: Message = {
   id: "welcome",
   role: "assistant",
-  content: "Hallo! Ik ben de DOOR AI-coach. Ik help je graag met vragen over werken in het onderwijs. Waar ben je benieuwd naar?",
+  content: "Welkom bij het Onderwijsloket Rotterdam. Heb je een vraag over werken in het onderwijs? Ik help je graag verder.",
 };
 
 const quickPrompts = [
