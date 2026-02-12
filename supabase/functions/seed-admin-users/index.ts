@@ -19,12 +19,23 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    const adminUsers = [
-      { email: "admin@doorai.nl", password: "admin010", role: "admin" as const, firstName: "Admin", lastName: "DOOR" },
-      { email: "backoffice@doorai.nl", password: "admin010", role: "advisor" as const, firstName: "Backoffice", lastName: "DOOR" },
-      { email: "test@doorai.nl", password: "admin010", role: "candidate" as const, firstName: "Test", lastName: "DOOR" },
-      { email: "test1@doorai.nl", password: "admin010", role: "candidate" as const, firstName: "Test1", lastName: "DOOR" },
+    const adminUsers: Array<{ email: string; password: string; role: "admin" | "advisor" | "candidate"; firstName: string; lastName: string }> = [
+      { email: "admin@doorai.nl", password: "admin010", role: "admin", firstName: "Admin", lastName: "DOOR" },
+      { email: "backoffice@doorai.nl", password: "admin010", role: "advisor", firstName: "Backoffice", lastName: "DOOR" },
+      { email: "test@doorai.nl", password: "admin010", role: "candidate", firstName: "Test", lastName: "DOOR" },
+      { email: "test1@doorai.nl", password: "admin010", role: "candidate", firstName: "Test1", lastName: "DOOR" },
     ];
+
+    // Add test2 through test50
+    for (let i = 2; i <= 50; i++) {
+      adminUsers.push({
+        email: `test${i}@doorai.nl`,
+        password: "admin010",
+        role: "candidate",
+        firstName: `Tester`,
+        lastName: `${i}`,
+      });
+    }
 
     const results = [];
 

@@ -60,7 +60,7 @@ Let op: zodra je inlogt verdwijnt de homepage widget. Als je uitlogt verschijnt 
 function getAssignedAccount(): { email: string; index: string } {
   let index = localStorage.getItem("doorai_test_account_index");
   if (!index) {
-    index = String(Math.floor(Math.random() * 29) + 2);
+    index = String(Math.floor(Math.random() * 49) + 2); // 2-50
     localStorage.setItem("doorai_test_account_index", index);
   }
   return { email: `test${index}@doorai.nl`, index };
