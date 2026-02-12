@@ -1,100 +1,72 @@
-# Format contract + typografie fix voor AUTH chat
 
-## Drie wijzigingen
 
-### 1. Format contract toevoegen aan AUTH prompt (`doorai-chat/index.ts`)
+# Mini-chat wisknop + Volledig gesprek herontwerp
 
-In de `DOORAI_SYSTEM_PROMPT_AUTH`, onder "NA INLOG MODUS" (rond regel 257-261), het bestaande blok vervangen door een ander  format, een formatkeuze op basis van intent en fase. Dus: één van een paar sjablonen, en alleen bullets als er echt iets te kiezen of te vergelijken valt.  
-  
-Zo zou ik het aanscherpen, zonder dat je opmaak weer lelijk wordt.  
-  
-Nieuwe FORMAT regels (flexibel, maar strak)  
-  
-Gebruik dit als vervanging van je huidige blok:  
-  
-FORMAT (flexibel, maar strak)  
-Kies precies één van deze vormen:  
-  
-  
-VORM A: Kort antwoord (meest gebruikt)  
-- 1 korte openingszin (max 12 woorden).  
-- 1 tot 2 korte zinnen uitleg (geen bullets).  
-- 1 korte vervolgstap zonder vraagteken.  
-  
-  
-VORM B: Keuzehulp (alleen als er echt 2 routes/opties zijn)  
-- 1 korte openingszin (max 12 woorden).  
-- Maximaal 2 bullets met opties. Gebruik "- " markdown. Gebruik nooit het woord "Scenario".  
-- 1 korte vervolgstap zonder vraagteken.  
-  
-  
-VORM C: Doorverwijzen (als maatwerk of risico op advies)  
-- 1 korte openingszin (max 12 woorden).  
-- 1 zin waarom dit kan verschillen of maatwerk is.  
-- 1 duidelijke vervolgstap zonder vraagteken (verwijs naar consult of vaste pagina).  
-  
-  
-Regels die altijd gelden  
-- Geen emojis, geen vraagtekens.  
-- Max 90 woorden totaal.  
-- Gebruik alleen alinea's en bullets met "- ".  
-- Als next_question_text aanwezig is: wij voegen die exact toe. Jij schrijft alleen het statement.  
-- Als next_question_text ontbreekt: eindig met een duidelijke vervolgstap zonder vraagteken.  
-  
-Kies VORM B alleen als de gebruiker duidelijk om vergelijken/keuze vraagt  
-(woorden als: verschil, kiezen, A of B, welke route, zij-instroom vs deeltijd).  
-Anders gebruik VORM A.  
-Gebruik VORM C bij salaris/inschaling/regels of als het maatwerk wordt.  
-  
-Waarom dit werkt  
-Je houdt de opmaak strak (geen rare regels), maar je forceert niet altijd bullets.  
-VORM A voorkomt dat elk antwoord een mini-vergelijking wordt.  
-VORM B zorgt dat wanneer er wél keuze is, het er netjes uitziet.  
-VORM C voorkomt dat je per ongeluk “advies” gaat geven en houdt het bij verwijzing.  
-  
-Mini voorbeelden (om het gedrag te zetten)  
-  
-VORM A voorbeeld  
-Gebruiker: “Ik zoek een school voor onderdaad.”  
-Doortje: “Dan focussen we op een concrete plek vinden. Kijk eerst wat er openstaat in jouw regio en sector, dan kun je scholen vergelijken op cultuur en begeleiding. Ga naar vacatures en zet een filter op sector en plaats.”  
-  
-VORM B voorbeeld  
-Gebruiker: “Zij-instroom of deeltijd, wat past beter?”  
-Doortje: “Er zijn twee routes die vaak logisch zijn.”  
-  
-Zij-instroom: sneller richting werk, met begeleiding op school  
-  
-Deeltijdopleiding: meer vaste opbouw, met stages en studiebelasting  
-Kies eerst je sector en niveau, dan maken we het concreet.  
-  
-VORM C voorbeeld  
-Gebruiker: “Wat verdien ik precies in het VO?”  
-Doortje: “Dit hangt af van functie en inschaling. Voor exacte bedragen is de CAO leidend en kan het per situatie verschillen. Check de VO CAO tabellen en kom terug met je functietype als je wil vergelijken.”
+## Drie onderdelen
 
-Ook "Scenario" toevoegen aan de verboden-zinnen lijst.
+### 1. Wisknop in de mini-chat (DashboardChat)
 
-### 2. Prose margins verkleinen (`Chat.tsx` en `DashboardChat.tsx`)
+De mini-chat op het dashboard mist een "wis gesprek" knop. Toevoegen als klein Trash2-icoon naast het invoerveld (links), identiek aan hoe het in Chat.tsx werkt. Gebruikt `resetConversation` uit de `useChatConversation` hook (die al beschikbaar is maar niet geimporteerd).
 
-**Chat.tsx regel 338**: van `prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5` naar `prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0`
+### 2. Volledig gesprek (/chat) visueel gelijktrekken met mini-chat
 
-**DashboardChat.tsx regel 260**: al redelijk strak, maar ook naar `prose-p:my-1 prose-ul:my-1 prose-li:my-0` voor consistentie.
+De `/chat` pagina gebruikt nu:
+- Solid green header balk
+- `rounded-lg` bubbles
+- Geen card-container
+- Platte layout zonder shadow
 
-### 3. normalizeMarkdown functie toevoegen
+Dit wordt visueel consistent gemaakt met de mini-chat:
+- Groene header wordt een compacte bar met DOORai label + terugknop (binnen een card-achtige container)
+- Bubbles worden `rounded-2xl` (zelfde als mini)
+- De hele chat zit in een `rounded-3xl border bg-card shadow-door` container (zelfde styling)
+- Suggestieknoppen (`ChatActions`) krijgen dezelfde compacte pill-styling als de mini-chat
+- Input area styling wordt consistent
 
-Een helper functie die:
+### 3. Gesprekssuggesties als interactieve timeline-feed
 
-- Em-dashes vervangt door streepjes
-- Opeenvolgende lege regels samenvoegt
-- Losse regels (geen bullet, heading of quote) samenvoegt tot alinea's
+Na elk assistant-antwoord worden de server-side `actions` al ontvangen. Deze worden nu alleen als tekst-pills getoond. Het plan is om deze suggesties te verrijken met visuele context:
 
-Toevoegen als gedeeld utility, gebruikt in zowel `Chat.tsx` als `DashboardChat.tsx` bij het renderen van assistant berichten.
+- **Link-suggesties**: als een actie een pad bevat (bijv. `/vacatures`, `/opleidingen`, `/events`), toon dit als een klikbare kaart met icoon en korte beschrijving
+- **Tool-suggesties**: als een actie verwijst naar de interessetest of CV-upload, toon een compact kaartje met een actie-icoon
+- **Gewone suggesties**: blijven als pill-knoppen (huidige vorm)
+
+Dit wordt gedaan door een nieuw component `ChatSuggestions` dat de `actions` array parseert en de juiste weergave kiest op basis van het type.
+
+## Technische wijzigingen per bestand
+
+### `src/components/dashboard/DashboardChat.tsx`
+- Import `Trash2` van lucide-react
+- Import `resetConversation` uit de hook (al beschikbaar, niet gebruikt)
+- Voeg Trash2 knop toe links van het invoerveld (alleen zichtbaar als messages.length > 1)
+- Reset ook `knownSlots` bij wissen
+
+### `src/pages/Chat.tsx`
+- Verwijder de solid green header balk
+- Wrap de hele chat in een `rounded-3xl border bg-card shadow-door` container binnen een `container max-w-3xl mx-auto`
+- Compacte header: DOORai label + terugknop + wisknop (in de card header, niet apart)
+- Bubbles: `rounded-2xl` i.p.v. `rounded-lg`
+- Vervang `ChatActions` door het nieuwe `ChatSuggestions` component
+- Input styling consistent met mini-chat (`rounded-xl`, `h-9`)
+
+### `src/components/chat/ChatSuggestions.tsx` (nieuw)
+- Vervangt `ChatActions` voor de volledige chatpagina
+- Parseert de actions array:
+  - Als `value` een intern pad bevat (`/vacatures`, `/opleidingen`, `/events`, `/kennisbank`): toon als link-kaart met route-icoon (Briefcase, GraduationCap, Calendar, BookOpen) en korte beschrijving
+  - Als `value` verwijst naar test/CV: toon als actie-kaart met icoon
+  - Anders: toon als pill-knop (bestaande styling)
+- Link-kaarten zijn klikbaar en navigeren direct (geen chat-bericht)
+- Pill-knoppen sturen het bericht zoals nu
+
+### `src/components/chat/ChatActions.tsx`
+- Blijft bestaan voor de mini-chat (compactere variant)
+- Geen wijzigingen
 
 ## Bestanden
 
+| Bestand | Wijziging |
+|---------|-----------|
+| `src/components/dashboard/DashboardChat.tsx` | Wisknop toevoegen |
+| `src/pages/Chat.tsx` | Layout herontwerp, consistent met mini-chat |
+| `src/components/chat/ChatSuggestions.tsx` | Nieuw: verrijkte suggesties met link-kaarten |
 
-| Bestand                                      | Wijziging                                                         |
-| -------------------------------------------- | ----------------------------------------------------------------- |
-| `supabase/functions/doorai-chat/index.ts`    | Format contract in AUTH prompt, "Scenario" toevoegen aan verboden |
-| `src/pages/Chat.tsx`                         | Prose margins verkleinen, normalizeMarkdown toepassen             |
-| `src/components/dashboard/DashboardChat.tsx` | Prose margins uniformeren, normalizeMarkdown toepassen            |
-| `src/utils/normalizeMarkdown.ts`             | Nieuw: gedeelde helper functie                                    |
