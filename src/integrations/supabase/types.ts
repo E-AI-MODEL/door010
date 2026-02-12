@@ -126,6 +126,7 @@ export type Database = {
           preferred_sector: string | null
           test_completed: boolean | null
           test_results: Json | null
+          tile_order: Json | null
           updated_at: string
           user_id: string
         }
@@ -144,6 +145,7 @@ export type Database = {
           preferred_sector?: string | null
           test_completed?: boolean | null
           test_results?: Json | null
+          tile_order?: Json | null
           updated_at?: string
           user_id: string
         }
@@ -162,6 +164,7 @@ export type Database = {
           preferred_sector?: string | null
           test_completed?: boolean | null
           test_results?: Json | null
+          tile_order?: Json | null
           updated_at?: string
           user_id?: string
         }
