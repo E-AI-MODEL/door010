@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/contexts/AuthContext";
+import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
 
 // ===== Types =====
 
@@ -403,7 +404,7 @@ export function PublicChatWidget() {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-50 bg-[hsl(152,100%,33%)] text-white rounded-full p-4 shadow-lg hover:bg-[hsl(152,100%,28%)] transition-colors"
+            className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground rounded-full p-4 shadow-lg hover:bg-primary/90 transition-colors"
             aria-label="Open DOORai chat"
           >
             <MessageCircle className="h-6 w-6" />
@@ -418,26 +419,24 @@ export function PublicChatWidget() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] bg-white rounded-3xl shadow-2xl border border-border overflow-hidden flex flex-col"
+            className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] bg-card rounded-3xl shadow-2xl border border-border overflow-hidden flex flex-col"
             style={{ height: "520px", maxHeight: "calc(100vh-6rem)" }}
           >
             {/* Header */}
-            <div className="bg-[hsl(152,100%,33%)] text-white p-4 flex items-center justify-between shrink-0 rounded-t-3xl">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 rounded-full p-2">
-                  <MessageCircle className="h-5 w-5" />
-                </div>
+            <div className="bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between shrink-0 rounded-t-3xl">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2 h-2 rounded-full bg-primary-foreground/60 animate-pulse" />
                 <div>
-                  <h3 className="font-semibold">DOORai</h3>
-                  <p className="text-xs text-white/80">Je gids naar het onderwijs</p>
+                  <h3 className="text-sm font-semibold">DOORai</h3>
+                  <p className="text-[10px] text-primary-foreground/70">Je gids naar het onderwijs</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
+                className="p-1 hover:bg-primary-foreground/20 rounded-full transition-colors"
                 aria-label="Sluit chat"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -515,20 +514,19 @@ export function PublicChatWidget() {
             </div>
 
             {/* Bottom area: actions + tip + input — anchored */}
-            <div className="shrink-0 border-t border-border bg-white">
+            <div className="shrink-0 border-t border-border bg-card">
               {/* Action buttons */}
               {latestActions.length > 0 && showActions && !isLoading && (
                 <motion.div
-                  initial={{ opacity: 0, y: 6 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="px-4 pt-3 pb-1"
+                  className="px-4 pt-2.5 pb-1"
                 >
-                  <p className="text-xs text-muted-foreground mb-2">Suggesties</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                   {latestActions.filter(isActionValid).map((action, i) => {
-                    const baseClass = "px-3 py-1 text-xs rounded-full transition-colors border h-7 inline-flex items-center justify-center";
-                    const ctaClass = "bg-[hsl(152,100%,33%)] text-white border-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]";
-                    const outlineClass = "bg-white border-[hsl(152,100%,33%)]/30 text-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,33%)]/10";
+                    const baseClass = "px-2.5 py-1 text-[11px] rounded-full transition-colors border inline-flex items-center justify-center";
+                    const ctaClass = "bg-primary text-primary-foreground border-primary hover:bg-primary/90";
+                    const outlineClass = "bg-background border-primary/30 text-primary hover:bg-primary/10";
 
                     if (action.kind === "ask") {
                       return (
@@ -537,7 +535,7 @@ export function PublicChatWidget() {
                           onClick={() => handleActionClick(action)}
                           className={`${baseClass} ${outlineClass}`}
                         >
-                          <span className="max-w-[260px] truncate">{action.label}</span>
+                          <span className="max-w-[200px] truncate">{action.label}</span>
                         </button>
                       );
                     }
@@ -552,7 +550,7 @@ export function PublicChatWidget() {
                           className={className}
                           onClick={() => setIsOpen(false)}
                         >
-                          <span className="max-w-[260px] truncate">{action.label}</span>
+                          <span className="max-w-[200px] truncate">{action.label}</span>
                         </Link>
                       );
                     }
@@ -566,7 +564,7 @@ export function PublicChatWidget() {
                         className={className}
                         onClick={() => setIsOpen(false)}
                       >
-                        <span className="max-w-[260px] truncate">{action.label}</span>
+                        <span className="max-w-[200px] truncate">{action.label}</span>
                       </a>
                     );
                   })}
@@ -574,40 +572,23 @@ export function PublicChatWidget() {
                 </motion.div>
               )}
 
-              {/* Contextual tip */}
-              <div className="flex items-center justify-between gap-2 px-4 py-2">
-                <p className="text-xs text-muted-foreground">
-                  {signals.hasEnoughContext
-                    ? "Tip: met een gratis profiel krijg je een persoonlijk stappenplan."
-                    : "Tip: met een profiel kun je stappen opslaan en advies op maat krijgen."}
-                </p>
-                <Link
-                  to="/auth"
-                  className="flex items-center gap-1 text-xs text-[hsl(152,100%,33%)] hover:underline font-medium whitespace-nowrap shrink-0"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <ArrowRight className="h-3 w-3" />
-                  Maak profiel
-                </Link>
-              </div>
-
               {/* Input */}
-              <form onSubmit={sendMessage} className="px-4 pb-4 pt-1">
-                <div className="flex gap-2">
+              <form onSubmit={sendMessage} className="px-4 pb-3 pt-2">
+                <div className="flex gap-2 items-center">
                   <Input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Stel je vraag…"
                     disabled={isLoading}
-                    className="flex-1 rounded-full px-4"
+                    className="flex-1 h-9 text-sm rounded-xl"
                   />
                   <Button
                     type="submit"
-                    size="icon"
+                    size="sm"
                     disabled={isLoading || !input.trim()}
-                    className="rounded-full bg-[hsl(152,100%,33%)] hover:bg-[hsl(152,100%,28%)]"
+                    className="h-9 w-9 p-0 rounded-xl bg-primary hover:bg-primary/90"
                   >
-                    <Send className="h-4 w-4" />
+                    <Send className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </form>
