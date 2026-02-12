@@ -299,6 +299,15 @@ export function AIWidgetSection() {
                 </div>
                 <div className="flex items-center gap-1">
                   <a
+                    href="https://doortje-embedded-bot.replit.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Chat met Doortje"
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                  >
+                    <Bot className="h-4 w-4" />
+                  </a>
+                  <a
                     href="mailto:info@onderwijsloketrotterdam.nl"
                     title="Mail het Onderwijsloket"
                     className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
