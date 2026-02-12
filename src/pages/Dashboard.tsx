@@ -17,6 +17,9 @@ interface Profile {
   current_phase: OrientationPhase;
   preferred_sector: string | null;
   test_completed: boolean | null;
+  test_results: unknown;
+  bio: string | null;
+  phone: string | null;
 }
 
 export default function Dashboard() {
@@ -104,6 +107,12 @@ export default function Dashboard() {
                   userId={user.id}
                   currentPhase={currentPhase}
                   preferredSector={profile?.preferred_sector || null}
+                  profileMeta={{
+                    first_name: profile?.first_name,
+                    bio: profile?.bio,
+                    test_completed: profile?.test_completed,
+                    test_results: profile?.test_results,
+                  }}
                 />
               </div>
             </div>
