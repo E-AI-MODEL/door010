@@ -323,12 +323,18 @@ interface DetectorPayload {
   next_phase_target?: string;
 }
 
+interface PhaseTransition {
+  from: string;
+  to: string;
+}
+
 interface RequestBody {
   messages: ChatMessage[];
   mode?: "public" | "authenticated";
   userPhase?: string;
   userSector?: string;
   detector?: DetectorPayload;
+  phase_transition?: PhaseTransition;
 }
 
 // ── Actions based on next slot (for authenticated flow) ────────────────
@@ -420,7 +426,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, mode = "public", userPhase, userSector, detector }: RequestBody = await req.json();
+    const { messages, mode = "public", userPhase, userSector, detector, phase_transition }: RequestBody = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -453,6 +459,9 @@ Deno.serve(async (req) => {
       systemPrompt += `\n\nContext\n- Ingelogd: ja\n- Fase: ${detector?.phase_current_ui || userPhase || "interesseren"}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}\n${knownSlotsInfo ? `- Bekende info: ${knownSlotsInfo}\n` : ""}`;
       if (userSector) systemPrompt += `- Voorkeursector: ${userSector}\n`;
       if (detector?.evidence?.length) systemPrompt += `- Evidence: ${detector.evidence.slice(0, 3).join(" | ")}\n`;
+      if (phase_transition) {
+        systemPrompt += `\n## FASE-VERSCHUIVING\nDe gebruiker verschuift van "${phase_transition.from}" naar "${phase_transition.to}". Erken dit kort en positief (bijv. "Je bent een stap verder"). Pas je begeleiding aan op de nieuwe fase.\n`;
+      }
     } else {
       // Public context blijft kort
       systemPrompt += `\n\n## Huidige context\n- Ingelogd: Nee\n`;

@@ -1,0 +1,321 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Send, ArrowRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import ReactMarkdown from "react-markdown";
+import { useChatConversation } from "@/hooks/useChatConversation";
+import { supabase } from "@/integrations/supabase/client";
+import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
+
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
+
+function sectorToSchoolType(sector: string | null | undefined): string | undefined {
+  if (!sector) return undefined;
+  const s = sector.toLowerCase();
+  if (s.includes("po")) return "PO";
+  if (s.includes("vo")) return "VO";
+  if (s.includes("mbo")) return "MBO";
+  return undefined;
+}
+
+interface DashboardChatProps {
+  userId: string;
+  currentPhase: UiPhaseCode;
+  preferredSector: string | null;
+}
+
+export function DashboardChat({ userId, currentPhase, preferredSector }: DashboardChatProps) {
+  const [input, setInput] = useState("");
+  const [knownSlots, setKnownSlots] = useState<KnownSlots>(() => {
+    const st = sectorToSchoolType(preferredSector);
+    return st ? { school_type: st } : {};
+  });
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const profile = { current_phase: currentPhase, preferred_sector: preferredSector };
+
+  const {
+    messages,
+    setMessages,
+    latestActions,
+    setLatestActions,
+    isLoading,
+    setIsLoading,
+    loadConversation,
+    ensureConversation,
+    saveMessage,
+  } = useChatConversation(userId, profile);
+
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
+  useEffect(() => {
+    setProfileLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (profileLoaded) {
+      loadConversation();
+    }
+  }, [profileLoaded, loadConversation]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const maybePersistProfile = useCallback(
+    async (detector: ReturnType<typeof runPhaseDetector>) => {
+      const updates: Record<string, unknown> = {};
+      const oldPhase = currentPhase;
+
+      if (detector.phase_current_ui !== oldPhase && detector.phase_confidence >= 0.75) {
+        updates.current_phase = detector.phase_current_ui;
+      }
+
+      const st = detector.known_slots.school_type;
+      if (st && typeof st === "string") {
+        const sector = st === "PO" ? "po" : st === "VO" ? "vo" : st === "MBO" ? "mbo" : null;
+        if (sector && sector !== preferredSector) {
+          updates.preferred_sector = sector;
+        }
+      }
+
+      if (Object.keys(updates).length === 0) return;
+
+      try {
+        await supabase
+          .from("profiles")
+          .update(updates)
+          .eq("user_id", userId);
+      } catch (e) {
+        console.warn("Profile update skipped:", e);
+      }
+    },
+    [userId, currentPhase, preferredSector],
+  );
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+
+    const userMessage = { role: "user" as const, content: text };
+    const outgoingMessages = [...messages, userMessage];
+
+    setMessages(outgoingMessages);
+    setInput("");
+    setIsLoading(true);
+    setLatestActions([]);
+
+    let assistantContent = "";
+
+    try {
+      const convId = await ensureConversation();
+      if (convId) await saveMessage(convId, "user", text);
+
+      const conversationTurns: ConversationTurn[] = outgoingMessages
+        .slice(-30)
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, text: m.content }));
+
+      const detector = runPhaseDetector({
+        conversation: conversationTurns,
+        known_slots: knownSlots,
+        current_phase_ui: currentPhase,
+      });
+
+      setKnownSlots(detector.known_slots);
+      await maybePersistProfile(detector);
+
+      // Phase transition detection
+      const phaseTransition = detector.phase_confidence >= 0.75 && detector.phase_current_ui !== currentPhase
+        ? { from: currentPhase, to: detector.phase_current_ui }
+        : undefined;
+
+      const response = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: outgoingMessages.map((m) => ({ role: m.role, content: m.content })),
+          mode: "authenticated",
+          userPhase: detector.phase_current_ui,
+          userSector: preferredSector,
+          detector,
+          phase_transition: phaseTransition,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error("Failed to get response");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+
+            if (parsed.actions && Array.isArray(parsed.actions)) {
+              setLatestActions(parsed.actions);
+              continue;
+            }
+
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              assistantContent += content;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: "assistant", content: assistantContent };
+                return updated;
+              });
+            }
+          } catch {
+            buffer = line + "\n" + buffer;
+            break;
+          }
+        }
+      }
+
+      if (convId) await saveMessage(convId, "assistant", assistantContent);
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Sorry, er ging iets mis. Probeer het later opnieuw." },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage(input);
+  };
+
+  // Show only the last 6 messages
+  const visibleMessages = messages.slice(-6);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.15 }}
+      className="rounded-3xl border bg-card shadow-door flex flex-col h-full min-h-[480px]"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+            DOORai
+          </h2>
+        </div>
+        <Link
+          to="/chat"
+          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+        >
+          Volledig gesprek
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {visibleMessages.map((message, index) => (
+          <div
+            key={index}
+            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
+                message.role === "user"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground"
+              }`}
+            >
+              {message.role === "assistant" ? (
+                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-p:leading-relaxed prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0">
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <p>{message.content}</p>
+              )}
+            </div>
+          </div>
+        ))}
+        {isLoading && messages[messages.length - 1]?.role === "user" && (
+          <div className="flex justify-start">
+            <div className="bg-muted rounded-2xl px-3.5 py-2.5">
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Suggestions */}
+      {latestActions.length > 0 && (
+        <div className="px-4 pb-2">
+          <div className="flex flex-wrap gap-1.5">
+            {latestActions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setLatestActions([]);
+                  sendMessage(action.value);
+                }}
+                disabled={isLoading}
+                className="px-3 py-1.5 text-xs rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="px-4 pb-4 pt-2 border-t border-border">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Stel je vraag..."
+            disabled={isLoading}
+            className="flex-1 h-9 text-sm rounded-xl"
+          />
+          <Button type="submit" size="sm" disabled={isLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl">
+            <Send className="h-3.5 w-3.5" />
+          </Button>
+        </form>
+      </div>
+    </motion.div>
+  );
+}

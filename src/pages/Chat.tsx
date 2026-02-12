@@ -170,6 +170,11 @@ export default function Chat() {
       // Optioneel profiel bijwerken (alleen bij voldoende confidence)
       await maybePersistProfile(detector);
 
+      // Phase transition detection
+      const phaseTransition = detector.phase_confidence >= 0.75 && detector.phase_current_ui !== (profile?.current_phase || "interesseren")
+        ? { from: profile?.current_phase || "interesseren", to: detector.phase_current_ui }
+        : undefined;
+
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -181,7 +186,8 @@ export default function Chat() {
           mode: "authenticated",
           userPhase: detector.phase_current_ui,
           userSector: profile?.preferred_sector,
-          detector, // SSOT: next_question_id + next_question + next_slot_key + evidence
+          detector,
+          phase_transition: phaseTransition,
         }),
       });
 

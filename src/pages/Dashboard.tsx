@@ -4,15 +4,11 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { PhaseCard, PhaseTips } from "@/components/dashboard/PhaseCard";
+import { PhaseCard } from "@/components/dashboard/PhaseCard";
 import { PhaseProgress } from "@/components/dashboard/PhaseProgress";
-import { 
-  WelcomeHeader, 
-  DOORaiCard, 
-  QuickLinksCard, 
-  ProfileCard, 
-  RotterdamInfoCard 
-} from "@/components/dashboard/DashboardCards";
+import { WelcomeHeader, ProfileCard } from "@/components/dashboard/DashboardCards";
+import { ProfileTimeline } from "@/components/profile/ProfileTimeline";
+import { DashboardChat } from "@/components/dashboard/DashboardChat";
 import { phaseData, type OrientationPhase } from "@/data/dashboard-phases";
 
 interface Profile {
@@ -21,6 +17,7 @@ interface Profile {
   last_name: string | null;
   current_phase: OrientationPhase;
   preferred_sector: string | null;
+  test_completed: boolean | null;
 }
 
 export default function Dashboard() {
@@ -53,7 +50,6 @@ export default function Dashboard() {
         console.error("Error fetching profile:", error);
       }
       
-      // Set profile even if null - component will use defaults
       setProfile(data);
     } catch (error) {
       console.error("Error fetching profile:", error);
@@ -91,19 +87,28 @@ export default function Dashboard() {
         <PhaseProgress currentPhase={currentPhase} />
 
         <div className="container py-6 md:py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main content - left 2 columns */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Left column - Timeline + Phase + Profile */}
             <div className="lg:col-span-2 space-y-6">
+              <ProfileTimeline
+                userId={user.id}
+                currentPhase={currentPhase}
+                preferredSector={profile?.preferred_sector || null}
+                testCompleted={profile?.test_completed || false}
+              />
               <PhaseCard phaseInfo={phaseInfo} />
-              <DOORaiCard />
-              <PhaseTips tips={phaseInfo.tips} />
+              <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
             </div>
 
-            {/* Sidebar - right column */}
-            <div className="space-y-6">
-              <QuickLinksCard />
-              <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
-              <RotterdamInfoCard />
+            {/* Right column - Inline chat */}
+            <div className="lg:col-span-3">
+              <div className="lg:sticky lg:top-6">
+                <DashboardChat
+                  userId={user.id}
+                  currentPhase={currentPhase}
+                  preferredSector={profile?.preferred_sector || null}
+                />
+              </div>
             </div>
           </div>
         </div>
