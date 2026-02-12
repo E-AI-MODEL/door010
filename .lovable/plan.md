@@ -1,77 +1,34 @@
 
 
-## Versleepbare profieltegels
+## De twee widgets samenvoegen
 
-### Wat wordt er gebouwd?
-De tegels op de profielpagina worden versleepbaar, zodat gebruikers ze in een volgorde kunnen zetten die voor hen prettig is. De gekozen volgorde wordt opgeslagen in de database zodat het onthouden wordt tussen sessies.
+### Probleem
+Er bestaan twee aparte chatwidgets:
+- **PublicChatWidget** -- de actieve widget die op elke pagina draait (vanuit App.tsx)
+- **AIWidgetSection** -- een oud, niet meer gebruikt bestand dat nergens wordt geimporteerd
 
-### Hoe werkt het voor de gebruiker?
-- Elke tegel krijgt een klein sleepicoon (griphandle) in de header
-- Door te klikken en slepen kan de gebruiker tegels omhoog/omlaag verplaatsen
-- De nieuwe volgorde wordt automatisch opgeslagen
-- Bij een volgend bezoek staat alles nog op dezelfde plek
+De mail-, telefoon- en Doortje-iconen zijn per ongeluk aan het ongebruikte bestand (`AIWidgetSection`) toegevoegd. Ze moeten naar de actieve widget (`PublicChatWidget`).
 
-### Aanpak
+### Plan
 
-**1. Database: volgorde opslaan**
-- Een nieuw veld `tile_order` (JSON array) toevoegen aan de `profiles` tabel
-- Hierin wordt de volgorde als lijst van tegel-ID's opgeslagen, bijv. `["personal","sector","phase","test","cv","notes","vacancies","events","appointment","timeline"]`
+**Stap 1: Iconen toevoegen aan PublicChatWidget**
+De header van `PublicChatWidget.tsx` krijgt dezelfde drie iconen die nu in `AIWidgetSection` staan:
+- Bot-icoon met link naar `https://doortje-embedded-bot.replit.app/`
+- Mail-icoon met `mailto:info@onderwijsloketrotterdam.nl`
+- Telefoon-icoon met `tel:+31107940000`
 
-**2. Reorder met framer-motion (geen extra pakket nodig)**
-- `framer-motion` heeft een ingebouwde `Reorder.Group` en `Reorder.Item` API
-- De tegels worden als een verticale lijst gerenderd (in plaats van een CSS grid), waarbinnen de gebruiker kan slepen
-- Elke tegel wordt gewrapped in een `Reorder.Item` component
-- Op mobiel wordt de lijst single-column, op desktop blijft het visueel compact via CSS columns of een flex-wrap layout
+Deze komen naast de bestaande sluit-knop (X) in de header.
 
-**3. Tegel-registratie**
-- Elke tegel krijgt een unieke string-ID (bijv. `"personal"`, `"sector"`, `"notes"`)
-- Een configuratie-array koppelt elke ID aan het bijbehorende React-component
-- De volgorde uit de database bepaalt de render-volgorde
-
-**4. Automatisch opslaan**
-- Bij elke herschikking wordt de nieuwe volgorde met een korte debounce naar de `profiles` tabel geschreven
-- Geen extra "opslaan" actie nodig: het gebeurt direct
-
-**5. Visuele feedback**
-- Een `GripVertical` icoon verschijnt linksboven in elke tegel-header
-- Tijdens het slepen krijgt de tegel een lichte schaduw en schaalvergroting
-- Andere tegels schuiven vloeiend op via framer-motion animatie
-
----
+**Stap 2: AIWidgetSection verwijderen**
+Het bestand `src/components/home/AIWidgetSection.tsx` wordt verwijderd omdat het nergens meer wordt gebruikt en alleen verwarring veroorzaakt.
 
 ### Technische details
 
-**Database migratie:**
-```sql
-ALTER TABLE profiles ADD COLUMN tile_order jsonb DEFAULT NULL;
-```
+**Bestand: `src/components/chat/PublicChatWidget.tsx`**
+- Import `Mail`, `Phone`, `Bot` van lucide-react
+- In het header-blok (naast de X-knop) drie `<a>` tags toevoegen met dezelfde styling als in AIWidgetSection
+- Volgorde: Bot | Mail | Phone | X
 
-**Render-logica (pseudocode):**
-```typescript
-import { Reorder } from "framer-motion";
+**Bestand: `src/components/home/AIWidgetSection.tsx`**
+- Volledig verwijderen (geen imports meer in het project)
 
-const defaultOrder = ["personal","sector","phase","test","cv","notes","vacancies","events","appointment","timeline"];
-
-const tileComponents = {
-  personal: <PersonalInfoTile />,
-  sector: <SectorTile />,
-  // ...
-};
-
-const [order, setOrder] = useState(profile.tile_order ?? defaultOrder);
-
-<Reorder.Group axis="y" values={order} onReorder={handleReorder}>
-  {order.map(id => (
-    <Reorder.Item key={id} value={id}>
-      {tileComponents[id]}
-    </Reorder.Item>
-  ))}
-</Reorder.Group>
-```
-
-**Bestanden die worden aangepast/aangemaakt:**
-- `profiles` tabel: nieuw `tile_order` veld (migratie)
-- `src/pages/Profile.tsx`: refactor grid naar `Reorder.Group`, tegel-configuratie, opslaan logica
-- `src/integrations/supabase/types.ts`: wordt automatisch bijgewerkt
-
-**Beperking:** `Reorder.Group` werkt het best op een enkele as (verticaal). Voor een multi-kolom grid-layout met vrije positie-swap zou een zwaardere library nodig zijn (bijv. `dnd-kit`). De voorgestelde aanpak gebruikt een responsive kolom-layout via CSS *binnen* de verticale sleeplijst, wat visueel hetzelfde resultaat geeft met minimale complexiteit.
