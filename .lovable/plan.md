@@ -1,138 +1,109 @@
-# Tone of Voice implementeren in beide prompts  
-Onderstaande gaat alleen over tone of voice. phase detector e.d. blijven gewoon actief. 
-
-- **Gedeelde kern**: huidige prompts missen de verboden-zinnen lijst, de voorkeurszinnen, en de scope/veiligheidsregels (geen BSN vragen, geen salaris-onderhandeling advies)
-- **Widget (public)**: huidige `DOORAI_SYSTEM_PROMPT` is te rigide (exact 4 zinnen, zin-voor-zin voorschrift). Jouw versie geeft meer ruimte (1-3 zinnen) en is link-first
-- **Na inlog (auth)**: huidige `DOORAI_SYSTEM_PROMPT_AUTH` mist fase-gedrag, doorverwijsregels, en de expliciete instructie dat de SSOT-vraag de enige zin met vraagteken mag zijn. 
-
-## Mapping naar bestanden
 
 
-| Jouw blok                | Bestand                                              | Huidige prompt                                 |
-| ------------------------ | ---------------------------------------------------- | ---------------------------------------------- |
-| Gedeelde kern + WIDGET   | `doorai-chat/index.ts` - `DOORAI_SYSTEM_PROMPT`      | Regels 112-169 (volledig vervangen)            |
-| Gedeelde kern + NA INLOG | `doorai-chat/index.ts` - `DOORAI_SYSTEM_PROMPT_AUTH` | Regels 172-186 (volledig vervangen)            |
-| Widget-variant           | `homepage-coach/index.ts` - `SITE_GUIDE_PROMPT`      | Regels 7-66 (tone updaten, structuur behouden) |
+# Dashboard herontwerp: rustiger, logischer, connected
 
+## Wat er nu mis is
 
-## Wat er verandert
+1. **Tips en Snelle Links** nemen elk een volledig kaartblok in beslag, terwijl de inhoud minimaal is (3 bullets / 4 links)
+2. **DOORai-kaart** is een dode link-kaart die naar /chat stuurt - voelt niet connected
+3. **Oriëntatietraject** (tijdlijn) staat op de profielpagina, terwijl dat het hart is van het dashboard
+4. **Fase-overgang wordt niet meegegeven aan de LLM** als de phase detector een verschuiving detecteert
 
-### `doorai-chat/index.ts`
+## Nieuwe dashboard-indeling
 
-**DOORAI_SYSTEM_PROMPT** (public mode) wordt vervangen door:
+```text
++------------------------------------------------------+
+| Header                                                |
++------------------------------------------------------+
+| Welkom, Frans!                          [Uitloggen]   |
+| Interesse: vo                                         |
++------------------------------------------------------+
+| Fase-stappen balk (bestaand)                         |
++------------------------------------------------------+
+|                          |                            |
+|  ORIËNTATIETRAJECT       |  INLINE DOORai CHAT        |
+|  (tijdlijn, verplaatst   |  (mini chatvenster met     |
+|   vanuit profiel)        |   laatste paar berichten,  |
+|                          |   invoerveld, suggesties)  |
+|  FASE-KAART (compact)    |                            |
+|  (header + acties,       |                            |
+|   geen apart tips-blok)  |                            |
+|                          |                            |
+|  PROFIEL (compact)       |                            |
+|  + Rotterdam info        |                            |
+|  (samengevoegd, klein)   |                            |
+|                          |                            |
++------------------------------------------------------+
+| Footer                                                |
++------------------------------------------------------+
+```
 
-- Gedeelde kern (identiteit, gedragsregels, verboden zinnen, voorkeurszinnen, scope/veiligheid, stijl)
-- Widget add-on (kort, link-first, max 1-3 zinnen, geen intake-achtige doorvraag)
-- Bestaande sector/route/salaris/links referentiedata blijft behouden als kennisblok
+### Wat verdwijnt / krimpt
 
-**DOORAI_SYSTEM_PROMPT_AUTH** (ingelogd) wordt vervangen door:
+- **PhaseTips**: wordt opgenomen als subtiele regel onder de PhaseCard acties (niet apart kaartblok)
+- **QuickLinksCard**: verdwijnt als apart blok. De links zitten al in de fase-acties en de header-navigatie
+- **DOORaiCard** (link-kaart): vervangen door inline chat
+- **RotterdamInfoCard**: wordt compact onderdeel van het profielblok
 
-- Gedeelde kern (zelfde basis)
-- Na inlog add-on (SSOT-vraag letterlijk overnemen, geen eigen vraagtekens, fase-gedrag, doorverwijsregels)
-- De dynamische context-injectie (fase, slots, evidence) blijft ongewijzigd
+### Wat wordt verplaatst
 
-### `homepage-coach/index.ts`
+- **ProfileTimeline**: van `/profile` naar het dashboard (linkerkolom, bovenaan)
+- **ProfileTimeline** blijft ook beschikbaar op de profielpagina (herbruikbaar component)
 
-- Tone-regels updaten naar gedeelde kern (verboden zinnen, voorkeurszinnen, stijl)
-- Site-gids rol en pagina-referenties blijven behouden
+### Wat nieuw is
 
-### Bestaande voorbeelden in de prompt
+- **Inline DOORai mini-chat** in de rechterkolom: toont de laatste berichten, een invoerveld en suggestieknoppen. Gebruikt dezelfde `useChatConversation` hook en dezelfde edge function. Link naar /chat voor volledige weergave.
 
-De huidige voorbeelden ("Goed dat je daar naar kijkt!") worden vervangen door voorbeelden die de voorkeurszinnen gebruiken ("Helder.", "Even scherp zetten.").
+## Fase-overgang meegeven aan LLM
 
-### PHASE_RULES tone-velden
+Wanneer de phase detector een fase-verschuiving detecteert (confidence >= 0.75 en nieuwe fase != huidige fase), wordt dit als extra context meegegeven:
 
-De `tone` velden in PHASE_RULES (regel 9-13) bevatten nu zinnen als "Logisch dat je benieuwd bent!" die op de verboden-lijst staan. Deze worden aangepast naar de voorkeurszinnen.
+### In `src/pages/Chat.tsx` (en straks ook dashboard mini-chat)
 
-## Wat NIET verandert
+Bij het verzenden naar de edge function wordt een extra veld `phase_transition` toegevoegd aan de detector payload als er een verschuiving is gedetecteerd.
 
-- Slot extraction logica
-- Deterministic next-question logica
-- Actions-per-fase/slot logica
-- Stream filter (emdash vervanging)
-- SSOT-vraag append mechanisme
-- Context-injectie code
+### In `supabase/functions/doorai-chat/index.ts`
 
-&nbsp;
+De system prompt krijgt een extra contextblok als `phase_transition` aanwezig is:
 
-Ja, dat is slim. Voor toon of voice werkt dit het best als “few shot” voorbeelden in je prompt: korte user input plus het gewenste Doortje antwoord. Dan leert het model het ritme, woordkeuze en grenzen, zonder dat je overal extra regels hoeft te stapelen.
+```
+- Fase-verschuiving: van [oude fase] naar [nieuwe fase]. 
+  Erken dit kort en positief (bijv. "Je bent een stap verder"). 
+  Pas je begeleiding aan op de nieuwe fase.
+```
 
-Je hebt er idealiter twee sets: één voor de homepage widget (public) en één voor de ingelogde assistent (auth). Zelfde stem, andere context en outputregels.
+## Technische wijzigingen per bestand
 
-Hier zijn kant en klare voorbeeldblokken:   
-Widget  
-(Doel: kort, wegwijzer, link-first, max 1 vraag)  
-  
-Voorbeeld 1  
-Gebruiker: "Ik twijfel of het onderwijs iets voor mij is."  
-Doortje: "Twijfel is normaal bij zo’n stap. Je kunt klein beginnen met oriënteren of meteen een route verkennen. Kijk bij /events voor meelopen en infosessies. Wil je PO, VO of MBO verkennen?"  
-  
-Voorbeeld 2  
-Gebruiker: "Wat is het verschil tussen PO en VO?"  
-Doortje: "PO is werken met jonge kinderen en brede ontwikkeling. VO is werken met pubers en meer vakgericht. Op /opleidingen staan de routes per sector. Wat spreekt je nu het meest aan: PO of VO?"  
-  
-Voorbeeld 3  
-Gebruiker: "Ik zoek vacatures in Rotterdam."  
-Doortje: "Dan is /vacatures de snelste ingang. Filter op sector en vakgebied, dan zie je direct wat er openstaat. Wil je PO, VO of MBO vacatures zien?"  
-  
-Voorbeeld 4  
-Gebruiker: "Wat verdien je als docent?"  
-Doortje: "Salaris hangt af van sector en inschaling. Ik kan je globaal richten, maar check de CAO tabellen voor de exacte bedragen. Gaat het om PO, VO of MBO?"  
-  
-Voorbeeld 5  
-Gebruiker: "Kan ik zij-instromen zonder pabo?"  
-Doortje: "Dat kan, afhankelijk van je opleiding en de sector. Op /opleidingen zie je de routes zoals zij-instroom en deeltijd. Wat is je hoogste afgeronde niveau: mbo, hbo of wo?"  
-  
-Voorbeeld 6  
-Gebruiker: "Hoi"  
-Doortje: "Hoi, ik help je snel op weg richting werken in het onderwijs. Je kunt beginnen met routes op /opleidingen of meelopen via /events."  
-  
-NA inlog AI  
-(Doel: compact, concreet, geen eigen vragen. Eindig met exact 1 SSOT vraagtekst. De SSOT vraag is de enige zin met een vraagteken.)  
-  
-Voorbeeld 1  
-Gebruiker: "Ik wil het onderwijs in, maar ik weet niet waar te beginnen."  
-Doortje: "Helder. We maken dit klein: eerst kiezen we de sector, daarna bekijken we de routes die daarbij passen. Als je liever eerst wilt ervaren, is meelopen ook een sterke eerste stap."  
-SSOT: "Welke sector bedoel je: PO, VO of MBO?"  
-  
-Voorbeeld 2  
-Gebruiker: "Wat verdien ik ongeveer in het onderwijs?"  
-Doortje: "Salaris hangt af van sector, functie en inschaling. Ik kan je een globale richting geven en je naar de juiste tabellen wijzen. Voor exacte bedragen is de CAO leidend."  
-SSOT: "Gaat het om PO, VO of MBO?"  
-  
-Voorbeeld 3  
-Gebruiker: "Ik twijfel tussen zij-instroom en een deeltijdopleiding."  
-Doortje: "Twee routes die je nu hebt: zij-instroom is vaak sneller richting werk, met begeleiding op school. Deeltijdopleiding is meestal voorspelbaarder in opbouw, met stages en studiebelasting. Als je wil, zetten we dit naast jouw situatie, stap voor stap."  
-SSOT: "Wat is je hoogste afgeronde opleiding: mbo, hbo of wo?"  
-  
-Voorbeeld 4  
-Gebruiker: "Ik zoek een baan in Rotterdam."  
-Doortje: "Dan zitten we in matchen. We kunnen dit op twee manieren aanpakken: eerst breed kijken wat er openstaat, of eerst je sector en vakgebied scherp zetten zodat je sneller de juiste vacatures ziet."  
-SSOT: "In welke sector zoek je: PO, VO of MBO?"  
-  
-Voorbeeld 5  
-Gebruiker: "Ik heb een buitenlands diploma."  
-Doortje: "Dit wordt vaak maatwerk, omdat diploma-waardering en aanvullende eisen kunnen verschillen. Ik kan je de route schetsen en je naar het juiste loket of consult wijzen, zodat je geen rondjes draait."  
-SSOT: "Wil je eerst de stappen voor diploma-waardering zien, of wil je een consult-optie bekijken?"  
-  
-Voorbeeld 6  
-Gebruiker: "Ik wil meelopen om te voelen of dit past."  
-Doortje: "Slim. Meelopen haalt veel twijfel weg zonder dat je meteen iets vastlegt. We kiezen eerst de sector, daarna kijken we welke activiteiten of scholen het best aansluiten."  
-SSOT: "Wil je meelopen in PO, VO of MBO?"  
+### `src/pages/Dashboard.tsx`
+- Verwijder imports: `PhaseTips`, `DOORaiCard`, `QuickLinksCard`, `RotterdamInfoCard`
+- Voeg imports toe: `ProfileTimeline`, nieuwe `DashboardChat` component
+- Haal extra profielvelden op (test_completed, preferred_sector)
+- Layout: 2-koloms grid. Links: tijdlijn + compacte fase-kaart + compact profiel. Rechts: inline chat
 
+### `src/components/dashboard/DashboardCards.tsx`
+- Verwijder `DOORaiCard`, `QuickLinksCard`, `RotterdamInfoCard`
+- `ProfileCard` uitbreiden met Rotterdam-info (compacte link onderaan)
+- Behoud `WelcomeHeader`
 
-Hoe je dit het best inzet (kort en praktisch)
+### `src/components/dashboard/PhaseCard.tsx`
+- Integreer tips als subtiele tekst onder de acties (1 regel, geen apart blok)
+- Verwijder `PhaseTips` export
 
-1. Plak deze blokken onder je VOICE_CORE in de system prompt van de juiste bot.
-2. Public: neem 4 tot 6 voorbeelden. Meer is niet per se beter.
-3. Auth: neem 4 tot 6 voorbeelden en houd de “SSOT:” regel exact zoals je het in code afdwingt (modeltekst zonder vraagtekens, SSOT vraag server-side eronder).
+### `src/components/dashboard/DashboardChat.tsx` (nieuw)
+- Mini-chatvenster: toont laatste 5-6 berichten
+- Invoerveld + suggestieknoppen
+- Gebruikt `useChatConversation` hook
+- "Bekijk volledig gesprek" link naar /chat
+- Zelfde streaming logica als Chat.tsx maar compacter
+- Phase detector draait ook hier, zodat fase-overgangen live gedetecteerd worden
 
-Als je wil, maak ik dit ook nog “token zuiniger”: dezelfde voorbeelden maar korter, zodat het minder kost per request, met hetzelfde effect op toon.
+### `src/pages/Chat.tsx`
+- Voeg `phase_transition` veld toe aan de request body wanneer detector een verschuiving detecteert
 
-## Bestanden
+### `supabase/functions/doorai-chat/index.ts`
+- Accepteer `phase_transition` veld in RequestBody
+- Voeg fase-overgang context toe aan de system prompt als dit veld aanwezig is
 
+### `src/pages/Profile.tsx`
+- ProfileTimeline blijft ook hier staan (component is herbruikbaar)
 
-| Bestand                                      | Wijziging                                                 |
-| -------------------------------------------- | --------------------------------------------------------- |
-| `supabase/functions/doorai-chat/index.ts`    | Beide system prompts vervangen + PHASE_RULES tone updaten |
-| `supabase/functions/homepage-coach/index.ts` | Tone-of-voice regels updaten                              |
