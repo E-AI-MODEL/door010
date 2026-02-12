@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Send, ArrowLeft, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useChatConversation } from "@/hooks/useChatConversation";
-import { ChatActions } from "@/components/chat/ChatActions";
+import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
 import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
 
@@ -303,33 +303,47 @@ export default function Chat() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 flex flex-col">
-        <div className="bg-primary py-4 border-b border-primary/20">
-          <div className="container flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-primary-foreground hover:bg-white/20"
-              onClick={() => navigate("/dashboard")}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex-1">
-              <h1 className="text-lg font-semibold text-primary-foreground">DOORai</h1>
-              <p className="text-sm text-primary-foreground/80">Je oriëntatie-assistent</p>
+      <main className="flex-1 flex flex-col items-center py-6 px-4">
+        <div className="w-full max-w-3xl flex flex-col rounded-3xl border bg-card shadow-door overflow-hidden" style={{ height: "calc(100vh - 120px)" }}>
+          {/* Compact header */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate("/dashboard")}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <h1 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+                  DOORai
+                </h1>
+              </div>
             </div>
+            {messages.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={handleClearConversation}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="container py-6 space-y-4 max-w-3xl mx-auto">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {messages.map((message, index) => (
               <div
                 key={index}
                 className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
                     message.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground"
@@ -347,7 +361,7 @@ export default function Chat() {
             ))}
             {isLoading && messages[messages.length - 1]?.role === "user" && (
               <div className="flex justify-start">
-                <div className="bg-muted rounded-lg px-4 py-3">
+                <div className="bg-muted rounded-2xl px-4 py-3">
                   <div className="flex gap-1">
                     <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
                     <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
@@ -358,33 +372,26 @@ export default function Chat() {
             )}
             <div ref={messagesEndRef} />
           </div>
-        </div>
 
-        <div className="border-t border-border bg-background">
-          <ChatActions actions={latestActions} onActionClick={handleActionClick} disabled={isLoading} />
-          <div className="container max-w-3xl mx-auto py-4">
-            <form onSubmit={handleSubmit} className="flex gap-3 items-center">
-              {messages.length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={handleClearConversation}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
+          {/* Suggestions */}
+          {latestActions.length > 0 && (
+            <div className="px-5 pb-2">
+              <ChatSuggestions actions={latestActions} onActionClick={handleActionClick} disabled={isLoading} />
+            </div>
+          )}
+
+          {/* Input */}
+          <div className="px-5 pb-4 pt-2 border-t border-border">
+            <form onSubmit={handleSubmit} className="flex gap-2 items-center">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Stel je vraag..."
                 disabled={isLoading}
-                className="flex-1"
+                className="flex-1 h-9 text-sm rounded-xl"
               />
-              <Button type="submit" disabled={isLoading || !input.trim()}>
-                <Send className="h-4 w-4 mr-2" />
-                Verstuur
+              <Button type="submit" size="sm" disabled={isLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl">
+                <Send className="h-3.5 w-3.5" />
               </Button>
             </form>
           </div>
