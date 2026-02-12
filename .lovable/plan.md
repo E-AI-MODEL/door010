@@ -1,85 +1,63 @@
 
+# Plan: Natuurlijkere knopteksten
 
-# Plan: Tone of Voice + Phase Detector update (v2)
+## Probleem
 
-## Samenvatting
+De suggestieknoppen sturen stijve, gescripte zinnen als chatbericht: "Ik ben geïnteresseerd in lesgeven", "Ik wil me oriënteren op PO". Dit voelt als een scripted chatbot, niet als een natuurlijk gesprek.
 
-De ingelogde chat wordt professioneler en minder "chatbot-achtig":
-- De AI stelt zelf geen vragen meer - de server voegt exact 1 SSOT-vervolgvraag toe
-- Geen standaard bevestigingen ("Goed dat je dit vraagt!") of samenvattingen
-- Deterministische fase-detectie op basis van wat de gebruiker typt
-- Fase en sector worden automatisch in het profiel bijgewerkt bij voldoende zekerheid
+## Oplossing
 
-De publieke widget op de homepage blijft ongewijzigd.
+De **labels** (wat de gebruiker ziet op de knop) blijven kort en duidelijk. De **values** (wat als bericht wordt verstuurd) worden omgeschreven naar informele, menselijke zinnetjes - alsof iemand het echt zou typen.
 
----
+## Wijzigingen
 
-## Stap 1: SSOT vragen-bestand vervangen
+Alleen het bestand `supabase/functions/doorai-chat/index.ts` wordt aangepast, in twee functies:
 
-Het bestand `src/data/phase-detector-questions.json` wordt vervangen met de nieuwe versie. Belangrijkste verschil: neutrale vervolgvragen staan bovenaan per slot (S00001 t/m S00009), zodat "beste route" formuleringen niet meer als default terugkomen.
+### 1. `actionsForNextSlot()` (authenticated mode)
 
-## Stap 2: Nieuwe utils toevoegen
+| Slot | Label (blijft) | Value (oud, stijf) | Value (nieuw, natuurlijk) |
+|------|----------------|--------------------|----|
+| school_type | PO (basisonderwijs) | "PO" | "Basisonderwijs lijkt me wat" |
+| school_type | VO (voortgezet) | "VO" | "Voortgezet onderwijs, denk ik" |
+| school_type | MBO (beroepsonderwijs) | "MBO" | "MBO spreekt me aan" |
+| role_interest | Lesgeven | "Ik wil lesgeven" | "Lesgeven trekt me" |
+| role_interest | Begeleiden | "Ik wil begeleiden" | "Leerlingen begeleiden, dat lijkt me wat" |
+| role_interest | Vakexpertise | "Ik wil mijn vak inzetten" | "Mijn vak inzetten in het onderwijs" |
+| credential_goal | Route naar bevoegdheid | "Ik wil routes naar bevoegdheid zien" | "Hoe krijg ik een bevoegdheid" |
+| credential_goal | Eerst verkennen | "Ik wil eerst verkennen wat bij me past" | "Ik wil eerst verkennen" |
+| admission_requirements | MBO/HBO/WO/Anders | "Ik heb mbo" etc. | "Mijn achtergrond is mbo" etc. |
+| region_preference | Regio Rotterdam | "Regio Rotterdam" | "Rotterdam en omgeving" |
+| region_preference | Andere regio | "Andere regio" | "Ergens anders in Nederland" |
+| next_step | Vacatures | "Ik wil vacatures bekijken" | "Laat me vacatures zien" |
+| next_step | Gesprek plannen | "Ik wil een gesprek plannen" | "Kan ik ergens terecht voor een gesprek" |
+| next_step | Events | "Ik wil events bekijken" | "Zijn er events binnenkort" |
 
-Twee nieuwe bestanden in een nieuwe `src/utils/` map:
+### 2. `chooseActions()` (public mode)
 
-| Bestand | Doel |
-|---------|------|
-| `src/utils/phaseDetectorParser.ts` | Laadt en valideert de 2 SSOT JSON bestanden, cached het resultaat |
-| `src/utils/phaseDetectorEngine.ts` | Deterministische fase-detectie + slot-extractie + SSOT vervolgvraag kiezen |
+| Fase | Label (blijft) | Value (oud) | Value (nieuw) |
+|------|----------------|-------------|---------------|
+| interesseren | Lesgeven | "Ik ben geïnteresseerd in lesgeven" | "Lesgeven trekt me" |
+| interesseren | Begeleiding | "Ik ben geïnteresseerd in begeleiding" | "Leerlingen begeleiden lijkt me wat" |
+| interesseren | Vakexpertise | "Ik ben geïnteresseerd in vakexpertise" | "Mijn vak inzetten in het onderwijs" |
+| (geen sector) | PO/VO/MBO | "Ik wil me oriënteren op PO" etc. | "Basisonderwijs lijkt me wat" etc. |
+| beslissen | Kosten bekijken | "Ik wil meer weten over de kosten" | "Wat kost het eigenlijk" |
+| beslissen | Vacatures | "Ik wil vacatures bekijken" | "Laat me vacatures zien" |
+| beslissen | Gesprek plannen | "Ik wil een gesprek plannen" | "Kan ik ergens terecht voor een gesprek" |
+| matchen | Scholen zoeken | "Ik wil scholen zoeken in mijn regio" | "Welke scholen zitten in mijn buurt" |
+| matchen | Vacatures | "Ik wil vacatures bekijken" | "Laat me vacatures zien" |
+| voorbereiden | Checklist | "Wat moet ik nog regelen?" | "Wat moet ik nog regelen" |
+| voorbereiden | Gesprek plannen | "Ik wil een gesprek plannen" | "Kan ik ergens terecht voor een gesprek" |
+| default | Routes bekijken | "Welke routes zijn er naar het leraarschap?" | "Hoe word je eigenlijk leraar" |
+| default | Opleidingen | "Welke opleidingen zijn er?" | "Welke opleidingen zijn er" |
 
-De engine bevat:
-- Mapping tussen UI-fasenamen (interesseren/orienteren/...) en SSOT-fasenamen (interesse/orientatie/...)
-- Keyword-gebaseerde slot-extractie (sector, regio, salaris, kosten, etc.)
-- Fase-scoring met bias naar huidige fase voor stabiliteit
-- Confidence-drempel (0.75) voor profielupdates
+### 3. Context-lek fixen (bonus)
 
-## Stap 3: Chat pagina patchen
+Regel 343: de SSOT-vraagtekst wordt uit de system prompt context verwijderd om te voorkomen dat het model de vraag parafraseert. Alleen fase, confidence en bekende info blijven staan.
 
-`src/pages/Chat.tsx` wordt vervangen met de nieuwe versie. Belangrijke wijzigingen:
-- Importeert en draait de Phase Detector bij elk bericht
-- Stuurt detector-output (fase, slots, SSOT vraag) mee naar de edge function
-- Updatet het profiel automatisch (fase bij confidence >= 0.75, sector als po/vo/mbo)
-- Houdt knownSlots bij als state tussen berichten
+## Bestanden
 
-## Stap 4: Edge function patchen
+| Bestand | Wijziging |
+|---------|-----------|
+| `supabase/functions/doorai-chat/index.ts` | Values in beide action-functies + context-lek fixen |
 
-`supabase/functions/doorai-chat/index.ts` wordt vervangen. Wijzigingen:
-- Nieuwe `DOORAI_SYSTEM_PROMPT_AUTH`: directe toon, geen bevestigingen, geen vraagtekens, max 110 woorden
-- Server voegt SSOT-vraag als apart tekst-chunk toe aan het einde van de AI-stream
-- Actieknoppen worden gekozen op basis van de next_slot_key uit de detector
-- Em-dash/en-dash filter op de stream (vervangt -- en - door gewone streep)
-- Public mode blijft exact hetzelfde als nu
-
-## Stap 5: Deploy
-
-Alleen de `doorai-chat` edge function wordt gedeployed.
-
----
-
-## Technische details
-
-### Bestanden
-
-| Actie | Bestand |
-|-------|---------|
-| Vervangen | `src/data/phase-detector-questions.json` |
-| Nieuw | `src/utils/phaseDetectorParser.ts` |
-| Nieuw | `src/utils/phaseDetectorEngine.ts` |
-| Vervangen | `src/pages/Chat.tsx` |
-| Vervangen | `supabase/functions/doorai-chat/index.ts` |
-
-### Parser importeert JSON met `?raw`
-
-De parser gebruikt `import rulesRaw from "@/data/phase-detector-rules.json?raw"` om de JSON als string te laden en daarna te parsen + valideren. Dit voorkomt problemen met Vite's JSON handling.
-
-### Profielupdates
-
-De Chat pagina bevat een `maybePersistProfile` functie die:
-- current_phase update als confidence >= 0.75 EN de fase veranderd is
-- preferred_sector update als school_type gedetecteerd is (po/vo/mbo in lowercase)
-
-### Edge function: twee prompt-paden
-
-- **Public mode**: gebruikt bestaande `DOORAI_SYSTEM_PROMPT` (4-zinnen format, ongewijzigd)
-- **Authenticated mode**: gebruikt nieuwe `DOORAI_SYSTEM_PROMPT_AUTH` (vrijer format, geen vragen, server voegt SSOT vraag toe)
-
+Na de wijziging wordt de edge function opnieuw gedeployed.
