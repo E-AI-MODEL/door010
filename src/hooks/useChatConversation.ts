@@ -157,7 +157,7 @@ export function useChatConversation(userId: string | undefined, profile: Profile
     setConversationId(null);
     setMessages([]);
     setLatestActions([]);
-    setInitialized(false);
+    setInitialized(true);
   }, []);
 
   return {
