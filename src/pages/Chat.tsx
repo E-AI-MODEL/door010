@@ -311,17 +311,6 @@ export default function Chat() {
               <h1 className="text-lg font-semibold text-primary-foreground">DOORai</h1>
               <p className="text-sm text-primary-foreground/80">Je oriëntatie-assistent</p>
             </div>
-            {messages.length > 1 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/20 gap-1.5"
-                onClick={handleClearConversation}
-              >
-                <Trash2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Wis gesprek</span>
-              </Button>
-            )}
           </div>
         </div>
 
@@ -367,7 +356,18 @@ export default function Chat() {
         <div className="border-t border-border bg-background">
           <ChatActions actions={latestActions} onActionClick={handleActionClick} disabled={isLoading} />
           <div className="container max-w-3xl mx-auto py-4">
-            <form onSubmit={handleSubmit} className="flex gap-3">
+            <form onSubmit={handleSubmit} className="flex gap-3 items-center">
+              {messages.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={handleClearConversation}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
