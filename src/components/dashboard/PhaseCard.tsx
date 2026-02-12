@@ -49,35 +49,12 @@ export function PhaseCard({ phaseInfo }: PhaseCardProps) {
             </Link>
           ))}
         </div>
-      </div>
-    </motion.div>
-  );
-}
-
-interface PhaseTipsProps {
-  tips: string[];
-}
-
-export function PhaseTips({ tips }: PhaseTipsProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2 }}
-      className="bg-card rounded-lg border border-border p-4"
-    >
-      <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">
-        Tips voor deze fase
-      </h3>
-      <div className="space-y-2">
-        {tips.map((tip, index) => (
-          <div key={index} className="flex items-start gap-3">
-            <div className="bg-primary/10 rounded-full p-1 mt-0.5">
-              <CheckCircle2 className="h-3 w-3 text-primary" />
-            </div>
-            <span className="text-sm text-muted-foreground">{tip}</span>
-          </div>
-        ))}
+        {phaseInfo.tips[0] && (
+          <p className="text-xs text-muted-foreground mt-3 italic">
+            <CheckCircle2 className="inline h-3 w-3 text-primary mr-1" />
+            {phaseInfo.tips[0]}
+          </p>
+        )}
       </div>
     </motion.div>
   );
