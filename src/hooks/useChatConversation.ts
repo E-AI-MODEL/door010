@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "advisor";
   content: string;
 }
 
@@ -102,7 +102,7 @@ export function useChatConversation(userId: string | undefined, profile: Profile
 
         if (msgs && msgs.length > 0) {
           const loaded = msgs.map((m) => ({
-            role: m.role as "user" | "assistant",
+            role: m.role as "user" | "assistant" | "advisor",
             // Strip any legacy <!--ACTIONS:...--> from stored messages
             content: m.content
               .replace(/<!--ACTIONS:\[.*?\]-->/s, "")

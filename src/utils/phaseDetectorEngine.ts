@@ -16,7 +16,7 @@ export type UiPhaseCode =
   | "voorbereiden";
 
 export interface ConversationTurn {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "advisor";
   text: string;
 }
 
