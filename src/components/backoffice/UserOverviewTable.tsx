@@ -188,7 +188,7 @@ export function UserOverviewTable({ profiles, onSelectUser, selectedUserId }: Us
               return (
                 <Card
                   key={profile.id}
-                  className={`p-3 cursor-pointer active:scale-[0.98] transition-transform ${
+                  className={`p-3 cursor-pointer active:scale-[0.98] transition-transform overflow-hidden ${
                     selectedUserId === profile.user_id ? 'ring-2 ring-primary' : ''
                   }`}
                   onClick={() => onSelectUser(profile)}
