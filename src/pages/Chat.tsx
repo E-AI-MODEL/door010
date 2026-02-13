@@ -39,7 +39,7 @@ export default function Chat() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     messages,
@@ -92,7 +92,8 @@ export default function Chat() {
   }, [profileLoaded, user, loadConversation]);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
   useEffect(() => {
@@ -282,8 +283,8 @@ export default function Chat() {
     sendMessage(value);
   };
 
-  const handleClearConversation = useCallback(() => {
-    resetConversation();
+  const handleClearConversation = useCallback(async () => {
+    await resetConversation();
     setKnownSlots({});
     const phase = profile?.current_phase || "interesseren";
     const info: Record<string, string> = {
@@ -345,7 +346,7 @@ export default function Chat() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -384,7 +385,7 @@ export default function Chat() {
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
+            <div />
           </div>
 
           {/* Suggestions */}

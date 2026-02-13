@@ -41,7 +41,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
     const st = sectorToSchoolType(preferredSector);
     return st ? { school_type: st } : {};
   });
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const profile = { current_phase: currentPhase, preferred_sector: preferredSector };
 
   const {
@@ -57,8 +57,8 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
     resetConversation,
   } = useChatConversation(userId, profile);
 
-  const handleClearConversation = useCallback(() => {
-    resetConversation();
+  const handleClearConversation = useCallback(async () => {
+    await resetConversation();
     setKnownSlots({});
     const phase = currentPhase || "interesseren";
     const info: Record<string, string> = {
@@ -87,7 +87,8 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
   }, [profileLoaded, loadConversation]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const maybePersistProfile = useCallback(
@@ -276,7 +277,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {visibleMessages.map((message, index) => (
           <div
             key={index}
@@ -315,7 +316,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
+        <div />
       </div>
 
       {/* Suggestions */}

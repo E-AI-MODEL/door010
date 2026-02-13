@@ -182,12 +182,20 @@ export function useChatConversation(userId: string | undefined, profile: Profile
     await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
   }, []);
 
-  const resetConversation = useCallback(() => {
+  const resetConversation = useCallback(async () => {
+    if (conversationId) {
+      try {
+        await supabase.from("messages").delete().eq("conversation_id", conversationId);
+        await supabase.from("conversations").delete().eq("id", conversationId);
+      } catch (e) {
+        console.error("Error deleting conversation:", e);
+      }
+    }
     setConversationId(null);
     setMessages([]);
     setLatestActions([]);
     setInitialized(true);
-  }, []);
+  }, [conversationId]);
 
   return {
     messages,
