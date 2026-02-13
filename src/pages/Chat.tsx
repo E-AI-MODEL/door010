@@ -346,15 +346,20 @@ export default function Chat() {
                   className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
                     message.role === "user"
                       ? "bg-primary text-primary-foreground"
+                      : message.role === "advisor"
+                      ? "bg-accent/15 border border-accent/30 text-foreground"
                       : "bg-muted text-foreground"
                   }`}
                 >
-                  {message.role === "assistant" ? (
+                  {message.role === "advisor" && (
+                    <span className="text-[10px] font-semibold text-accent-foreground uppercase tracking-wide mb-1 block">Adviseur</span>
+                  )}
+                  {message.role === "user" ? (
+                    <p>{message.content}</p>
+                  ) : (
                     <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:leading-relaxed prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0">
                       <ReactMarkdown>{normalizeMarkdown(message.content)}</ReactMarkdown>
                     </div>
-                  ) : (
-                    <p>{message.content}</p>
                   )}
                 </div>
               </div>

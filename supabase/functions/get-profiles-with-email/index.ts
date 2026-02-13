@@ -83,27 +83,50 @@ serve(async (req) => {
     const savedVacancies = savedVacanciesResult.data || [];
     const userNotes = userNotesResult.data || [];
 
-    // Get the latest message date per conversation
+    // Get the latest message date per conversation + unread calculation
     const conversationIds = conversations.map(c => c.id);
     let lastMessageMap: Record<string, string> = {};
+    let unreadMap: Record<string, number> = {};
     
     if (conversationIds.length > 0) {
-      // Get the most recent message per user by joining through conversations
       const { data: messagesData } = await adminClient
         .from("messages")
-        .select("conversation_id, created_at")
+        .select("conversation_id, created_at, role")
         .in("conversation_id", conversationIds)
         .order("created_at", { ascending: false });
 
       if (messagesData) {
-        // Build a map: user_id -> latest message date
         const convToUser: Record<string, string> = {};
         conversations.forEach(c => { convToUser[c.id] = c.user_id; });
 
+        // Track last message per user and calculate unread
+        const lastAdvisorMsg: Record<string, string> = {};
+        
         for (const msg of messagesData) {
-          const userId = convToUser[msg.conversation_id];
-          if (userId && !lastMessageMap[userId]) {
-            lastMessageMap[userId] = msg.created_at;
+          const usrId = convToUser[msg.conversation_id];
+          if (!usrId) continue;
+          
+          // Last message timestamp (any role)
+          if (!lastMessageMap[usrId]) {
+            lastMessageMap[usrId] = msg.created_at;
+          }
+          
+          // Track last advisor message per user
+          if (msg.role === 'advisor' && !lastAdvisorMsg[usrId]) {
+            lastAdvisorMsg[usrId] = msg.created_at;
+          }
+        }
+
+        // Count user/assistant messages after last advisor message
+        for (const msg of messagesData) {
+          const usrId = convToUser[msg.conversation_id];
+          if (!usrId) continue;
+          if (msg.role === 'advisor') continue;
+          if (msg.role !== 'user') continue; // Only count user messages as "unread"
+          
+          const lastAdv = lastAdvisorMsg[usrId];
+          if (!lastAdv || msg.created_at > lastAdv) {
+            unreadMap[usrId] = (unreadMap[usrId] || 0) + 1;
           }
         }
       }
@@ -155,6 +178,7 @@ serve(async (req) => {
       email: emailMap[profile.user_id] || null,
       conversation_count: convCountMap[profile.user_id] || 0,
       last_message_at: lastMessageMap[profile.user_id] || null,
+      unread_messages: unreadMap[profile.user_id] || 0,
       appointments: appointmentsMap[profile.user_id] || [],
       saved_events: savedEventsMap[profile.user_id] || [],
       saved_vacancies: savedVacanciesMap[profile.user_id] || [],

@@ -9,24 +9,13 @@ import { Calendar, Clock, User, CheckCircle, XCircle, Loader2, MessageSquare } f
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
-import type { ProfileWithEmail } from "./UserOverviewTable";
-
-interface Appointment {
-  id: string;
-  user_id: string;
-  subject: string;
-  message: string | null;
-  preferred_date: string | null;
-  preferred_time: string | null;
-  status: string;
-  advisor_notes: string | null;
-  created_at: string;
-}
+import type { ProfileWithEmail, Appointment } from "./UserOverviewTable";
 
 interface AppointmentsTabProps {
   profiles: ProfileWithEmail[];
   onSelectUser: (profile: ProfileWithEmail) => void;
   onOpenChat: (profile: ProfileWithEmail) => void;
+  onRefresh?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
@@ -36,7 +25,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   cancelled: { label: "Geannuleerd", variant: "destructive" },
 };
 
-export function AppointmentsTab({ profiles, onSelectUser, onOpenChat }: AppointmentsTabProps) {
+export function AppointmentsTab({ profiles, onSelectUser, onOpenChat, onRefresh }: AppointmentsTabProps) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
@@ -46,7 +35,7 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat }: Appointm
   // Collect all appointments from profiles
   const allAppointments: (Appointment & { userName: string; profile: ProfileWithEmail })[] = [];
   for (const p of profiles) {
-    const apts = (p as any).appointments || [];
+    const apts: Appointment[] = p.appointments || [];
     const name = p.first_name && p.last_name ? `${p.first_name} ${p.last_name}` : p.email || 'Onbekend';
     for (const apt of apts) {
       allAppointments.push({ ...apt, ...localUpdates[apt.id], userName: name, profile: p });
@@ -60,6 +49,43 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat }: Appointm
     ? allAppointments
     : allAppointments.filter(a => a.status === statusFilter);
 
+  const sendAppointmentNotification = async (apt: Appointment & { userName: string; profile: ProfileWithEmail }, newStatus: string) => {
+    try {
+      // Find or create conversation for this user
+      const { data: convs } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("user_id", apt.user_id)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+
+      let convId: string;
+      if (convs && convs.length > 0) {
+        convId = convs[0].id;
+      } else {
+        const { data: newConv } = await supabase
+          .from("conversations")
+          .insert({ user_id: apt.user_id, title: "Gesprek met adviseur" })
+          .select("id")
+          .single();
+        if (!newConv) return;
+        convId = newConv.id;
+      }
+
+      const statusText = newStatus === 'confirmed' ? 'bevestigd' : newStatus === 'cancelled' ? 'geannuleerd' : newStatus === 'completed' ? 'afgerond' : newStatus;
+      const dateText = apt.preferred_date ? ` voor ${format(new Date(apt.preferred_date), 'd MMMM yyyy', { locale: nl })}` : '';
+      const content = `📋 Je afspraak '${apt.subject}' is **${statusText}**${dateText}.`;
+
+      await supabase.from("messages").insert({
+        conversation_id: convId,
+        role: "advisor",
+        content,
+      });
+    } catch (err) {
+      console.error("Error sending appointment notification:", err);
+    }
+  };
+
   const updateStatus = async (id: string, newStatus: string) => {
     setUpdatingId(id);
     try {
@@ -69,6 +95,10 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat }: Appointm
         .eq("id", id);
       if (!error) {
         setLocalUpdates(prev => ({ ...prev, [id]: { ...prev[id], status: newStatus } }));
+        // Send automatic chat message (punt 5)
+        const apt = allAppointments.find(a => a.id === id);
+        if (apt) await sendAppointmentNotification(apt, newStatus);
+        onRefresh?.();
       }
     } catch (err) {
       console.error("Error updating appointment:", err);
@@ -154,7 +184,7 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat }: Appointm
                         <div>
                           <p className="text-sm font-medium">{apt.subject}</p>
                           {apt.message && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{apt.message}</p>
+                            <p className="text-xs text-muted-foreground mt-1 bg-muted/50 rounded p-1.5">{apt.message}</p>
                           )}
                         </div>
                       </TableCell>

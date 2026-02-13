@@ -1,24 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Users, MessageCircle, Bell, LogOut, Calendar, UserCircle } from "lucide-react";
+import { LayoutDashboard, Users, MessageCircle, Bell, LogOut, Calendar, RefreshCw, Search } from "lucide-react";
 import { UserOverviewTable, type ProfileWithEmail } from "@/components/backoffice/UserOverviewTable";
 import { AdvisorChatPanel } from "@/components/backoffice/AdvisorChatPanel";
 import { BackofficeStats } from "@/components/backoffice/BackofficeStats";
 import { BackofficeAlerts, type DashboardAlert } from "@/components/backoffice/BackofficeAlerts";
 import { CandidateDetailPanel } from "@/components/backoffice/CandidateDetailPanel";
 import { AppointmentsTab } from "@/components/backoffice/AppointmentsTab";
+import { format } from "date-fns";
+import { nl } from "date-fns/locale";
 
 type AppRole = 'candidate' | 'advisor' | 'admin';
 
-// Generate alerts from real profile data
+// Generate alerts from real profile data (punt 7: includes appointments)
 function generateAlertsFromProfiles(profiles: ProfileWithEmail[]): DashboardAlert[] {
   const alerts: DashboardAlert[] = [];
   const now = new Date();
@@ -44,7 +48,7 @@ function generateAlertsFromProfiles(profiles: ProfileWithEmail[]): DashboardAler
       });
     }
 
-    // CV uploaded recently (updated_at within 7 days and cv_url present)
+    // CV uploaded recently
     if (p.cv_url && new Date(p.updated_at) > weekAgo) {
       alerts.push({
         id: `cv-${p.id}`,
@@ -72,9 +76,26 @@ function generateAlertsFromProfiles(profiles: ProfileWithEmail[]): DashboardAler
         priority: 'medium',
       });
     }
+
+    // Pending appointments (punt 7)
+    const appointments = p.appointments || [];
+    for (const apt of appointments) {
+      if (apt.status === 'pending') {
+        alerts.push({
+          id: `apt-${apt.id}`,
+          type: 'needs_support',
+          user_name: name,
+          user_id: p.user_id,
+          message: `Afspraakverzoek: ${apt.subject}`,
+          detail: apt.preferred_date ? `Voorkeursdatum: ${apt.preferred_date}` : undefined,
+          created_at: apt.created_at,
+          is_read: false,
+          priority: 'high',
+        });
+      }
+    }
   }
 
-  // Sort by date descending
   alerts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return alerts;
 }
@@ -90,6 +111,8 @@ export default function Backoffice() {
   const [selectedUser, setSelectedUser] = useState<ProfileWithEmail | null>(null);
   const [activePanel, setActivePanel] = useState<'detail' | 'chat'>('detail');
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [chatSearch, setChatSearch] = useState("");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -103,7 +126,7 @@ export default function Backoffice() {
     }
   }, [user]);
 
-  const checkAccessAndFetchData = async () => {
+  const checkAccessAndFetchData = useCallback(async () => {
     try {
       const { data: roleData, error: roleError } = await supabase
         .from("user_roles")
@@ -112,11 +135,11 @@ export default function Backoffice() {
 
       if (roleError) throw roleError;
 
-      const hasAccess = roleData?.some(
+      const access = roleData?.some(
         (r) => r.role === 'advisor' || r.role === 'admin'
       );
       
-      if (!hasAccess) {
+      if (!access) {
         setHasAccess(false);
         setLoading(false);
         return;
@@ -146,13 +169,26 @@ export default function Backoffice() {
       const realProfiles = profilesData || [];
       setProfiles(realProfiles);
       setAlerts(generateAlertsFromProfiles(realProfiles));
+      
+      // Update selectedUser if it was selected before refresh
+      if (selectedUser) {
+        const updated = realProfiles.find((p: ProfileWithEmail) => p.user_id === selectedUser.user_id);
+        if (updated) setSelectedUser(updated);
+      }
     } catch (err) {
       console.error("Error:", err);
       setError("Kon profielen niet laden. Probeer het opnieuw.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [user, selectedUser]);
+
+  // Refresh function (punt 13)
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    checkAccessAndFetchData();
+  }, [checkAccessAndFetchData]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -197,6 +233,23 @@ export default function Backoffice() {
     );
   }
 
+  // Filter and sort for chat tab (punten 9, 10, 15)
+  const chatFilteredProfiles = profiles
+    .filter(p => {
+      if (!chatSearch) return true;
+      const q = chatSearch.toLowerCase();
+      return (
+        p.first_name?.toLowerCase().includes(q) ||
+        p.last_name?.toLowerCase().includes(q) ||
+        p.email?.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      const aDate = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const bDate = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return bDate - aDate;
+    });
+
   return (
     <div className="min-h-screen flex flex-col bg-muted/30">
       <Header />
@@ -218,10 +271,21 @@ export default function Backoffice() {
                   </p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Uitloggen
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                  Vernieuwen
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Uitloggen
+                </Button>
+              </div>
             </div>
           </div>
         </section>
@@ -230,7 +294,7 @@ export default function Backoffice() {
           {error && (
             <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
               {error}
-              <Button variant="ghost" size="sm" className="ml-4" onClick={checkAccessAndFetchData}>
+              <Button variant="ghost" size="sm" className="ml-4" onClick={handleRefresh}>
                 Opnieuw proberen
               </Button>
             </div>
@@ -259,6 +323,11 @@ export default function Backoffice() {
               <TabsTrigger value="alerts" className="flex items-center gap-2">
                 <Bell className="h-4 w-4" />
                 Meldingen
+                {alerts.filter(a => a.priority === 'high').length > 0 && (
+                  <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-[10px]">
+                    {alerts.filter(a => a.priority === 'high').length}
+                  </Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="chat" className="flex items-center gap-2">
                 <MessageCircle className="h-4 w-4" />
@@ -291,6 +360,7 @@ export default function Backoffice() {
                         user={selectedUser}
                         onClose={() => setSelectedUser(null)}
                         onOpenChat={() => setActivePanel('chat')}
+                        onRefresh={handleRefresh}
                       />
                     )}
                   </div>
@@ -308,6 +378,7 @@ export default function Backoffice() {
                   profiles={profiles}
                   onSelectUser={(p) => { setSelectedUser(p); setActivePanel('detail'); }}
                   onOpenChat={(p) => { setSelectedUser(p); setActivePanel('chat'); }}
+                  onRefresh={handleRefresh}
                 />
               </motion.div>
             </TabsContent>
@@ -333,6 +404,7 @@ export default function Backoffice() {
                       user={selectedUser}
                       onClose={() => setSelectedUser(null)}
                       onOpenChat={() => setActivePanel('chat')}
+                      onRefresh={handleRefresh}
                     />
                   </div>
                 </div>
@@ -350,10 +422,19 @@ export default function Backoffice() {
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm">Kandidaten</CardTitle>
+                        <div className="relative mt-2">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Zoek..."
+                            value={chatSearch}
+                            onChange={(e) => setChatSearch(e.target.value)}
+                            className="pl-8 h-8 text-xs"
+                          />
+                        </div>
                       </CardHeader>
                       <CardContent className="p-2">
-                        <div className="space-y-1">
-                          {profiles.map((profile) => (
+                        <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                          {chatFilteredProfiles.map((profile) => (
                             <button
                               key={profile.id}
                               onClick={() => { setSelectedUser(profile); setActivePanel('chat'); }}
@@ -362,16 +443,30 @@ export default function Backoffice() {
                               }`}
                             >
                               <div className="flex items-center gap-2">
-                                <div className="bg-primary/10 rounded-full p-1.5">
-                                  <Users className="h-3 w-3 text-primary" />
+                                <div className="relative">
+                                  <div className="bg-primary/10 rounded-full p-1.5">
+                                    <Users className="h-3 w-3 text-primary" />
+                                  </div>
+                                  {(profile.unread_messages ?? 0) > 0 && (
+                                    <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-[9px] rounded-full h-3.5 w-3.5 flex items-center justify-center font-bold">
+                                      {profile.unread_messages}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium truncate">
                                     {profile.first_name || 'Onbekend'}
                                   </p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {profile.current_phase || 'Geen fase'}
-                                  </p>
+                                  <div className="flex items-center gap-1">
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {profile.current_phase || 'Geen fase'}
+                                    </p>
+                                    {profile.last_message_at && (
+                                      <span className="text-[10px] text-muted-foreground/60 shrink-0">
+                                        • {format(new Date(profile.last_message_at), 'd MMM', { locale: nl })}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </button>

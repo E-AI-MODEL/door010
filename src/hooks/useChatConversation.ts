@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
@@ -67,6 +67,35 @@ export function useChatConversation(userId: string | undefined, profile: Profile
   const [latestActions, setLatestActions] = useState<Array<{ label: string; value: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  // Realtime subscription for incoming messages (punt 3)
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const channel = supabase
+      .channel(`chat-${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as { id: string; role: string; content: string; created_at: string };
+          // Only add advisor messages (user/assistant are added locally)
+          if (newMsg.role === 'advisor') {
+            setMessages(prev => [...prev, { role: 'advisor', content: newMsg.content }]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId]);
 
   const getWelcomeMessage = useCallback((phase: string): { content: string; actions: Array<{ label: string; value: string }> } => {
     const info = PHASE_INFO[phase] || PHASE_INFO.interesseren;

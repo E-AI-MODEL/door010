@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X, User, Shield, LogOut, Info } from "lucide-react";
+import { Menu, X, User, Shield, LogOut, Info, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -83,6 +83,44 @@ export function Header() {
   const [showMascot, setShowMascot] = useState(false);
   const [isAdvisorOrAdmin, setIsAdvisorOrAdmin] = useState(false);
   const [testInfoOpen, setTestInfoOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Check for unread advisor messages (punt 12)
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+
+    const checkUnread = async () => {
+      try {
+        // Get user's conversations
+        const { data: convs } = await supabase
+          .from("conversations")
+          .select("id")
+          .eq("user_id", user.id);
+        
+        if (!convs || convs.length === 0) return;
+
+        const convIds = convs.map(c => c.id);
+        
+        // Count advisor messages in last 7 days
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        
+        const { count } = await supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .in("conversation_id", convIds)
+          .eq("role", "advisor")
+          .gte("created_at", weekAgo.toISOString());
+
+        setUnreadCount(count || 0);
+      } catch {
+        // Ignore errors
+      }
+    };
+
+    checkUnread();
+  }, [user]);
+
   // Check if user has advisor or admin role
   useEffect(() => {
     if (user) {
@@ -202,10 +240,15 @@ export function Header() {
           {!loading && (
             user ? (
               <>
-                <Button size="sm" className="font-medium" asChild>
+                <Button size="sm" className="font-medium relative" asChild>
                   <Link to="/dashboard">
                     <User className="mr-2 h-4 w-4" />
                     Dashboard
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-[10px] rounded-full h-4 w-4 flex items-center justify-center font-bold">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
                   </Link>
                 </Button>
                 <Button
