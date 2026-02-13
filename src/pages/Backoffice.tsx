@@ -8,11 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Users, MessageCircle, Bell, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, MessageCircle, Bell, LogOut, Calendar, UserCircle } from "lucide-react";
 import { UserOverviewTable, type ProfileWithEmail } from "@/components/backoffice/UserOverviewTable";
 import { AdvisorChatPanel } from "@/components/backoffice/AdvisorChatPanel";
 import { BackofficeStats } from "@/components/backoffice/BackofficeStats";
 import { BackofficeAlerts, type DashboardAlert } from "@/components/backoffice/BackofficeAlerts";
+import { CandidateDetailPanel } from "@/components/backoffice/CandidateDetailPanel";
+import { AppointmentsTab } from "@/components/backoffice/AppointmentsTab";
 
 type AppRole = 'candidate' | 'advisor' | 'admin';
 
@@ -86,6 +88,7 @@ export default function Backoffice() {
   const [error, setError] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ProfileWithEmail | null>(null);
+  const [activePanel, setActivePanel] = useState<'detail' | 'chat'>('detail');
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
 
   useEffect(() => {
@@ -249,6 +252,10 @@ export default function Backoffice() {
                 <Users className="h-4 w-4" />
                 Overzicht
               </TabsTrigger>
+              <TabsTrigger value="appointments" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Afspraken
+              </TabsTrigger>
               <TabsTrigger value="alerts" className="flex items-center gap-2">
                 <Bell className="h-4 w-4" />
                 Meldingen
@@ -269,17 +276,38 @@ export default function Backoffice() {
                   <div className="lg:col-span-2">
                     <UserOverviewTable 
                       profiles={profiles} 
-                      onSelectUser={setSelectedUser}
+                      onSelectUser={(p) => { setSelectedUser(p); setActivePanel('detail'); }}
                       selectedUserId={selectedUser?.user_id}
                     />
                   </div>
                   <div className="lg:col-span-1">
-                    <AdvisorChatPanel 
-                      selectedUser={selectedUser}
-                      onClose={() => setSelectedUser(null)}
-                    />
+                    {activePanel === 'chat' ? (
+                      <AdvisorChatPanel 
+                        selectedUser={selectedUser}
+                        onClose={() => setSelectedUser(null)}
+                      />
+                    ) : (
+                      <CandidateDetailPanel
+                        user={selectedUser}
+                        onClose={() => setSelectedUser(null)}
+                        onOpenChat={() => setActivePanel('chat')}
+                      />
+                    )}
                   </div>
                 </div>
+              </motion.div>
+            </TabsContent>
+
+            <TabsContent value="appointments">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <AppointmentsTab 
+                  profiles={profiles}
+                  onSelectUser={(p) => { setSelectedUser(p); setActivePanel('detail'); }}
+                />
               </motion.div>
             </TabsContent>
 
@@ -295,14 +323,15 @@ export default function Backoffice() {
                       alerts={alerts}
                       onSelectUser={(userId) => {
                         const profile = profiles.find(p => p.user_id === userId);
-                        if (profile) setSelectedUser(profile);
+                        if (profile) { setSelectedUser(profile); setActivePanel('detail'); }
                       }}
                     />
                   </div>
                   <div className="lg:col-span-1">
-                    <AdvisorChatPanel 
-                      selectedUser={selectedUser}
+                    <CandidateDetailPanel
+                      user={selectedUser}
                       onClose={() => setSelectedUser(null)}
+                      onOpenChat={() => setActivePanel('chat')}
                     />
                   </div>
                 </div>
@@ -326,7 +355,7 @@ export default function Backoffice() {
                           {profiles.map((profile) => (
                             <button
                               key={profile.id}
-                              onClick={() => setSelectedUser(profile)}
+                              onClick={() => { setSelectedUser(profile); setActivePanel('chat'); }}
                               className={`w-full text-left p-2 rounded-lg hover:bg-muted transition-colors ${
                                 selectedUser?.user_id === profile.user_id ? 'bg-primary/10' : ''
                               }`}

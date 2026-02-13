@@ -60,11 +60,15 @@ serve(async (req) => {
     // Use service role to fetch all data
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch profiles, conversations, and auth users in parallel
-    const [profilesResult, conversationsResult, usersResult] = await Promise.all([
+    // Fetch profiles, conversations, auth users, appointments, saved_events, saved_vacancies, user_notes in parallel
+    const [profilesResult, conversationsResult, usersResult, appointmentsResult, savedEventsResult, savedVacanciesResult, userNotesResult] = await Promise.all([
       adminClient.from("profiles").select("*").order("created_at", { ascending: false }),
       adminClient.from("conversations").select("id, user_id, updated_at"),
       adminClient.auth.admin.listUsers({ perPage: 1000 }),
+      adminClient.from("appointments").select("*").order("created_at", { ascending: false }),
+      adminClient.from("saved_events").select("*"),
+      adminClient.from("saved_vacancies").select("*"),
+      adminClient.from("user_notes").select("*"),
     ]);
 
     if (profilesResult.error) throw profilesResult.error;
@@ -74,6 +78,10 @@ serve(async (req) => {
     const profiles = profilesResult.data || [];
     const conversations = conversationsResult.data || [];
     const users = usersResult.data?.users || [];
+    const appointments = appointmentsResult.data || [];
+    const savedEvents = savedEventsResult.data || [];
+    const savedVacancies = savedVacanciesResult.data || [];
+    const userNotes = userNotesResult.data || [];
 
     // Get the latest message date per conversation
     const conversationIds = conversations.map(c => c.id);
@@ -107,6 +115,34 @@ serve(async (req) => {
       convCountMap[c.user_id] = (convCountMap[c.user_id] || 0) + 1;
     });
 
+    // Build appointments per user
+    const appointmentsMap: Record<string, typeof appointments> = {};
+    appointments.forEach(a => {
+      if (!appointmentsMap[a.user_id]) appointmentsMap[a.user_id] = [];
+      appointmentsMap[a.user_id].push(a);
+    });
+
+    // Build saved events per user
+    const savedEventsMap: Record<string, typeof savedEvents> = {};
+    savedEvents.forEach(e => {
+      if (!savedEventsMap[e.user_id]) savedEventsMap[e.user_id] = [];
+      savedEventsMap[e.user_id].push(e);
+    });
+
+    // Build saved vacancies per user
+    const savedVacanciesMap: Record<string, typeof savedVacancies> = {};
+    savedVacancies.forEach(v => {
+      if (!savedVacanciesMap[v.user_id]) savedVacanciesMap[v.user_id] = [];
+      savedVacanciesMap[v.user_id].push(v);
+    });
+
+    // Build notes per user
+    const notesMap: Record<string, typeof userNotes> = {};
+    userNotes.forEach(n => {
+      if (!notesMap[n.user_id]) notesMap[n.user_id] = [];
+      notesMap[n.user_id].push(n);
+    });
+
     // Email map
     const emailMap: Record<string, string> = {};
     users.forEach(u => {
@@ -119,6 +155,10 @@ serve(async (req) => {
       email: emailMap[profile.user_id] || null,
       conversation_count: convCountMap[profile.user_id] || 0,
       last_message_at: lastMessageMap[profile.user_id] || null,
+      appointments: appointmentsMap[profile.user_id] || [],
+      saved_events: savedEventsMap[profile.user_id] || [],
+      saved_vacancies: savedVacanciesMap[profile.user_id] || [],
+      user_notes: notesMap[profile.user_id] || [],
     }));
 
     return new Response(
