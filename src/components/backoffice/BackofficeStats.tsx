@@ -6,7 +6,7 @@ import {
   Clock,
   UserCheck,
   MessageCircle,
-  AlertCircle
+  FileText
 } from "lucide-react";
 import type { ProfileWithEmail } from "./UserOverviewTable";
 
@@ -28,8 +28,8 @@ export function BackofficeStats({ profiles }: BackofficeStatsProps) {
       acc[phase] = (acc[phase] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
-    needsAttention: profiles.filter(p => (p.unread_messages ?? 0) > 0).length,
-    activeToday: Math.floor(profiles.length * 0.3), // Mock: 30% active today
+    withConversation: profiles.filter(p => (p as any).conversation_count > 0).length,
+    withCV: profiles.filter(p => !!p.cv_url).length,
   };
 
   const statCards = [
@@ -47,15 +47,15 @@ export function BackofficeStats({ profiles }: BackofficeStatsProps) {
     },
     {
       icon: MessageCircle,
-      value: stats.activeToday,
-      label: 'Actief vandaag',
+      value: stats.withConversation,
+      label: 'Met gesprek',
       color: 'bg-accent/10 text-accent',
     },
     {
-      icon: AlertCircle,
-      value: stats.needsAttention,
-      label: 'Wacht op reactie',
-      color: 'bg-destructive/10 text-destructive',
+      icon: FileText,
+      value: stats.withCV,
+      label: 'CV geüpload',
+      color: 'bg-primary/10 text-primary',
     },
     {
       icon: Clock,

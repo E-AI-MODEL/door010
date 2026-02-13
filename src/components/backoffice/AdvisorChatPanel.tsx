@@ -10,45 +10,20 @@ import {
   X,
   MessageCircle,
   Clock,
-  GraduationCap
+  GraduationCap,
+  Loader2
 } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 import type { ProfileWithEmail } from "./UserOverviewTable";
 
 interface Message {
   id: string;
-  role: 'advisor' | 'user' | 'ai';
+  role: string;
   content: string;
   created_at: string;
 }
-
-// Mock conversation data - in production this would come from the database
-const mockConversations: Record<string, Message[]> = {};
-
-const generateMockMessages = (userId: string): Message[] => {
-  const now = new Date();
-  return [
-    {
-      id: '1',
-      role: 'user',
-      content: 'Hallo, ik heb een vraag over de opleiding tot leraar basisonderwijs.',
-      created_at: new Date(now.getTime() - 3600000 * 24).toISOString(),
-    },
-    {
-      id: '2',
-      role: 'ai',
-      content: 'Hallo! Leuk dat je interesse hebt in het basisonderwijs. Ik kan je daar meer over vertellen. Welk aspect van de opleiding zou je willen bespreken?',
-      created_at: new Date(now.getTime() - 3600000 * 23).toISOString(),
-    },
-    {
-      id: '3',
-      role: 'user',
-      content: 'Ik wil weten hoe lang de opleiding duurt en of er ook deeltijd mogelijkheden zijn.',
-      created_at: new Date(now.getTime() - 3600000 * 2).toISOString(),
-    },
-  ];
-};
 
 interface AdvisorChatPanelProps {
   selectedUser: ProfileWithEmail | null;
@@ -59,42 +34,106 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Load real messages when user is selected
   useEffect(() => {
     if (selectedUser) {
-      // Load mock messages for this user
-      if (!mockConversations[selectedUser.user_id]) {
-        mockConversations[selectedUser.user_id] = generateMockMessages(selectedUser.user_id);
-      }
-      setMessages(mockConversations[selectedUser.user_id]);
+      loadConversation(selectedUser.user_id);
+    } else {
+      setMessages([]);
+      setConversationId(null);
     }
   }, [selectedUser]);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
+  const loadConversation = async (userId: string) => {
+    setLoadingMessages(true);
+    try {
+      // Get conversations for this user
+      const { data: conversations, error: convError } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+
+      if (convError) throw convError;
+
+      if (!conversations || conversations.length === 0) {
+        setMessages([]);
+        setConversationId(null);
+        setLoadingMessages(false);
+        return;
+      }
+
+      const convId = conversations[0].id;
+      setConversationId(convId);
+
+      // Get messages for this conversation
+      const { data: messagesData, error: msgError } = await supabase
+        .from("messages")
+        .select("id, role, content, created_at")
+        .eq("conversation_id", convId)
+        .order("created_at", { ascending: true });
+
+      if (msgError) throw msgError;
+      setMessages(messagesData || []);
+    } catch (err) {
+      console.error("Error loading conversation:", err);
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedUser) return;
 
     setSending(true);
-    
-    const advisorMessage: Message = {
-      id: Date.now().toString(),
-      role: 'advisor',
-      content: newMessage,
-      created_at: new Date().toISOString(),
-    };
+    try {
+      let targetConvId = conversationId;
 
-    const updatedMessages = [...messages, advisorMessage];
-    setMessages(updatedMessages);
-    mockConversations[selectedUser.user_id] = updatedMessages;
-    setNewMessage("");
-    setSending(false);
+      // Create conversation if none exists
+      if (!targetConvId) {
+        const { data: newConv, error: convError } = await supabase
+          .from("conversations")
+          .insert({ user_id: selectedUser.user_id, title: "Gesprek met adviseur" })
+          .select("id")
+          .single();
+
+        if (convError) throw convError;
+        targetConvId = newConv.id;
+        setConversationId(targetConvId);
+      }
+
+      // Insert message
+      const { data: insertedMsg, error: msgError } = await supabase
+        .from("messages")
+        .insert({
+          conversation_id: targetConvId,
+          role: "advisor",
+          content: newMessage,
+        })
+        .select("id, role, content, created_at")
+        .single();
+
+      if (msgError) throw msgError;
+
+      setMessages(prev => [...prev, insertedMsg]);
+      setNewMessage("");
+    } catch (err) {
+      console.error("Error sending message:", err);
+    } finally {
+      setSending(false);
+    }
   };
 
   if (!selectedUser) {
@@ -158,7 +197,12 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
       <CardContent className="flex-1 p-0 overflow-hidden">
         <ScrollArea className="h-[400px] p-4" ref={scrollRef}>
           <div className="space-y-4">
-            {messages.length === 0 ? (
+            {loadingMessages ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                <p className="text-sm text-muted-foreground mt-2">Berichten laden...</p>
+              </div>
+            ) : messages.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>Nog geen berichten met deze kandidaat.</p>
                 <p className="text-sm mt-1">Start het gesprek door een bericht te sturen.</p>
@@ -173,15 +217,18 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
                     className={`max-w-[80%] rounded-lg px-4 py-2 ${
                       message.role === 'advisor'
                         ? 'bg-primary text-primary-foreground'
-                        : message.role === 'ai'
+                        : message.role === 'assistant'
                         ? 'bg-accent/10 text-foreground border border-accent/20'
                         : 'bg-muted text-foreground'
                     }`}
                   >
-                    {message.role === 'ai' && (
+                    {message.role === 'assistant' && (
                       <p className="text-xs text-accent font-medium mb-1">DOORai</p>
                     )}
-                    <p className="text-sm">{message.content}</p>
+                    {message.role === 'advisor' && (
+                      <p className="text-xs text-primary-foreground/70 font-medium mb-1">Adviseur</p>
+                    )}
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     <p className={`text-xs mt-1 ${
                       message.role === 'advisor' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                     }`}>
@@ -212,7 +259,7 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
             className="flex-1"
           />
           <Button type="submit" disabled={sending || !newMessage.trim()}>
-            <Send className="h-4 w-4" />
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
         <p className="text-xs text-muted-foreground mt-2">

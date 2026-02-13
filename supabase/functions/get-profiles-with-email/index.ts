@@ -12,7 +12,6 @@ serve(async (req) => {
   }
 
   try {
-    // Get the authorization header from the request
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(
@@ -25,7 +24,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // First, verify the user has advisor/admin role using their token
+    // Verify user has advisor/admin role
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -38,7 +37,6 @@ serve(async (req) => {
       );
     }
 
-    // Check if user has advisor or admin role
     const { data: roleData, error: roleError } = await userClient
       .from("user_roles")
       .select("role")
@@ -60,41 +58,68 @@ serve(async (req) => {
       );
     }
 
-    // Now use service role to fetch user emails
+    // Use service role to fetch all data
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all profiles
-    const { data: profiles, error: profilesError } = await adminClient
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
+    // Fetch profiles, conversations, and auth users in parallel
+    const [profilesResult, conversationsResult, usersResult] = await Promise.all([
+      adminClient.from("profiles").select("*").order("created_at", { ascending: false }),
+      adminClient.from("conversations").select("id, user_id, updated_at"),
+      adminClient.auth.admin.listUsers({ perPage: 1000 }),
+    ]);
 
-    if (profilesError) {
-      throw profilesError;
+    if (profilesResult.error) throw profilesResult.error;
+    if (conversationsResult.error) throw conversationsResult.error;
+    if (usersResult.error) throw usersResult.error;
+
+    const profiles = profilesResult.data || [];
+    const conversations = conversationsResult.data || [];
+    const users = usersResult.data?.users || [];
+
+    // Get the latest message date per conversation
+    const conversationIds = conversations.map(c => c.id);
+    let lastMessageMap: Record<string, string> = {};
+    
+    if (conversationIds.length > 0) {
+      // Get the most recent message per user by joining through conversations
+      const { data: messagesData } = await adminClient
+        .from("messages")
+        .select("conversation_id, created_at")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: false });
+
+      if (messagesData) {
+        // Build a map: user_id -> latest message date
+        const convToUser: Record<string, string> = {};
+        conversations.forEach(c => { convToUser[c.id] = c.user_id; });
+
+        for (const msg of messagesData) {
+          const userId = convToUser[msg.conversation_id];
+          if (userId && !lastMessageMap[userId]) {
+            lastMessageMap[userId] = msg.created_at;
+          }
+        }
+      }
     }
 
-    // Get user emails from auth.users
-    const userIds = profiles?.map(p => p.user_id) || [];
-    
-    // Fetch users from auth
-    const { data: { users }, error: usersError } = await adminClient.auth.admin.listUsers({
-      perPage: 1000,
+    // Build conversation count per user
+    const convCountMap: Record<string, number> = {};
+    conversations.forEach(c => {
+      convCountMap[c.user_id] = (convCountMap[c.user_id] || 0) + 1;
     });
 
-    if (usersError) {
-      throw usersError;
-    }
-
-    // Create a map of user_id to email
+    // Email map
     const emailMap: Record<string, string> = {};
-    users?.forEach(u => {
+    users.forEach(u => {
       emailMap[u.id] = u.email || "";
     });
 
-    // Combine profiles with emails
-    const profilesWithEmail = profiles?.map(profile => ({
+    // Combine everything
+    const profilesWithEmail = profiles.map(profile => ({
       ...profile,
       email: emailMap[profile.user_id] || null,
+      conversation_count: convCountMap[profile.user_id] || 0,
+      last_message_at: lastMessageMap[profile.user_id] || null,
     }));
 
     return new Response(

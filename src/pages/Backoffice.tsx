@@ -12,97 +12,70 @@ import { LayoutDashboard, Users, MessageCircle, Bell, LogOut } from "lucide-reac
 import { UserOverviewTable, type ProfileWithEmail } from "@/components/backoffice/UserOverviewTable";
 import { AdvisorChatPanel } from "@/components/backoffice/AdvisorChatPanel";
 import { BackofficeStats } from "@/components/backoffice/BackofficeStats";
-import { BackofficeAlerts } from "@/components/backoffice/BackofficeAlerts";
+import { BackofficeAlerts, type DashboardAlert } from "@/components/backoffice/BackofficeAlerts";
 
 type AppRole = 'candidate' | 'advisor' | 'admin';
 
-// Mock data for development/demo
-const mockProfiles: ProfileWithEmail[] = [
-  {
-    id: '1',
-    user_id: 'user-1',
-    first_name: 'Maria',
-    last_name: 'de Jong',
-    email: 'maria.dejong@email.nl',
-    phone: '06-12345678',
-    current_phase: 'orienteren',
-    preferred_sector: 'po',
-    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_activity: new Date(Date.now() - 3600000 * 2).toISOString(),
-    unread_messages: 2,
-  },
-  {
-    id: '2',
-    user_id: 'user-2',
-    first_name: 'Jan',
-    last_name: 'Bakker',
-    email: 'j.bakker@gmail.com',
-    phone: '06-98765432',
-    current_phase: 'interesseren',
-    preferred_sector: 'vo',
-    created_at: new Date(Date.now() - 86400000 * 7).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_activity: new Date(Date.now() - 86400000).toISOString(),
-    unread_messages: 0,
-  },
-  {
-    id: '3',
-    user_id: 'user-3',
-    first_name: 'Sophie',
-    last_name: 'van der Berg',
-    email: 'sophie.vdberg@outlook.com',
-    phone: null,
-    current_phase: 'beslissen',
-    preferred_sector: 'mbo',
-    created_at: new Date(Date.now() - 86400000 * 14).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_activity: new Date(Date.now() - 3600000 * 5).toISOString(),
-    unread_messages: 1,
-  },
-  {
-    id: '4',
-    user_id: 'user-4',
-    first_name: 'Thomas',
-    last_name: 'Visser',
-    email: 'thomas.visser@email.nl',
-    phone: '06-11223344',
-    current_phase: 'matchen',
-    preferred_sector: 'po',
-    created_at: new Date(Date.now() - 86400000 * 21).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_activity: new Date(Date.now() - 3600000 * 1).toISOString(),
-    unread_messages: 0,
-  },
-  {
-    id: '5',
-    user_id: 'user-5',
-    first_name: 'Emma',
-    last_name: 'Smit',
-    email: 'emma.smit@hotmail.com',
-    phone: '06-55667788',
-    current_phase: 'voorbereiden',
-    preferred_sector: 'so',
-    created_at: new Date(Date.now() - 86400000 * 30).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_activity: new Date(Date.now() - 86400000 * 2).toISOString(),
-    unread_messages: 0,
-  },
-  {
-    id: '6',
-    user_id: 'user-6',
-    first_name: 'Daan',
-    last_name: 'Jansen',
-    email: 'daan.j@gmail.com',
-    phone: null,
-    current_phase: 'interesseren',
-    preferred_sector: null,
-    created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-    updated_at: new Date().toISOString(),
-    last_activity: new Date(Date.now() - 3600000 * 3).toISOString(),
-    unread_messages: 3,
-  },
-];
+// Generate alerts from real profile data
+function generateAlertsFromProfiles(profiles: ProfileWithEmail[]): DashboardAlert[] {
+  const alerts: DashboardAlert[] = [];
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 86400000);
+
+  for (const p of profiles) {
+    const name = p.first_name && p.last_name 
+      ? `${p.first_name} ${p.last_name}` 
+      : p.email || 'Onbekende gebruiker';
+
+    // New signup (last 7 days)
+    if (new Date(p.created_at) > weekAgo) {
+      alerts.push({
+        id: `signup-${p.id}`,
+        type: 'new_signup',
+        user_name: name,
+        user_id: p.user_id,
+        message: 'Nieuwe aanmelding',
+        detail: p.preferred_sector ? `Interesse: ${p.preferred_sector}` : undefined,
+        created_at: p.created_at,
+        is_read: false,
+        priority: 'low',
+      });
+    }
+
+    // CV uploaded recently (updated_at within 7 days and cv_url present)
+    if (p.cv_url && new Date(p.updated_at) > weekAgo) {
+      alerts.push({
+        id: `cv-${p.id}`,
+        type: 'phase_change',
+        user_name: name,
+        user_id: p.user_id,
+        message: 'CV geüpload',
+        created_at: p.updated_at,
+        is_read: false,
+        priority: 'medium',
+      });
+    }
+
+    // Test completed recently
+    if (p.test_completed && new Date(p.updated_at) > weekAgo) {
+      alerts.push({
+        id: `test-${p.id}`,
+        type: 'needs_support',
+        user_name: name,
+        user_id: p.user_id,
+        message: 'Interessetest voltooid',
+        detail: 'Resultaten beschikbaar',
+        created_at: p.updated_at,
+        is_read: false,
+        priority: 'medium',
+      });
+    }
+  }
+
+  // Sort by date descending
+  alerts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return alerts;
+}
 
 export default function Backoffice() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -110,8 +83,10 @@ export default function Backoffice() {
   
   const [profiles, setProfiles] = useState<ProfileWithEmail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ProfileWithEmail | null>(null);
+  const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -127,7 +102,6 @@ export default function Backoffice() {
 
   const checkAccessAndFetchData = async () => {
     try {
-      // Check if user has advisor or admin role
       const { data: roleData, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
@@ -147,41 +121,31 @@ export default function Backoffice() {
 
       setHasAccess(true);
 
-      // Try to fetch real profiles, fall back to mock data
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
 
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-profiles-with-email`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (response.ok) {
-          const { profiles: profilesData } = await response.json();
-          // Merge with mock data for demo purposes
-          const enrichedProfiles = (profilesData || []).map((p: ProfileWithEmail, i: number) => ({
-            ...p,
-            last_activity: new Date(Date.now() - Math.random() * 86400000 * 3).toISOString(),
-            unread_messages: Math.floor(Math.random() * 4),
-          }));
-          setProfiles(enrichedProfiles.length > 0 ? enrichedProfiles : mockProfiles);
-        } else {
-          setProfiles(mockProfiles);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-profiles-with-email`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
         }
-      } catch {
-        // Use mock data if API fails
-        setProfiles(mockProfiles);
+      );
+
+      if (!response.ok) {
+        throw new Error(`API fout: ${response.status}`);
       }
-    } catch (error) {
-      console.error("Error:", error);
-      setProfiles(mockProfiles);
+
+      const { profiles: profilesData } = await response.json();
+      const realProfiles = profilesData || [];
+      setProfiles(realProfiles);
+      setAlerts(generateAlertsFromProfiles(realProfiles));
+    } catch (err) {
+      console.error("Error:", err);
+      setError("Kon profielen niet laden. Probeer het opnieuw.");
     } finally {
       setLoading(false);
     }
@@ -260,6 +224,15 @@ export default function Backoffice() {
         </section>
 
         <div className="container py-6">
+          {error && (
+            <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
+              {error}
+              <Button variant="ghost" size="sm" className="ml-4" onClick={checkAccessAndFetchData}>
+                Opnieuw proberen
+              </Button>
+            </div>
+          )}
+
           {/* Stats */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -293,7 +266,6 @@ export default function Backoffice() {
                 transition={{ delay: 0.1 }}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* User table - 2 columns */}
                   <div className="lg:col-span-2">
                     <UserOverviewTable 
                       profiles={profiles} 
@@ -301,8 +273,6 @@ export default function Backoffice() {
                       selectedUserId={selectedUser?.user_id}
                     />
                   </div>
-                  
-                  {/* Chat panel - 1 column */}
                   <div className="lg:col-span-1">
                     <AdvisorChatPanel 
                       selectedUser={selectedUser}
@@ -320,17 +290,15 @@ export default function Backoffice() {
                 transition={{ delay: 0.1 }}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Alerts panel - 2 columns */}
                   <div className="lg:col-span-2">
                     <BackofficeAlerts 
+                      alerts={alerts}
                       onSelectUser={(userId) => {
                         const profile = profiles.find(p => p.user_id === userId);
                         if (profile) setSelectedUser(profile);
                       }}
                     />
                   </div>
-                  
-                  {/* Chat panel - 1 column */}
                   <div className="lg:col-span-1">
                     <AdvisorChatPanel 
                       selectedUser={selectedUser}
@@ -348,7 +316,6 @@ export default function Backoffice() {
                 transition={{ delay: 0.1 }}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  {/* Compact user list */}
                   <div className="lg:col-span-1">
                     <Card>
                       <CardHeader className="pb-2">
@@ -365,15 +332,8 @@ export default function Backoffice() {
                               }`}
                             >
                               <div className="flex items-center gap-2">
-                                <div className="relative">
-                                  <div className="bg-primary/10 rounded-full p-1.5">
-                                    <Users className="h-3 w-3 text-primary" />
-                                  </div>
-                                  {(profile.unread_messages ?? 0) > 0 && (
-                                    <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-[10px] rounded-full h-3.5 w-3.5 flex items-center justify-center">
-                                      {profile.unread_messages}
-                                    </span>
-                                  )}
+                                <div className="bg-primary/10 rounded-full p-1.5">
+                                  <Users className="h-3 w-3 text-primary" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium truncate">
@@ -390,8 +350,6 @@ export default function Backoffice() {
                       </CardContent>
                     </Card>
                   </div>
-                  
-                  {/* Full-width chat panel */}
                   <div className="lg:col-span-3">
                     <AdvisorChatPanel 
                       selectedUser={selectedUser}
