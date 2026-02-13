@@ -93,6 +93,7 @@ function extractSlots(text: string, base: KnownSlots): KnownSlots {
   if (!next.role_interest) {
     if (/(lesgeven|voor de klas|docent|leraar)/.test(t)) next.role_interest = "lesgeven";
     else if (/(begeleiden|mentor|coach|ondersteunen)/.test(t)) next.role_interest = "begeleiding";
+    else if (/(vak|expertise|instructeur|praktijk|specialist|vak inzetten)/.test(t)) next.role_interest = "vakexpertise";
   }
 
   // Next step
@@ -173,6 +174,7 @@ function pickPhase(
 function chooseNextSlot(
   phase: DetectorPhaseCode,
   known: KnownSlots,
+  previousNextSlot?: SlotKey,
 ): { missing: SlotKey[]; nextSlot: SlotKey } {
   const { rules } = loadPhaseDetectorConfig();
   const phaseRule = rules.phases.find((p) => p.code === phase);
@@ -180,15 +182,16 @@ function chooseNextSlot(
   const required = (phaseRule?.required_slots || []) as SlotKey[];
   const optional = (phaseRule?.optional_slots || []) as SlotKey[];
 
-  const missingRequired = required.filter((s) => !known[s]);
-  if (missingRequired.length > 0) {
-    return { missing: missingRequired, nextSlot: missingRequired[0] };
-  }
+  const allSlots = [...required, ...optional];
+  const missing = allSlots.filter((s) => !known[s]);
 
-  // Als required compleet is, kies de eerste ontbrekende optional in de SSOT volgorde (zoals in rules)
-  const missingOptional = optional.filter((s) => !known[s]);
-  if (missingOptional.length > 0) {
-    return { missing: missingOptional, nextSlot: missingOptional[0] };
+  if (missing.length > 0) {
+    // Loop-prevention: if the same slot was already the previous next,
+    // skip it and pick the next missing one instead
+    if (previousNextSlot && missing[0] === previousNextSlot && missing.length > 1) {
+      return { missing, nextSlot: missing[1] };
+    }
+    return { missing, nextSlot: missing[0] };
   }
 
   // Fallback: altijd een volgende stap slot
@@ -214,6 +217,7 @@ export function runPhaseDetector(args: {
   conversation: ConversationTurn[];
   known_slots?: KnownSlots;
   current_phase_ui?: UiPhaseCode;
+  previous_next_slot?: SlotKey;
 }): PhaseDetectorOutput {
   const { rules } = loadPhaseDetectorConfig();
 
@@ -228,7 +232,7 @@ export function runPhaseDetector(args: {
   const nextPhaseTarget =
     rules.phases.find((p) => p.code === picked.phase)?.next_phase_default;
 
-  const slotChoice = chooseNextSlot(picked.phase, known);
+  const slotChoice = chooseNextSlot(picked.phase, known, args.previous_next_slot);
   const q = pickQuestionForSlot(slotChoice.nextSlot);
 
   return {
