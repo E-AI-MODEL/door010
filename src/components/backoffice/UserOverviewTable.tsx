@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PhaseStatusBar } from "./PhaseStatusBar";
 import { 
   Users, 
   Search, 
@@ -197,19 +198,8 @@ export function UserOverviewTable({ profiles, onSelectUser, selectedUserId }: Us
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        {profile.current_phase && phaseLabels[profile.current_phase] ? (
-                          <Badge 
-                            variant="outline" 
-                            className={phaseLabels[profile.current_phase].color}
-                          >
-                            {phaseLabels[profile.current_phase].label}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-muted text-muted-foreground">
-                            Onbekend
-                          </Badge>
-                        )}
+                      <TableCell className="min-w-[200px]">
+                        <PhaseStatusBar profile={profile} />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

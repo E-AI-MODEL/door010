@@ -40,18 +40,17 @@ serve(async (req) => {
     const { data: roleData, error: roleError } = await userClient
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
-      .single();
+      .eq("user_id", user.id);
 
-    if (roleError || !roleData) {
+    if (roleError || !roleData || roleData.length === 0) {
       return new Response(
         JSON.stringify({ error: "User role not found" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const role = roleData.role;
-    if (role !== "advisor" && role !== "admin") {
+    const roles = roleData.map(r => r.role);
+    if (!roles.includes("advisor") && !roles.includes("admin")) {
       return new Response(
         JSON.stringify({ error: "Insufficient permissions" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
