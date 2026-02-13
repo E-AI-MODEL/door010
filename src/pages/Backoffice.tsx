@@ -307,6 +307,7 @@ export default function Backoffice() {
                 <AppointmentsTab 
                   profiles={profiles}
                   onSelectUser={(p) => { setSelectedUser(p); setActivePanel('detail'); }}
+                  onOpenChat={(p) => { setSelectedUser(p); setActivePanel('chat'); }}
                 />
               </motion.div>
             </TabsContent>

@@ -123,10 +123,12 @@ export function CandidateDetailPanel({ user, onClose, onOpenChat }: CandidateDet
                     </Button>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <ClipboardCheck className={`h-4 w-4 ${user.test_completed ? 'text-primary' : 'text-muted-foreground/40'}`} />
-                  <span>{user.test_completed ? 'Interessetest voltooid' : 'Test niet gemaakt'}</span>
-                </div>
+                {user.test_completed && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <ClipboardCheck className="h-4 w-4 text-primary" />
+                    <span>Interessetest voltooid</span>
+                  </div>
+                )}
                 {user.test_completed && testResults && Object.keys(testResults).length > 0 && (
                   <div className="bg-muted/50 rounded-lg p-3 mt-2">
                     <p className="text-xs font-medium mb-2">Testresultaten:</p>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, Clock, User, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Calendar, Clock, User, CheckCircle, XCircle, Loader2, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,7 @@ interface Appointment {
 interface AppointmentsTabProps {
   profiles: ProfileWithEmail[];
   onSelectUser: (profile: ProfileWithEmail) => void;
+  onOpenChat: (profile: ProfileWithEmail) => void;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
@@ -35,7 +36,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   cancelled: { label: "Geannuleerd", variant: "destructive" },
 };
 
-export function AppointmentsTab({ profiles, onSelectUser }: AppointmentsTabProps) {
+export function AppointmentsTab({ profiles, onSelectUser, onOpenChat }: AppointmentsTabProps) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
@@ -203,6 +204,13 @@ export function AppointmentsTab({ profiles, onSelectUser }: AppointmentsTabProps
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm" variant="ghost" className="text-primary h-8"
+                            onClick={() => onOpenChat(apt.profile)}
+                            title="Reageer via chat"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
                           {apt.status === 'pending' && (
                             <>
                               <Button
