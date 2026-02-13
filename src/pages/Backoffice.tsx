@@ -341,8 +341,8 @@ export default function Backoffice() {
 
           {/* Main Content */}
           <Tabs defaultValue="overview" className="space-y-4 md:space-y-6">
-            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-              <TabsList className="inline-flex w-auto min-w-full md:min-w-0">
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 scrollbar-none">
+              <TabsList className="inline-flex w-max md:w-auto md:min-w-0">
                 <TabsTrigger value="overview" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
                   <Users className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   {isMobile ? "Overzicht" : "Overzicht"}
