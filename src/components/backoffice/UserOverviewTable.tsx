@@ -34,6 +34,8 @@ export interface ProfileWithEmail {
   updated_at: string;
   last_activity?: string;
   unread_messages?: number;
+  conversation_count?: number;
+  last_message_at?: string | null;
   avatar_url?: string | null;
   cv_url?: string | null;
   test_completed?: boolean;
@@ -249,8 +251,8 @@ export function UserOverviewTable({ profiles, onSelectUser, selectedUserId }: Us
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
-                          {profile.last_activity 
-                            ? format(new Date(profile.last_activity), 'd MMM HH:mm', { locale: nl })
+                          {profile.last_message_at 
+                            ? format(new Date(profile.last_message_at), 'd MMM HH:mm', { locale: nl })
                             : format(new Date(profile.created_at), 'd MMM yyyy', { locale: nl })}
                         </span>
                       </TableCell>

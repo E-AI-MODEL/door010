@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Bell, 
-  ArrowRight, 
   MessageCircle, 
   AlertTriangle,
   Clock,
@@ -35,76 +34,6 @@ export interface DashboardAlert {
   is_read: boolean;
   priority: 'low' | 'medium' | 'high';
 }
-
-// Mock alerts for development
-const mockAlerts: DashboardAlert[] = [
-  {
-    id: '1',
-    type: 'phase_change',
-    user_name: 'Maria de Jong',
-    user_id: 'user-1',
-    message: 'Is naar fase "Beslissen" gegaan',
-    detail: 'Oriënteren → Beslissen',
-    created_at: new Date(Date.now() - 1800000).toISOString(),
-    is_read: false,
-    priority: 'medium',
-  },
-  {
-    id: '2',
-    type: 'has_question',
-    user_name: 'Jan Bakker',
-    user_id: 'user-2',
-    message: 'Heeft een vraag gesteld aan een medewerker',
-    detail: '"Kan iemand mij helpen met de toelatingseisen?"',
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-    is_read: false,
-    priority: 'high',
-  },
-  {
-    id: '3',
-    type: 'critical_point',
-    user_name: 'Sophie van der Berg',
-    user_id: 'user-3',
-    message: 'Bevindt zich op een kritiek beslismoment',
-    detail: 'Twijfelt tussen zij-instroom en deeltijd opleiding',
-    created_at: new Date(Date.now() - 7200000).toISOString(),
-    is_read: false,
-    priority: 'high',
-  },
-  {
-    id: '4',
-    type: 'inactive',
-    user_name: 'Thomas Visser',
-    user_id: 'user-4',
-    message: 'Is al 7 dagen niet actief geweest',
-    detail: 'Laatste activiteit: oriëntatie PO',
-    created_at: new Date(Date.now() - 14400000).toISOString(),
-    is_read: true,
-    priority: 'medium',
-  },
-  {
-    id: '5',
-    type: 'needs_support',
-    user_name: 'Emma Smit',
-    user_id: 'user-5',
-    message: 'DOORai detecteerde ondersteuningsbehoefte',
-    detail: 'Meerdere vragen over financiering en toelating',
-    created_at: new Date(Date.now() - 21600000).toISOString(),
-    is_read: true,
-    priority: 'medium',
-  },
-  {
-    id: '6',
-    type: 'new_signup',
-    user_name: 'Daan Jansen',
-    user_id: 'user-6',
-    message: 'Nieuwe aanmelding',
-    detail: 'Interesse: VO, Wiskunde',
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    is_read: true,
-    priority: 'low',
-  },
-];
 
 const alertConfig: Record<AlertType, { 
   icon: typeof Bell; 
@@ -151,11 +80,11 @@ const alertConfig: Record<AlertType, {
 };
 
 interface BackofficeAlertsProps {
+  alerts: DashboardAlert[];
   onSelectUser?: (userId: string) => void;
 }
 
-export function BackofficeAlerts({ onSelectUser }: BackofficeAlertsProps) {
-  const alerts = mockAlerts;
+export function BackofficeAlerts({ alerts, onSelectUser }: BackofficeAlertsProps) {
   const unreadCount = alerts.filter(a => !a.is_read).length;
 
   return (
@@ -171,65 +100,69 @@ export function BackofficeAlerts({ onSelectUser }: BackofficeAlertsProps) {
               </Badge>
             )}
           </div>
-          <Button variant="ghost" size="sm" className="text-xs">
-            Alles gelezen
-          </Button>
         </div>
       </CardHeader>
       <CardContent className="p-0">
         <ScrollArea className="h-[350px]">
           <div className="space-y-1 px-4 pb-4">
-            {alerts.map((alert, index) => {
-              const config = alertConfig[alert.type];
-              const Icon = config.icon;
-              
-              return (
-                <motion.div
-                  key={alert.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`p-3 rounded-xl border transition-colors cursor-pointer hover:bg-muted/50 ${
-                    !alert.is_read ? 'bg-muted/30 border-primary/20' : 'border-transparent'
-                  }`}
-                  onClick={() => onSelectUser?.(alert.user_id)}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`rounded-full p-2 ${config.bgColor}`}>
-                      <Icon className={`h-4 w-4 ${config.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium text-sm truncate">
-                          {alert.user_name}
-                        </p>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          {format(new Date(alert.created_at), 'HH:mm', { locale: nl })}
-                        </span>
+            {alerts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Bell className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">Geen recente meldingen</p>
+              </div>
+            ) : (
+              alerts.map((alert, index) => {
+                const config = alertConfig[alert.type];
+                const Icon = config.icon;
+                
+                return (
+                  <motion.div
+                    key={alert.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`p-3 rounded-xl border transition-colors cursor-pointer hover:bg-muted/50 ${
+                      !alert.is_read ? 'bg-muted/30 border-primary/20' : 'border-transparent'
+                    }`}
+                    onClick={() => onSelectUser?.(alert.user_id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`rounded-full p-2 ${config.bgColor}`}>
+                        <Icon className={`h-4 w-4 ${config.color}`} />
                       </div>
-                      <p className="text-sm text-muted-foreground mt-0.5">
-                        {alert.message}
-                      </p>
-                      {alert.detail && (
-                        <p className="text-xs text-muted-foreground/80 mt-1 italic">
-                          {alert.detail}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-sm truncate">
+                            {alert.user_name}
+                          </p>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {format(new Date(alert.created_at), 'd MMM HH:mm', { locale: nl })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          {alert.message}
                         </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-2">
-                        <Badge variant="outline" className={`text-xs ${config.color} border-current/20`}>
-                          {config.label}
-                        </Badge>
-                        {alert.priority === 'high' && (
-                          <Badge variant="destructive" className="text-xs">
-                            Urgent
-                          </Badge>
+                        {alert.detail && (
+                          <p className="text-xs text-muted-foreground/80 mt-1 italic">
+                            {alert.detail}
+                          </p>
                         )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className={`text-xs ${config.color} border-current/20`}>
+                            {config.label}
+                          </Badge>
+                          {alert.priority === 'high' && (
+                            <Badge variant="destructive" className="text-xs">
+                              Urgent
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.div>
-              );
-            })}
+                  </motion.div>
+                );
+              })
+            )}
           </div>
         </ScrollArea>
       </CardContent>
