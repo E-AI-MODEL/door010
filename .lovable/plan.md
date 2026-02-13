@@ -1,63 +1,34 @@
 
 
-## Mobiele optimalisatie BackDOORai
+## Fix: Chat.tsx stuurt geen profielgegevens mee naar de LLM
 
-Op basis van de screenshot en de code-analyse zijn dit de hoofdproblemen op mobiel:
+### Probleem
 
-### Problemen geidentificeerd
+De volledige chatpagina (`/chat`) stuurt geen `profileMeta` (voornaam, bio, testresultaten) mee naar de edge function. De LLM weet daardoor niet wie de gebruiker is en geeft generieke, herhalende antwoorden.
 
-1. **Backoffice header**: Knoppen "Vernieuwen" en "Uitloggen" overlappen met de titel op smalle schermen
-2. **Stats grid**: 6-koloms grid op desktop, 2-koloms op mobiel -- dit werkt al redelijk maar neemt veel ruimte in
-3. **TabsList**: 4 tabs met iconen en tekst passen niet horizontaal, waardoor horizontal scroll nodig is
-4. **UserOverviewTable**: De `<Table>` met 6 kolommen (Kandidaat, Contact, Fase, Documenten, Laatste activiteit, Acties) is veel te breed voor mobiel
-5. **Overzicht-tab layout**: `lg:grid-cols-3` grid toont tabel + detailpaneel naast elkaar op desktop, maar op mobiel staat het detailpaneel onder de tabel (onzichtbaar zonder scrollen)
-6. **Gesprekken-tab**: `lg:grid-cols-4` layout met kandidatenlijst + chatpaneel -- op mobiel staan beide onder elkaar
-7. **AppointmentsTab**: Tabel met 6 kolommen is onleesbaar op mobiel
-8. **CandidateDetailPanel**: Wordt op mobiel niet als overlay getoond, waardoor je moet scrollen voorbij de tabel
+De Dashboard-chat (`DashboardChat.tsx`) doet dit wel correct (regels 173-178), maar `Chat.tsx` mist dit volledig (regels 185-192).
 
-### Oplossingen
+### Oorzaak
 
-**A. Backoffice header compact op mobiel**
-- Op mobiel: icoon-only knoppen (geen tekst "Vernieuwen"/"Uitloggen"), kleinere padding
+In `Chat.tsx` wordt het profiel opgehaald met alleen `current_phase` en `preferred_sector` (regel 64). De velden `first_name`, `bio`, `test_completed` en `test_results` worden niet opgehaald en dus ook niet meegestuurd in de fetch-body naar `doorai-chat`.
 
-**B. TabsList scrollbaar maken**
-- `overflow-x-auto` toevoegen aan TabsList wrapper
-- Op mobiel: korte labels zonder iconen, of icoon-only
+### Oplossing
 
-**C. UserOverviewTable omzetten naar kaart-layout op mobiel**
-- Gebruik `useIsMobile()` hook
-- Op mobiel: render elke kandidaat als een compact kaartje in plaats van tabelrij
-- Kaartje bevat: naam, fase-badge, documenten-iconen, laatste activiteit, chat-knop
+**Bestand: `src/pages/Chat.tsx`**
 
-**D. CandidateDetailPanel als Sheet/Drawer op mobiel**
-- Op mobiel: wanneer een kandidaat wordt geselecteerd, toon het detailpaneel als een bottom-up `Sheet` (half-screen overlay)
-- Hierdoor hoeft de gebruiker niet te scrollen en kan het paneel snel gesloten worden
+1. Breid de `Profile` interface uit met `first_name`, `bio`, `test_completed` en `test_results`
+2. Voeg deze velden toe aan de `.select()` query (regel 64)
+3. Stuur `profileMeta` mee in de fetch body (na regel 191), identiek aan DashboardChat.tsx
 
-**E. AdvisorChatPanel als fullscreen overlay op mobiel**
-- Op mobiel: wanneer een chat geopend wordt, toon deze als fullscreen Sheet
-- Terug-knop om naar de lijst te gaan
+### Technische details
 
-**F. AppointmentsTab als kaarten op mobiel**
-- Zelfde aanpak als de UserOverviewTable: op mobiel kaarten in plaats van tabel
-- Elke kaart toont kandidaat, onderwerp, datum, status, acties
+Wijzigingen in `src/pages/Chat.tsx`:
 
-**G. Gesprekken-tab: mobiele navigatie**
-- Op mobiel: toon eerst de kandidatenlijst, en bij selectie navigeer naar de fullscreen chat
-- Terug-knop om terug te gaan naar de lijst
+| Regel | Wat | Wijziging |
+|-------|-----|-----------|
+| 15-18 | Profile interface | Voeg `first_name`, `bio`, `test_completed`, `test_results` toe |
+| 64 | select query | Voeg extra kolommen toe aan de select |
+| 185-192 | fetch body | Voeg `profileMeta` object toe met naam, bio en testresultaten |
 
----
-
-### Technische aanpak
-
-| # | Bestand | Wijziging |
-|---|---------|-----------|
-| A | `src/pages/Backoffice.tsx` | Header: icoon-only knoppen op mobiel, TabsList scrollable |
-| B | `src/pages/Backoffice.tsx` | TabsList: `overflow-x-auto`, compactere triggers |
-| C | `src/components/backoffice/UserOverviewTable.tsx` | Mobiele kaart-view met `useIsMobile()` |
-| D | `src/pages/Backoffice.tsx` | CandidateDetailPanel wrappen in `Sheet` op mobiel |
-| E | `src/pages/Backoffice.tsx` | AdvisorChatPanel wrappen in `Sheet` op mobiel |
-| F | `src/components/backoffice/AppointmentsTab.tsx` | Mobiele kaart-view |
-| G | `src/pages/Backoffice.tsx` | Gesprekken-tab: conditie voor mobiel (lijst of chat) |
-
-Alle wijzigingen gebruiken de bestaande `useIsMobile()` hook uit `src/hooks/use-mobile.tsx` en de bestaande `Sheet` component uit `src/components/ui/sheet.tsx`. Geen nieuwe dependencies nodig.
+Dit is een kleine, gerichte fix in 1 bestand die het gedrag gelijktrekt met de Dashboard-chat.
 
