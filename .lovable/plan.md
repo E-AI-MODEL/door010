@@ -1,49 +1,47 @@
 
 
-## Fix: Loop-probleem bij ontbrekende slot-herkenning
+## Fix: Dashboard auto-scroll en gesprek wissen
 
-### Probleem
+### Probleem 1: Dashboard scrollt naar beneden bij laden
 
-Wanneer een gebruiker op de action-button "Vakexpertise" klikt, stuurt de app de tekst "Mijn vak inzetten in het onderwijs". De phase detector herkent dit niet als een waarde voor de `role_interest` slot, waardoor dezelfde vraag en dezelfde knoppen opnieuw worden getoond. De LLM krijgt steeds dezelfde context en geeft steeds hetzelfde antwoord.
+De DashboardChat component scrollt automatisch naar het laatste bericht wanneer berichten laden. Omdat `scrollIntoView` wordt gebruikt, scrollt dit de **hele pagina** mee naar beneden, niet alleen het chatvenster.
 
-Dit geldt potentieel voor elke action-button waarvan de tekst niet matcht met een regex in de slot-extractie.
+**Oorzaak**: In `DashboardChat.tsx` regel 89-91 wordt `messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })` aangeroepen bij elke berichtwijziging. Dit beweegt de hele viewport.
 
-### Oorzaak (2 lagen)
+**Oplossing**: Vervang `scrollIntoView` door een scroll binnen het chat-container element zelf. Gebruik een ref op de scroll-container (de `div` met `overflow-y-auto` op regel 279) en stel `scrollTop = scrollHeight` in. Hierdoor scrollt alleen de chat-inhoud, niet de hele pagina.
 
-1. **Regex-gat**: De `extractSlots` functie in `phaseDetectorEngine.ts` herkent alleen "lesgeven/docent/leraar" en "begeleiden/mentor/coach" als `role_interest`. "Vakexpertise", "vak inzetten", "instructeur" worden niet herkend.
+### Probleem 2: Gesprek wissen werkt alleen tijdelijk
 
-2. **Geen fallback**: Als een slot niet gevuld wordt, kiest het systeem steeds dezelfde slot als "volgende stap". Er is geen mechanisme om door te gaan naar de volgende slot of om de LLM extra context te geven.
+De "wis gesprek" functie (prullenbak-icoon) reset alleen de lokale React state, maar verwijdert niets uit de database. Bij navigatie naar `/chat` of bij een page refresh laadt `loadConversation` de oude berichten gewoon opnieuw uit de database.
 
-### Oplossing
+**Oorzaak**: `resetConversation` in `useChatConversation.ts` doet alleen:
+- `setConversationId(null)`
+- `setMessages([])`
+- `setLatestActions([])`
 
-**A. Regex uitbreiden** (phaseDetectorEngine.ts)
-- Voeg een derde match toe voor role_interest: `/(vak|expertise|instructeur|praktijk|specialist)/ -> "vakexpertise"`
-- Dit zorgt dat "Mijn vak inzetten in het onderwijs" correct de slot vult
+Er wordt geen `DELETE` uitgevoerd op de `messages` of `conversations` tabel.
 
-**B. Fallback bij herhaalde slot** (phaseDetectorEngine.ts)
-- Detecteer wanneer dezelfde slot 2x achter elkaar als "next" wordt gekozen terwijl de gebruiker al een antwoord gaf
-- In dat geval: markeer de slot als "acknowledged" (met de ruwe gebruikerstekst) en ga door naar de volgende ontbrekende slot
-- Dit voorkomt loops voor elke toekomstige action-button die niet perfect matcht
-
-**C. Actions afstemmen op slot-waarde** (doorai-chat/index.ts)
-- Wanneer `role_interest` gevuld is als "vakexpertise": stuur relevante vervolgacties (bijv. "Instructeur in MBO", "Vakleerkracht in VO") in plaats van opnieuw dezelfde 3 keuzes
-- Voeg een case toe in `actionsForNextSlot` voor de situatie dat role_interest al bekend is
-
-**D. LLM-context verrijken bij bekende slots** (doorai-chat/index.ts)
-- Wanneer role_interest = "vakexpertise": voeg een kort kennisblok toe aan de system prompt met informatie uit route-questions.json over instructeursrollen, vakleerkrachten en onderwijsondersteunende functies
-- Dit geeft de LLM iets inhoudelijks om op te reageren in plaats van generiek te blijven
+**Oplossing**: Pas `resetConversation` aan zodat het ook de database opschoont:
+1. Verwijder alle berichten van de huidige conversatie (`DELETE FROM messages WHERE conversation_id = ...`)
+2. Verwijder de conversatie zelf (`DELETE FROM conversations WHERE id = ...`)
+3. Reset daarna pas de lokale state
 
 ### Technische details
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `src/utils/phaseDetectorEngine.ts` | Regel 93-96: voeg derde regex-match toe voor role_interest. Voeg fallback-logica toe in `chooseNextSlot` om herhaalde slots te voorkomen. |
-| `supabase/functions/doorai-chat/index.ts` | `actionsForNextSlot`: voeg case toe voor wanneer role_interest al gevuld is. Voeg kennisblok toe aan system prompt bij bekende role_interest waarden. |
+| `src/components/dashboard/DashboardChat.tsx` | Vervang `scrollIntoView` door container-gebaseerde scroll met een ref op de overflow-div |
+| `src/hooks/useChatConversation.ts` | Voeg database deletes toe aan `resetConversation`: verwijder messages en conversation uit Supabase voordat lokale state wordt gereset |
+| `src/pages/Chat.tsx` | Zelfde scroll-fix als DashboardChat (regel 94-100): scroll alleen binnen de chat-container |
 
-### Verwacht resultaat
+### RLS check
 
-- Klik op "Vakexpertise" vult `role_interest = "vakexpertise"`
-- Het systeem gaat door naar de volgende relevante vraag (bijv. sector-keuze)
-- De LLM geeft een inhoudelijk antwoord over vakexpertise-rollen in het onderwijs
-- Bij toekomstige action-buttons die niet exact matchen, voorkomt de fallback-logica een loop
+De `messages` tabel heeft **geen DELETE policy** voor gebruikers. Er moet een RLS policy worden toegevoegd:
+- "Users can delete messages in own conversations" met conditie: `EXISTS (SELECT 1 FROM conversations WHERE conversations.id = messages.conversation_id AND conversations.user_id = auth.uid())`
+
+De `conversations` tabel heeft al een DELETE policy voor eigen conversations.
+
+### Database migratie nodig
+
+Een nieuwe RLS policy op de `messages` tabel zodat gebruikers hun eigen berichten kunnen verwijderen.
 
