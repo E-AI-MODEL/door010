@@ -22,6 +22,49 @@ import { nl } from "date-fns/locale";
 
 type OrientationPhase = 'interesseren' | 'orienteren' | 'beslissen' | 'matchen' | 'voorbereiden';
 
+export interface Appointment {
+  id: string;
+  user_id: string;
+  subject: string;
+  message: string | null;
+  preferred_date: string | null;
+  preferred_time: string | null;
+  status: string;
+  advisor_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedEvent {
+  id: string;
+  user_id: string;
+  event_title: string;
+  event_date: string | null;
+  event_url: string | null;
+  event_source: string | null;
+  created_at: string;
+}
+
+export interface SavedVacancy {
+  id: string;
+  user_id: string;
+  title: string;
+  organization: string | null;
+  url: string | null;
+  sector: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface UserNote {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProfileWithEmail {
   id: string;
   user_id: string;
@@ -41,6 +84,10 @@ export interface ProfileWithEmail {
   cv_url?: string | null;
   test_completed?: boolean;
   test_results?: Record<string, unknown> | null;
+  appointments?: Appointment[];
+  saved_events?: SavedEvent[];
+  saved_vacancies?: SavedVacancy[];
+  user_notes?: UserNote[];
 }
 
 const phaseLabels: Record<OrientationPhase, { label: string; color: string }> = {

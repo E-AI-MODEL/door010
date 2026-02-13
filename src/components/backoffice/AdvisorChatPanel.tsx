@@ -48,6 +48,36 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
     }
   }, [selectedUser]);
 
+  // Realtime subscription (punt 2)
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const channel = supabase
+      .channel(`advisor-chat-${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          setMessages(prev => {
+            // Avoid duplicates
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -114,13 +144,25 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
         setConversationId(targetConvId);
       }
 
-      // Insert message
+      // Insert message with advisor metadata (punt 18)
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: advisorProfile } = authUser ? await supabase
+        .from("profiles")
+        .select("first_name, last_name")
+        .eq("user_id", authUser.id)
+        .single() : { data: null };
+
+      const advisorName = advisorProfile?.first_name
+        ? `${advisorProfile.first_name}${advisorProfile.last_name ? ' ' + advisorProfile.last_name : ''}`
+        : 'Adviseur';
+
       const { data: insertedMsg, error: msgError } = await supabase
         .from("messages")
         .insert({
           conversation_id: targetConvId,
           role: "advisor",
           content: newMessage,
+          metadata: { advisor_name: advisorName },
         })
         .select("id, role, content, created_at")
         .single();

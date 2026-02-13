@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      advisor_notes: {
+        Row: {
+          advisor_user_id: string
+          candidate_user_id: string
+          content: string
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          advisor_user_id: string
+          candidate_user_id: string
+          content?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          advisor_user_id?: string
+          candidate_user_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           advisor_notes: string | null

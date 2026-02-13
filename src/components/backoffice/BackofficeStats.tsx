@@ -28,7 +28,7 @@ export function BackofficeStats({ profiles }: BackofficeStatsProps) {
       acc[phase] = (acc[phase] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
-    withConversation: profiles.filter(p => (p as any).conversation_count > 0).length,
+    withConversation: profiles.filter(p => (p.conversation_count ?? 0) > 0).length,
     withCV: profiles.filter(p => !!p.cv_url).length,
   };
 
