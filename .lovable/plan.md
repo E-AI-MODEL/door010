@@ -1,185 +1,63 @@
 
 
-## Verbeterplan BackDOORai: 18 verbeterpunten
+## Mobiele optimalisatie BackDOORai
 
-Hieronder staan alle verbeterpunten die ik uit de code heb geidentificeerd, genummerd 1-18. De eerste 13 worden volledig uitgewerkt. Punten 14-18 zijn laag-risico verbeteringen die meegenomen worden.
+Op basis van de screenshot en de code-analyse zijn dit de hoofdproblemen op mobiel:
 
----
+### Problemen geidentificeerd
 
-### Deel 1: Verbeteringen 1-13 (prioriteit)
+1. **Backoffice header**: Knoppen "Vernieuwen" en "Uitloggen" overlappen met de titel op smalle schermen
+2. **Stats grid**: 6-koloms grid op desktop, 2-koloms op mobiel -- dit werkt al redelijk maar neemt veel ruimte in
+3. **TabsList**: 4 tabs met iconen en tekst passen niet horizontaal, waardoor horizontal scroll nodig is
+4. **UserOverviewTable**: De `<Table>` met 6 kolommen (Kandidaat, Contact, Fase, Documenten, Laatste activiteit, Acties) is veel te breed voor mobiel
+5. **Overzicht-tab layout**: `lg:grid-cols-3` grid toont tabel + detailpaneel naast elkaar op desktop, maar op mobiel staat het detailpaneel onder de tabel (onzichtbaar zonder scrollen)
+6. **Gesprekken-tab**: `lg:grid-cols-4` layout met kandidatenlijst + chatpaneel -- op mobiel staan beide onder elkaar
+7. **AppointmentsTab**: Tabel met 6 kolommen is onleesbaar op mobiel
+8. **CandidateDetailPanel**: Wordt op mobiel niet als overlay getoond, waardoor je moet scrollen voorbij de tabel
 
-**1. Chat.tsx: Advisor-berichten tonen met ADVISEUR label**
-De volledige chatpagina (`Chat.tsx`) toont advisor-berichten als gewone berichten. DashboardChat heeft al de juiste styling (paarse rand + "ADVISEUR" label). Dezelfde styling moet naar Chat.tsx.
+### Oplossingen
 
-- Bestand: `src/pages/Chat.tsx` (regels 340-360)
-- Aanpassing: advisor-berichten herkennen en met accent-styling + label tonen
+**A. Backoffice header compact op mobiel**
+- Op mobiel: icoon-only knoppen (geen tekst "Vernieuwen"/"Uitloggen"), kleinere padding
 
-**2. Realtime updates in backoffice chat (AdvisorChatPanel)**
-Als een kandidaat een bericht stuurt terwijl de adviseur het chatpaneel open heeft, verschijnt het pas na pagina-refresh. Supabase Realtime subscription toevoegen.
+**B. TabsList scrollbaar maken**
+- `overflow-x-auto` toevoegen aan TabsList wrapper
+- Op mobiel: korte labels zonder iconen, of icoon-only
 
-- Bestand: `src/components/backoffice/AdvisorChatPanel.tsx`
-- Aanpassing: `supabase.channel()` subscription op `messages` tabel voor het actieve conversation_id
-- Database: `ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;`
+**C. UserOverviewTable omzetten naar kaart-layout op mobiel**
+- Gebruik `useIsMobile()` hook
+- Op mobiel: render elke kandidaat als een compact kaartje in plaats van tabelrij
+- Kaartje bevat: naam, fase-badge, documenten-iconen, laatste activiteit, chat-knop
 
-**3. Realtime updates in kandidaat chat (DashboardChat + Chat.tsx)**
-Advisor-berichten verschijnen pas na refresh bij de kandidaat. Realtime subscription toevoegen zodat nieuwe berichten direct binnenkomen.
+**D. CandidateDetailPanel als Sheet/Drawer op mobiel**
+- Op mobiel: wanneer een kandidaat wordt geselecteerd, toon het detailpaneel als een bottom-up `Sheet` (half-screen overlay)
+- Hierdoor hoeft de gebruiker niet te scrollen en kan het paneel snel gesloten worden
 
-- Bestanden: `src/hooks/useChatConversation.ts`, `src/components/dashboard/DashboardChat.tsx`
-- Aanpassing: subscription op messages tabel voor het actieve conversation_id
+**E. AdvisorChatPanel als fullscreen overlay op mobiel**
+- Op mobiel: wanneer een chat geopend wordt, toon deze als fullscreen Sheet
+- Terug-knop om naar de lijst te gaan
 
-**4. unread_messages dynamisch berekenen**
-In `UserOverviewTable.tsx` wordt `unread_messages` getoond als badge, maar deze waarde is altijd undefined/0 -- er is geen berekening. Echte "ongelezen" berichten tellen: berichten van de kandidaat die na het laatste advisor-bericht zijn gestuurd.
+**F. AppointmentsTab als kaarten op mobiel**
+- Zelfde aanpak als de UserOverviewTable: op mobiel kaarten in plaats van tabel
+- Elke kaart toont kandidaat, onderwerp, datum, status, acties
 
-- Bestand: `supabase/functions/get-profiles-with-email/index.ts`
-- Aanpassing: per gebruiker de berichten tellen na het laatste advisor-bericht in hun conversation
-
-**5. Automatisch chatbericht bij afspraak-statuswijziging**
-Wanneer een adviseur een afspraak bevestigt of annuleert, wordt er automatisch een chatbericht naar de kandidaat gestuurd (bijv. "Je afspraak 'Orienteringsgesprek' is bevestigd voor 15 feb").
-
-- Bestand: `src/components/backoffice/AppointmentsTab.tsx`
-- Aanpassing: na succesvolle status-update, een message inserten in de conversation van de kandidaat
-
-**6. TypeScript typing verbeteren -- `as any` casts verwijderen**
-`CandidateDetailPanel.tsx` en `AppointmentsTab.tsx` gebruiken `(user as any).appointments` etc. Dit moet getypt worden via het `ProfileWithEmail` interface.
-
-- Bestanden: `src/components/backoffice/UserOverviewTable.tsx` (ProfileWithEmail type), `CandidateDetailPanel.tsx`, `AppointmentsTab.tsx`
-- Aanpassing: appointments, saved_events, saved_vacancies, user_notes als optionele velden toevoegen aan ProfileWithEmail
-
-**7. Alerts uitbreiden met afspraken**
-Het alert-systeem genereert alleen alerts op basis van profieldata (nieuwe aanmelding, CV upload, test). Nieuwe afspraak-aanvragen (status: pending) moeten ook als alert verschijnen.
-
-- Bestand: `src/pages/Backoffice.tsx` (generateAlertsFromProfiles functie)
-- Aanpassing: appointments uit profieldata lezen en als alert toevoegen
-
-**8. Kandidaat fase handmatig aanpassen door adviseur**
-Adviseurs moeten de fase van een kandidaat kunnen wijzigen vanuit het detailpaneel. Hiervoor is een nieuwe RLS policy nodig.
-
-- Bestanden: `src/components/backoffice/CandidateDetailPanel.tsx`, database migratie
-- Aanpassing: dropdown met fasen + update knop, nieuwe RLS UPDATE policy op profiles voor advisors
-
-**9. Zoeken/filteren in gesprekken-tab**
-De kandidatenlijst in de gesprekken-tab heeft geen zoekfunctie -- bij veel kandidaten is dit onwerkbaar.
-
-- Bestand: `src/pages/Backoffice.tsx` (gesprekken-tab, regels 348-380)
-- Aanpassing: zoekbalk toevoegen die filtert op naam
-
-**10. Gesprekken-tab: toon laatste bericht en ongelezen indicator**
-De kandidatenlijst toont alleen naam en fase, maar niet wanneer het laatste bericht was of of er ongelezen berichten zijn.
-
-- Bestand: `src/pages/Backoffice.tsx` (gesprekken-tab)
-- Aanpassing: `last_message_at` en `conversation_count` tonen per kandidaat
-
-**11. Interne advisor-notities per kandidaat**
-Er bestaan al `user_notes` (van de kandidaat zelf), maar adviseurs hebben geen eigen notitie-veld per kandidaat. Een `advisor_notes` tabel of veld toevoegen.
-
-- Nieuwe tabel: `advisor_notes` (advisor_user_id, candidate_user_id, content, created_at)
-- Bestanden: `CandidateDetailPanel.tsx`, edge function, database migratie + RLS
-
-**12. Notificatie-indicator voor kandidaten**
-Kandidaten hebben geen manier om te zien dat er een nieuw advisor-bericht of afspraakwijziging is. Een eenvoudige "ongelezen" indicator toevoegen aan het dashboard.
-
-- Bestanden: `src/pages/Dashboard.tsx`, `src/components/layout/Header.tsx`
-- Aanpassing: query voor berichten met role='advisor' na laatste bezoek, badge tonen
-
-**13. Backoffice data-refresh knop**
-Na acties (afspraak bevestigen, bericht sturen) moet de adviseur handmatig de pagina herladen. Een refresh-knop toevoegen + automatisch refreshen na bepaalde acties.
-
-- Bestand: `src/pages/Backoffice.tsx`
-- Aanpassing: refresh functie + knop in header, automatisch aanroepen na status-updates
+**G. Gesprekken-tab: mobiele navigatie**
+- Op mobiel: toon eerst de kandidatenlijst, en bij selectie navigeer naar de fullscreen chat
+- Terug-knop om terug te gaan naar de lijst
 
 ---
 
-### Deel 2: Verbeteringen 14-18 (laag risico, meegenomen)
-
-**14. BackofficeStats typing fix**
-`(p as any).conversation_count` in BackofficeStats vervangen door correct getypt veld.
-
-- Bestand: `src/components/backoffice/BackofficeStats.tsx` (regel 31)
-- Simpele fix na verbetering 6
-
-**15. Gesprekken-tab: sorteren op laatste activiteit**
-Kandidaten met recente berichten bovenaan tonen in plaats van willekeurige volgorde.
-
-- Bestand: `src/pages/Backoffice.tsx`
-- Aanpassing: sorteren op `last_message_at`
-
-**16. Afspraken-tab: toon bericht van kandidaat prominenter**
-Het `message` veld wordt nu als `line-clamp-1` getoond. Bij afspraken is het bericht van de kandidaat cruciale context.
-
-- Bestand: `src/components/backoffice/AppointmentsTab.tsx`
-- Aanpassing: message als apart blok tonen, niet afgeknipt
-
-**17. CandidateDetailPanel: chat-knop prominenter**
-De "Open chat" knop staat onderaan het scrollbare paneel. Een sticky knop of in de header is beter bereikbaar.
-
-- Bestand: `src/components/backoffice/CandidateDetailPanel.tsx`
-- Aanpassing: chat-knop naar de header verplaatsen
-
-**18. Advisor identificatie in berichten**
-Bij meerdere adviseurs is niet duidelijk wie welk bericht stuurde. Een `advisor_name` meesturen of afleiden uit de sessie.
-
-- Bestanden: `AdvisorChatPanel.tsx`, `messages` metadata
-- Aanpassing: advisor naam opslaan in message metadata bij insert
-
----
-
-### Technische details
-
-**Database migraties nodig:**
-```sql
--- Realtime voor berichten
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
-
--- Advisors mogen profielen updaten (voor fase-wijziging)
-CREATE POLICY "Advisors can update profiles"
-ON public.profiles FOR UPDATE
-USING (has_role(auth.uid(), 'advisor'::app_role) OR has_role(auth.uid(), 'admin'::app_role));
-
--- Interne advisor notities tabel
-CREATE TABLE public.advisor_notes (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  advisor_user_id uuid NOT NULL,
-  candidate_user_id uuid NOT NULL,
-  content text NOT NULL DEFAULT '',
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.advisor_notes ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Advisors can manage advisor notes"
-ON public.advisor_notes FOR ALL
-USING (has_role(auth.uid(), 'advisor'::app_role) OR has_role(auth.uid(), 'admin'::app_role));
-```
-
-**Bestanden die worden aangepast (samenvatting):**
+### Technische aanpak
 
 | # | Bestand | Wijziging |
 |---|---------|-----------|
-| 1 | `src/pages/Chat.tsx` | Advisor styling |
-| 2 | `src/components/backoffice/AdvisorChatPanel.tsx` | Realtime subscription |
-| 3 | `src/hooks/useChatConversation.ts` | Realtime subscription |
-| 4 | `supabase/functions/get-profiles-with-email/index.ts` | Unread count berekening |
-| 5 | `src/components/backoffice/AppointmentsTab.tsx` | Auto-chatbericht |
-| 6 | `src/components/backoffice/UserOverviewTable.tsx` | ProfileWithEmail type uitbreiden |
-| 6 | `src/components/backoffice/CandidateDetailPanel.tsx` | as any verwijderen |
-| 7 | `src/pages/Backoffice.tsx` | Alerts uitbreiden + refresh + zoeken |
-| 8 | `src/components/backoffice/CandidateDetailPanel.tsx` | Fase-dropdown |
-| 9-10 | `src/pages/Backoffice.tsx` | Gesprekken-tab verbeteren |
-| 11 | Nieuw: `advisor_notes` tabel + UI | Interne notities |
-| 12 | `src/pages/Dashboard.tsx` + `Header.tsx` | Notificatie badge |
-| 13 | `src/pages/Backoffice.tsx` | Refresh-knop |
-| 14-18 | Diverse kleine fixes | Typing, sorting, UI tweaks |
+| A | `src/pages/Backoffice.tsx` | Header: icoon-only knoppen op mobiel, TabsList scrollable |
+| B | `src/pages/Backoffice.tsx` | TabsList: `overflow-x-auto`, compactere triggers |
+| C | `src/components/backoffice/UserOverviewTable.tsx` | Mobiele kaart-view met `useIsMobile()` |
+| D | `src/pages/Backoffice.tsx` | CandidateDetailPanel wrappen in `Sheet` op mobiel |
+| E | `src/pages/Backoffice.tsx` | AdvisorChatPanel wrappen in `Sheet` op mobiel |
+| F | `src/components/backoffice/AppointmentsTab.tsx` | Mobiele kaart-view |
+| G | `src/pages/Backoffice.tsx` | Gesprekken-tab: conditie voor mobiel (lijst of chat) |
 
-**Volgorde van implementatie:**
-1. Database migraties eerst (realtime, RLS, nieuwe tabel)
-2. Type-fixes (punt 6, 14) -- voorkomt errors bij latere wijzigingen
-3. Core functionaliteit (punten 1-5, 7-8)
-4. UX verbeteringen (punten 9-13)
-5. Polish (punten 14-18)
-
-**Risico-inschatting:**
-- Punten 14-18 zijn puur UI/typing fixes zonder risico op data-verlies of regressie
-- Punt 11 (advisor_notes) vereist een nieuwe tabel maar is geisoleerd
-- Punt 8 (fase aanpassen) vereist een nieuwe RLS policy -- moet zorgvuldig zodat kandidaten niet elkaars fase kunnen wijzigen
+Alle wijzigingen gebruiken de bestaande `useIsMobile()` hook uit `src/hooks/use-mobile.tsx` en de bestaande `Sheet` component uit `src/components/ui/sheet.tsx`. Geen nieuwe dependencies nodig.
 
