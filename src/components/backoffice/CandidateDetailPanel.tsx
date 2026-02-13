@@ -224,19 +224,35 @@ export function CandidateDetailPanel({ user, onClose, onOpenChat, onRefresh }: C
                     <span>Interessetest voltooid</span>
                   </div>
                 )}
-                {user.test_completed && testResults && Object.keys(testResults).length > 0 && (
-                  <div className="bg-muted/50 rounded-lg p-3 mt-2">
-                    <p className="text-xs font-medium mb-2">Testresultaten:</p>
-                    <div className="space-y-1">
-                      {Object.entries(testResults).map(([key, value]) => (
-                        <div key={key} className="flex justify-between text-xs">
-                          <span className="text-muted-foreground capitalize">{key}</span>
-                          <span className="font-medium">{String(value)}</span>
-                        </div>
-                      ))}
+                {user.test_completed && testResults && Object.keys(testResults).length > 0 && (() => {
+                  const results = testResults as { recommendedSector?: string; sectorScores?: Record<string, number>; ranking?: { sector: string; score: number }[]; answers?: Record<string, string>; completedAt?: string };
+                  const sectorLabels: Record<string, string> = { po: "Primair Onderwijs", vo: "Voortgezet Onderwijs", mbo: "MBO", so: "Speciaal Onderwijs" };
+                  return (
+                    <div className="bg-muted/50 rounded-lg p-3 mt-2">
+                      <p className="text-xs font-medium mb-2">Testresultaten:</p>
+                      <div className="space-y-1.5">
+                        {results.recommendedSector && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Aanbevolen sector</span>
+                            <span className="font-semibold text-primary">{sectorLabels[results.recommendedSector] || results.recommendedSector}</span>
+                          </div>
+                        )}
+                        {results.ranking?.map(({ sector, score }, i) => (
+                          <div key={sector} className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">{i + 1}. {sectorLabels[sector] || sector}</span>
+                            <span className="font-medium">{score} punten</span>
+                          </div>
+                        ))}
+                        {results.completedAt && (
+                          <div className="flex justify-between text-xs pt-1 border-t border-border">
+                            <span className="text-muted-foreground">Voltooid op</span>
+                            <span className="font-medium">{new Date(results.completedAt).toLocaleDateString('nl-NL')}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </Section>
 
