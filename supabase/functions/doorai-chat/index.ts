@@ -370,6 +370,7 @@ interface RequestBody {
 // ── Actions based on next slot (for authenticated flow) ────────────────
 function actionsForNextSlot(
   slot: SlotKey,
+  knownSlots?: Partial<Record<SlotKey, string>>,
 ): Array<{ label: string; value: string }> {
   if (slot === "school_type") {
     return [
@@ -384,6 +385,16 @@ function actionsForNextSlot(
       { label: "Begeleiden", value: "Leerlingen begeleiden, dat lijkt me wat" },
       { label: "Vakexpertise", value: "Mijn vak inzetten in het onderwijs" },
     ];
+  }
+  // When role_interest is already filled, offer sector-specific follow-ups
+  if (slot === "school_type" && knownSlots?.role_interest) {
+    if (knownSlots.role_interest === "vakexpertise") {
+      return [
+        { label: "MBO (instructeur)", value: "MBO als instructeur of vakspecialist" },
+        { label: "VO (vakleerkracht)", value: "Vakleerkracht in het voortgezet onderwijs" },
+        { label: "PO (vakspecialist)", value: "Specialist in het basisonderwijs" },
+      ];
+    }
   }
   if (slot === "credential_goal") {
     return [
@@ -476,7 +487,7 @@ Deno.serve(async (req) => {
       : legacyNextQ;
 
     const authActions = detector?.next_slot_key
-      ? actionsForNextSlot(detector.next_slot_key)
+      ? actionsForNextSlot(detector.next_slot_key, detector?.known_slots)
       : legacyActions;
 
     // System prompt
@@ -489,6 +500,15 @@ Deno.serve(async (req) => {
       systemPrompt += `\n\nContext\n- Ingelogd: ja\n- Fase: ${detector?.phase_current_ui || userPhase || "interesseren"}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}\n${knownSlotsInfo ? `- Bekende info: ${knownSlotsInfo}\n` : ""}`;
       if (userSector) systemPrompt += `- Voorkeursector: ${userSector}\n`;
       if (detector?.evidence?.length) systemPrompt += `- Evidence: ${detector.evidence.slice(0, 3).join(" | ")}\n`;
+
+      // Vakexpertise knowledge block
+      if (detector?.known_slots?.role_interest === "vakexpertise") {
+        systemPrompt += `\n## KENNISBLOK: VAKEXPERTISE-ROLLEN
+- **Instructeur (MBO)**: Je geeft praktijklessen vanuit je vakkennis. Geen bevoegdheid nodig, wel PDG aanbevolen.
+- **Vakleerkracht (VO)**: Je geeft les in je eigen vak. Tweedegraads of eerstegraads bevoegdheid nodig, afhankelijk van niveau.
+- **Onderwijsondersteuner (PO/VO)**: Je ondersteunt lessen met je expertise, bijv. als techniekcoach of taalspecialist. Vaak geen volledige bevoegdheid vereist.
+- **Gastdocent/specialist**: Tijdelijk of parttime je kennis delen. Laagdrempelig, goed om te testen of het past.\n`;
+      }
       // Profile metadata for personalization
       if (profileMeta) {
         if (profileMeta.first_name) systemPrompt += `- Naam gebruiker: ${profileMeta.first_name}\n`;
