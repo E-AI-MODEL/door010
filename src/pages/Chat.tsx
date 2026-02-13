@@ -15,6 +15,10 @@ import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
 interface Profile {
   current_phase: UiPhaseCode | null;
   preferred_sector: string | null;
+  first_name?: string | null;
+  bio?: string | null;
+  test_completed?: boolean | null;
+  test_results?: unknown;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
@@ -62,7 +66,7 @@ export default function Chat() {
         try {
           const { data } = await supabase
             .from("profiles")
-            .select("current_phase, preferred_sector")
+            .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results")
             .eq("user_id", user.id)
             .single();
           if (data) {
@@ -122,7 +126,7 @@ export default function Chat() {
           .from("profiles")
           .update(updates)
           .eq("user_id", user.id)
-          .select("current_phase, preferred_sector")
+          .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results")
           .single();
 
         if (!error && data) {
@@ -189,6 +193,11 @@ export default function Chat() {
           userSector: profile?.preferred_sector,
           detector,
           phase_transition: phaseTransition,
+          profileMeta: {
+            first_name: profile?.first_name,
+            bio: profile?.bio,
+            test_results: profile?.test_completed ? profile?.test_results : null,
+          },
         }),
       });
 
