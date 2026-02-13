@@ -9,6 +9,7 @@ import { Calendar, Clock, User, CheckCircle, XCircle, Loader2, MessageSquare } f
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { ProfileWithEmail, Appointment } from "./UserOverviewTable";
 
 interface AppointmentsTabProps {
@@ -31,8 +32,8 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat, onRefresh 
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [notesValue, setNotesValue] = useState("");
   const [localUpdates, setLocalUpdates] = useState<Record<string, Partial<Appointment>>>({});
+  const isMobile = useIsMobile();
 
-  // Collect all appointments from profiles
   const allAppointments: (Appointment & { userName: string; profile: ProfileWithEmail })[] = [];
   for (const p of profiles) {
     const apts: Appointment[] = p.appointments || [];
@@ -42,7 +43,6 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat, onRefresh 
     }
   }
 
-  // Sort by date descending
   allAppointments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const filtered = statusFilter === "all"
@@ -51,7 +51,6 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat, onRefresh 
 
   const sendAppointmentNotification = async (apt: Appointment & { userName: string; profile: ProfileWithEmail }, newStatus: string) => {
     try {
-      // Find or create conversation for this user
       const { data: convs } = await supabase
         .from("conversations")
         .select("id")
@@ -95,7 +94,6 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat, onRefresh 
         .eq("id", id);
       if (!error) {
         setLocalUpdates(prev => ({ ...prev, [id]: { ...prev[id], status: newStatus } }));
-        // Send automatic chat message (punt 5)
         const apt = allAppointments.find(a => a.id === id);
         if (apt) await sendAppointmentNotification(apt, newStatus);
         onRefresh?.();
@@ -125,16 +123,55 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat, onRefresh 
     }
   };
 
+  const renderStatusActions = (apt: Appointment & { userName: string; profile: ProfileWithEmail }) => (
+    <div className="flex items-center gap-1">
+      <Button
+        size="sm" variant="ghost" className="text-primary h-8"
+        onClick={(e) => { e.stopPropagation(); onOpenChat(apt.profile); }}
+        title="Reageer via chat"
+      >
+        <MessageSquare className="h-4 w-4" />
+      </Button>
+      {apt.status === 'pending' && (
+        <>
+          <Button
+            size="sm" variant="ghost" className="text-primary h-8"
+            onClick={(e) => { e.stopPropagation(); updateStatus(apt.id, 'confirmed'); }}
+            disabled={updatingId === apt.id}
+          >
+            <CheckCircle className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm" variant="ghost" className="text-destructive h-8"
+            onClick={(e) => { e.stopPropagation(); updateStatus(apt.id, 'cancelled'); }}
+            disabled={updatingId === apt.id}
+          >
+            <XCircle className="h-4 w-4" />
+          </Button>
+        </>
+      )}
+      {apt.status === 'confirmed' && (
+        <Button
+          size="sm" variant="ghost" className="text-primary h-8"
+          onClick={(e) => { e.stopPropagation(); updateStatus(apt.id, 'completed'); }}
+          disabled={updatingId === apt.id}
+        >
+          Afronden
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Alle afspraken</h3>
+          <h3 className="font-semibold text-foreground text-sm md:text-base">Alle afspraken</h3>
           <Badge variant="secondary">{allAppointments.length}</Badge>
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-[140px] md:w-[160px]">
             <SelectValue placeholder="Alle statussen" />
           </SelectTrigger>
           <SelectContent>
@@ -147,137 +184,188 @@ export function AppointmentsTab({ profiles, onSelectUser, onOpenChat, onRefresh 
         </Select>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead>Kandidaat</TableHead>
-                <TableHead>Onderwerp</TableHead>
-                <TableHead>Datum/Tijd</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Notities</TableHead>
-                <TableHead className="text-right">Acties</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Geen afspraken gevonden
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((apt) => {
-                  const config = statusConfig[apt.status] || statusConfig.pending;
-                  return (
-                    <TableRow key={apt.id} className="hover:bg-muted/30">
-                      <TableCell>
-                        <button
-                          className="text-sm font-medium text-primary hover:underline"
-                          onClick={() => onSelectUser(apt.profile)}
-                        >
-                          {apt.userName}
-                        </button>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-sm font-medium">{apt.subject}</p>
-                          {apt.message && (
-                            <p className="text-xs text-muted-foreground mt-1 bg-muted/50 rounded p-1.5">{apt.message}</p>
-                          )}
+      {isMobile ? (
+        /* Mobile: Card view */
+        <div className="space-y-3">
+          {filtered.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Geen afspraken gevonden
+            </div>
+          ) : (
+            filtered.map((apt) => {
+              const config = statusConfig[apt.status] || statusConfig.pending;
+              return (
+                <Card key={apt.id} className="p-3">
+                  <div className="space-y-2">
+                    {/* Header: name + status */}
+                    <div className="flex items-center justify-between">
+                      <button
+                        className="text-sm font-medium text-primary hover:underline"
+                        onClick={() => onSelectUser(apt.profile)}
+                      >
+                        {apt.userName}
+                      </button>
+                      <Badge variant={config.variant} className="text-xs">
+                        {config.label}
+                      </Badge>
+                    </div>
+
+                    {/* Subject */}
+                    <p className="text-sm font-medium">{apt.subject}</p>
+
+                    {/* Message */}
+                    {apt.message && (
+                      <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2">{apt.message}</p>
+                    )}
+
+                    {/* Date */}
+                    {apt.preferred_date && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        <span>{format(new Date(apt.preferred_date), 'd MMM yyyy', { locale: nl })}</span>
+                        {apt.preferred_time && (
+                          <>
+                            <Clock className="h-3 w-3 ml-1" />
+                            <span>{apt.preferred_time}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {editingNotesId === apt.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={notesValue}
+                          onChange={(e) => setNotesValue(e.target.value)}
+                          className="text-xs min-h-[60px]"
+                          placeholder="Notitie toevoegen..."
+                        />
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="default" onClick={() => saveNotes(apt.id)} disabled={updatingId === apt.id}>
+                            {updatingId === apt.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Opslaan'}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingNotesId(null)}>Annuleer</Button>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {apt.preferred_date ? (
-                          <div className="text-sm">
-                            <p>{format(new Date(apt.preferred_date), 'd MMM yyyy', { locale: nl })}</p>
-                            {apt.preferred_time && (
-                              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Clock className="h-3 w-3" /> {apt.preferred_time}
-                              </p>
+                      </div>
+                    ) : (
+                      <button
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => { setEditingNotesId(apt.id); setNotesValue(apt.advisor_notes || ""); }}
+                      >
+                        {apt.advisor_notes ? `📝 ${apt.advisor_notes}` : '+ Notitie'}
+                      </button>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex justify-end pt-1 border-t border-border">
+                      {renderStatusActions(apt)}
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        /* Desktop: Table view */
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead>Kandidaat</TableHead>
+                  <TableHead>Onderwerp</TableHead>
+                  <TableHead>Datum/Tijd</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Notities</TableHead>
+                  <TableHead className="text-right">Acties</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Geen afspraken gevonden
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((apt) => {
+                    const config = statusConfig[apt.status] || statusConfig.pending;
+                    return (
+                      <TableRow key={apt.id} className="hover:bg-muted/30">
+                        <TableCell>
+                          <button
+                            className="text-sm font-medium text-primary hover:underline"
+                            onClick={() => onSelectUser(apt.profile)}
+                          >
+                            {apt.userName}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm font-medium">{apt.subject}</p>
+                            {apt.message && (
+                              <p className="text-xs text-muted-foreground mt-1 bg-muted/50 rounded p-1.5">{apt.message}</p>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Geen voorkeur</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={config.variant} className="text-xs">
-                          {config.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[200px]">
-                        {editingNotesId === apt.id ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              value={notesValue}
-                              onChange={(e) => setNotesValue(e.target.value)}
-                              className="text-xs min-h-[60px]"
-                              placeholder="Notitie toevoegen..."
-                            />
-                            <div className="flex gap-1">
-                              <Button size="sm" variant="default" onClick={() => saveNotes(apt.id)} disabled={updatingId === apt.id}>
-                                {updatingId === apt.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Opslaan'}
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setEditingNotesId(null)}>Annuleer</Button>
+                        </TableCell>
+                        <TableCell>
+                          {apt.preferred_date ? (
+                            <div className="text-sm">
+                              <p>{format(new Date(apt.preferred_date), 'd MMM yyyy', { locale: nl })}</p>
+                              {apt.preferred_time && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="h-3 w-3" /> {apt.preferred_time}
+                                </p>
+                              )}
                             </div>
-                          </div>
-                        ) : (
-                          <button
-                            className="text-xs text-muted-foreground hover:text-foreground text-left"
-                            onClick={() => { setEditingNotesId(apt.id); setNotesValue(apt.advisor_notes || ""); }}
-                          >
-                            {apt.advisor_notes || '+ Notitie toevoegen'}
-                          </button>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm" variant="ghost" className="text-primary h-8"
-                            onClick={() => onOpenChat(apt.profile)}
-                            title="Reageer via chat"
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                          {apt.status === 'pending' && (
-                            <>
-                              <Button
-                                size="sm" variant="ghost" className="text-primary h-8"
-                                onClick={() => updateStatus(apt.id, 'confirmed')}
-                                disabled={updatingId === apt.id}
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm" variant="ghost" className="text-destructive h-8"
-                                onClick={() => updateStatus(apt.id, 'cancelled')}
-                                disabled={updatingId === apt.id}
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Geen voorkeur</span>
                           )}
-                          {apt.status === 'confirmed' && (
-                            <Button
-                              size="sm" variant="ghost" className="text-primary h-8"
-                              onClick={() => updateStatus(apt.id, 'completed')}
-                              disabled={updatingId === apt.id}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={config.variant} className="text-xs">
+                            {config.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[200px]">
+                          {editingNotesId === apt.id ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={notesValue}
+                                onChange={(e) => setNotesValue(e.target.value)}
+                                className="text-xs min-h-[60px]"
+                                placeholder="Notitie toevoegen..."
+                              />
+                              <div className="flex gap-1">
+                                <Button size="sm" variant="default" onClick={() => saveNotes(apt.id)} disabled={updatingId === apt.id}>
+                                  {updatingId === apt.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Opslaan'}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setEditingNotesId(null)}>Annuleer</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              className="text-xs text-muted-foreground hover:text-foreground text-left"
+                              onClick={() => { setEditingNotesId(apt.id); setNotesValue(apt.advisor_notes || ""); }}
                             >
-                              Afronden
-                            </Button>
+                              {apt.advisor_notes || '+ Notitie toevoegen'}
+                            </button>
                           )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {renderStatusActions(apt)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
