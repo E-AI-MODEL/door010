@@ -3,6 +3,242 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ══════════════════════════════════════════════════════════════════════
+// META CHAT COORDINATOR — Dynamische contextorkestratie
+// ══════════════════════════════════════════════════════════════════════
+
+// ── A. Knowledge Resolver ─────────────────────────────────────────────
+// Compacte kennisblokken samengevat uit SSOT JSON-bestanden.
+// Max 50-80 woorden per blok.
+const KNOWLEDGE_BLOCKS: Record<string, string> = {
+  // Rollen per sector
+  "lesgeven_po": "Leraar PO: je draagt verantwoordelijkheid voor een klas op de basisschool (groep 1-8). Je geeft alle vakken. Een Pabo-diploma of zij-instroom PO-traject is vereist voor bevoegdheid.",
+  "lesgeven_vo": "Leraar VO: je geeft les in een specifiek vak op de middelbare school. Voor onderbouw/vmbo is een tweedegraads bevoegdheid nodig (4 jr hbo). Voor bovenbouw havo/vwo een eerstegraads (universitaire master + lerarenopleiding).",
+  "lesgeven_mbo": "Docent MBO: je geeft theorie- en/of praktijklessen aan studenten in beroepsopleidingen. Een PDG (Pedagogisch Didactisch Getuigschrift, 1-2 jr) is vereist. Vakkennis uit de praktijk is een groot pluspunt.",
+  "vakexpertise_po": "Vakspecialist PO: je zet je expertise in op basisscholen (bijv. muziek, techniek, beweging). Een hbo-diploma in je vakgebied is vaak voldoende. Voor een vaste aanstelling is een bevoegdheid aanbevolen.",
+  "vakexpertise_vo": "Vakleerkracht VO: je geeft les in je eigen vak. Een tweedegraads of eerstegraads bevoegdheid is nodig, afhankelijk van het niveau waarop je lesgeeft.",
+  "vakexpertise_mbo": "Instructeur MBO: je geeft praktijklessen vanuit je vakkennis. Geen formele bevoegdheid nodig, wel PDG (Pedagogisch Didactisch Getuigschrift) aanbevolen. Je brengt beroepservaring de klas in.",
+  "begeleiding": "Onderwijsondersteuner/leerlingbegeleider: je begeleidt leerlingen bij leren, gedrag of sociaal-emotionele ontwikkeling. Denk aan mentor, zorgcoordinator, RT-er of onderwijsassistent. De eisen verschillen per functie en sector.",
+  // Routes
+  "route_pabo": "Pabo: 4 jaar voltijd (of deeltijd). Leidt op tot leraar basisonderwijs. Toelatingseis: havo, vwo of mbo-4. Zij-instroom PO is een alternatief voor hbo/wo-gediplomeerden (2 jaar, leren en werken).",
+  "route_tweedegraads": "Tweedegraads lerarenopleiding: 4 jaar hbo. Bevoegd voor vmbo en onderbouw havo/vwo. Zij-instroom VO is een versneld traject (2 jaar) voor mensen met een relevant hbo/wo-diploma en werkplek.",
+  "route_eerstegraads": "Eerstegraads lerarenopleiding: universitaire master (1-2 jaar) na een vakinhoudelijke bachelor. Bevoegd voor alle niveaus VO inclusief bovenbouw havo/vwo.",
+  "route_pdg": "PDG (Pedagogisch Didactisch Getuigschrift): 1-2 jaar, bedoeld voor vakmensen die in het MBO willen lesgeven. Je leert didactiek en pedagogiek terwijl je al voor de klas staat.",
+  "route_zij_instroom": "Zij-instroom: een versneld traject (2 jaar) waarbij je leert en werkt tegelijk. Beschikbaar voor PO en VO. Voorwaarden: relevant hbo/wo-diploma, geschiktheidsonderzoek, en een werkplek op een school.",
+  // Salaris
+  "salaris": "Salaris in het onderwijs is vastgelegd in de CAO. Starters verdienen ca. 2.900-3.500 bruto/maand. Ervaren leraren tot ca. 5.800 bruto/maand. Exacte inschaling hangt af van opleiding, ervaring en sector. Check de CAO-tabellen voor je situatie.",
+  // Kosten
+  "kosten": "Kosten van een opleiding verschillen per route. Reguliere opleidingen vallen onder het wettelijk collegegeld (ca. 2.500/jaar). Zij-instroom wordt vaak deels door de school bekostigd via een subsidieregeling. PDG-kosten variëren per aanbieder.",
+  // Regio Rotterdam
+  "regio_rotterdam": "Onderwijsloket Rotterdam: gratis en onafhankelijk advies over werken in het onderwijs in de regio Rotterdam-Rijnmond. Je kunt een individueel consult aanvragen voor persoonlijk advies over routes, diploma-erkenning en vacatures. Website: onderwijsloketrotterdam.nl",
+};
+
+// ── B. Tone Selector ──────────────────────────────────────────────────
+const TONE_TABLE: Record<string, { early: string; late: string }> = {
+  interesseren: {
+    early: "Houd het luchtig. Maak nieuwsgierig. Vermijd jargon. Laat zien dat kleine stappen al tellen.",
+    late: "De gebruiker heeft al een richting. Bevestig kort en bied een concrete vervolgstap.",
+  },
+  orienteren: {
+    early: "Zet opties naast elkaar. Noem randvoorwaarden (sector, niveau). Vermijd keuzestress.",
+    late: "Focus op de gekozen route. Geef concrete info over duur, eisen, kosten.",
+  },
+  beslissen: {
+    early: "Normaliseer twijfel. Bied 2 routes, niet meer. Geen druk.",
+    late: "De keuze wordt concreet. Verwijs naar actie: aanmelden, gesprek, event.",
+  },
+  matchen: {
+    early: "Help zoeken: regio, sector, type school. Concreet en praktisch.",
+    late: "Verwijs naar vacatures en events. Bied contact met loket of school.",
+  },
+  voorbereiden: {
+    early: "Checklist-stijl. Kort en zakelijk. Wat moet nog geregeld.",
+    late: "Sluit af met aanmoediging. Verwijs naar praktische resources.",
+  },
+};
+
+function selectTone(phase: string, slotsFilledCount: number, totalSlotsCount: number): string {
+  const p = phase.toLowerCase();
+  const entry = TONE_TABLE[p] || TONE_TABLE.interesseren;
+  const ratio = totalSlotsCount > 0 ? slotsFilledCount / totalSlotsCount : 0;
+  return ratio >= 0.5 ? entry.late : entry.early;
+}
+
+// ── C. Link Injector ──────────────────────────────────────────────────
+function injectLinks(phase: string, slots: Partial<Record<SlotKey, string>>): string {
+  const links: string[] = [];
+  const p = phase.toLowerCase();
+
+  links.push("/opleidingen - Routes naar het leraarschap");
+
+  if (p === "matchen" || slots.next_step === "vacatures") {
+    links.push("/vacatures - Actuele vacatures in het onderwijs");
+  }
+  if (p === "interesseren" || slots.next_step === "event") {
+    links.push("/events - Meeloopdagen en infosessies");
+  }
+  if (p === "matchen" || p === "voorbereiden") {
+    links.push("/events - Kennismakingen en open dagen");
+  }
+  if (slots.region_preference) {
+    links.push("onderwijsloketrotterdam.nl - Gratis consult en persoonlijk advies");
+  }
+  if (slots.salary_info) {
+    links.push("CAO PO/VO/MBO - Officiële salaristabellen (zoek op 'CAO primair onderwijs' e.d.)");
+  }
+
+  // Deduplicate
+  const unique = [...new Set(links)];
+  return unique.slice(0, 3).join("\n- ");
+}
+
+// ── D. Profile Interpreter ────────────────────────────────────────────
+function interpretProfile(profileMeta?: ProfileMeta | null): string {
+  if (!profileMeta) return "";
+  const parts: string[] = [];
+
+  if (profileMeta.first_name) {
+    parts.push(`De gebruiker heet ${profileMeta.first_name}.`);
+  }
+  if (profileMeta.bio) {
+    parts.push(`Achtergrond: ${profileMeta.bio.slice(0, 120)}.`);
+  }
+  if (profileMeta.test_completed && profileMeta.test_results) {
+    const tr = profileMeta.test_results as Record<string, unknown>;
+    if (tr.recommendedSector && tr.ranking && Array.isArray(tr.ranking)) {
+      const ranking = tr.ranking as Array<{ sector: string; score: number }>;
+      const top = ranking[0];
+      const second = ranking[1];
+      const sectorNames: Record<string, string> = { po: "basisonderwijs (PO)", vo: "voortgezet onderwijs (VO)", mbo: "beroepsonderwijs (MBO)" };
+      let interp = `Interessetest afgerond. ${sectorNames[String(top?.sector).toLowerCase()] || top?.sector} past het best (score ${top?.score})`;
+      if (second) interp += `, gevolgd door ${sectorNames[String(second.sector).toLowerCase()] || second.sector} (score ${second.score})`;
+      interp += ".";
+      parts.push(interp);
+    }
+  }
+
+  return parts.join(" ");
+}
+
+// ── E. Knowledge Resolver ─────────────────────────────────────────────
+function resolveKnowledge(
+  slots: Partial<Record<SlotKey, string>>,
+  phase: string,
+): string[] {
+  const fragments: string[] = [];
+  const role = slots.role_interest?.toLowerCase();
+  const sector = slots.school_type?.toUpperCase();
+
+  // Role + sector specific knowledge
+  if (role && sector) {
+    const key = `${role}_${sector.toLowerCase()}`;
+    if (KNOWLEDGE_BLOCKS[key]) fragments.push(KNOWLEDGE_BLOCKS[key]);
+  } else if (role === "begeleiding") {
+    fragments.push(KNOWLEDGE_BLOCKS.begeleiding);
+  } else if (role === "vakexpertise" && !sector) {
+    // Generic vakexpertise without sector
+    fragments.push(KNOWLEDGE_BLOCKS.vakexpertise_mbo);
+  } else if (role === "lesgeven" && !sector) {
+    fragments.push(KNOWLEDGE_BLOCKS.lesgeven_po); // default to PO
+  }
+
+  // Route info when credential_goal is asked
+  if (slots.credential_goal) {
+    if (sector === "PO") fragments.push(KNOWLEDGE_BLOCKS.route_pabo);
+    else if (sector === "VO") fragments.push(KNOWLEDGE_BLOCKS.route_tweedegraads);
+    else if (sector === "MBO") fragments.push(KNOWLEDGE_BLOCKS.route_pdg);
+    else fragments.push(KNOWLEDGE_BLOCKS.route_zij_instroom);
+  }
+
+  // Salary
+  if (slots.salary_info) fragments.push(KNOWLEDGE_BLOCKS.salaris);
+
+  // Costs
+  if (slots.costs_info) fragments.push(KNOWLEDGE_BLOCKS.kosten);
+
+  // Region
+  if (slots.region_preference) fragments.push(KNOWLEDGE_BLOCKS.regio_rotterdam);
+
+  // Limit to max 3 fragments
+  return fragments.slice(0, 3);
+}
+
+// ── F. Context Assembler ──────────────────────────────────────────────
+function assembleContext(
+  phase: string,
+  detector: DetectorPayload | undefined,
+  profileMeta: ProfileMeta | undefined | null,
+  userSector: string | undefined,
+  phaseTransition: PhaseTransition | undefined,
+): string {
+  const slots = detector?.known_slots || {};
+  const slotsFilledCount = Object.values(slots).filter(Boolean).length;
+  const totalSlotsCount = detector?.missing_slots
+    ? slotsFilledCount + detector.missing_slots.length
+    : 9; // total slot count from PHASE_RULES
+
+  // 1. Tone (always, max ~50 tokens)
+  const tone = selectTone(phase, slotsFilledCount, totalSlotsCount);
+
+  // 2. Knowledge (max ~300 tokens, 1-3 fragments)
+  const knowledge = resolveKnowledge(slots, phase);
+
+  // 3. Profile interpretation (max ~100 tokens)
+  const profile = interpretProfile(profileMeta);
+
+  // 4. Links (max ~50 tokens)
+  const links = injectLinks(phase, slots);
+
+  // 5. Phase transition acknowledgment
+  let transitionNote = "";
+  if (phaseTransition) {
+    transitionNote = `De gebruiker verschuift van "${phaseTransition.from}" naar "${phaseTransition.to}". Erken dit kort en positief (bijv. "Je bent een stap verder"). Pas je begeleiding aan op de nieuwe fase.`;
+  }
+
+  // Assemble
+  const parts: string[] = [];
+  parts.push(`## DYNAMISCHE CONTEXT`);
+
+  parts.push(`\n### Toon\n${tone}`);
+
+  // Basic context info
+  const knownSlotsInfo = Object.entries(slots)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+  parts.push(`\n### Situatie\n- Fase: ${detector?.phase_current_ui || phase}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}`);
+  if (knownSlotsInfo) parts.push(`- Bekende info: ${knownSlotsInfo}`);
+  if (userSector) parts.push(`- Voorkeursector: ${userSector}`);
+  if (detector?.evidence?.length) parts.push(`- Evidence: ${detector.evidence.slice(0, 3).join(" | ")}`);
+
+  if (knowledge.length > 0) {
+    parts.push(`\n### Kennis\n${knowledge.map(k => `- ${k}`).join("\n")}`);
+  }
+
+  if (profile) {
+    parts.push(`\n### Over de gebruiker\n${profile}`);
+  }
+
+  parts.push(`\n### Relevante pagina's\n- ${links}`);
+
+  if (transitionNote) {
+    parts.push(`\n### Fase-verschuiving\n${transitionNote}`);
+  }
+
+  // Rough token estimate (~4 chars per token), cap at ~800 tokens
+  const assembled = parts.join("\n");
+  const estimatedTokens = Math.ceil(assembled.length / 4);
+  if (estimatedTokens > 800) {
+    // Trim: remove knowledge beyond first fragment, then links
+    const trimmed = parts.slice(0, 4); // tone + situation
+    if (knowledge.length > 0) trimmed.push(`\n### Kennis\n- ${knowledge[0]}`);
+    if (profile) trimmed.push(`\n### Over de gebruiker\n${profile}`);
+    return trimmed.join("\n");
+  }
+
+  return assembled;
+}
+
 // ── Phase & slot definitions (Single Source of Truth) ──────────────────
   const PHASE_RULES = {
   phases: [
@@ -283,11 +519,7 @@ Regels die altijd gelden:
 Kies VORM B alleen als de gebruiker duidelijk om vergelijken/keuze vraagt (woorden als: verschil, kiezen, A of B, welke route, zij-instroom vs deeltijd). Anders gebruik VORM A. Gebruik VORM C bij salaris/inschaling/regels of als het maatwerk wordt.
 
 ## FASE-GEDRAG
-- Interesseren: betekenis, drempel omlaag, klein beginnen.
-- Orienteren: opties naast elkaar, randvoorwaarden (sector, niveau).
-- Beslissen: keuzehulp, twijfel normaliseren maar kort, richting kiezen.
-- Matchen: naar vacatures, events, contact met scholen, regio.
-- Voorbereiden: checklist, documenten, stappen, begeleiding.
+(Wordt dynamisch bepaald per beurt via de coordinator - zie DYNAMISCHE CONTEXT hieronder.)
 
 ## DOORVERWIJZEN
 - Bij salaris of inschaling: alleen globaal en altijd richting CAO/tabellen.
@@ -494,39 +726,14 @@ Deno.serve(async (req) => {
     let systemPrompt = mode === "authenticated" ? DOORAI_SYSTEM_PROMPT_AUTH : DOORAI_SYSTEM_PROMPT;
 
     if (mode === "authenticated") {
-      const knownSlotsInfo = detector?.known_slots
-        ? Object.entries(detector.known_slots).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(", ")
-        : "";
-      systemPrompt += `\n\nContext\n- Ingelogd: ja\n- Fase: ${detector?.phase_current_ui || userPhase || "interesseren"}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}\n${knownSlotsInfo ? `- Bekende info: ${knownSlotsInfo}\n` : ""}`;
-      if (userSector) systemPrompt += `- Voorkeursector: ${userSector}\n`;
-      if (detector?.evidence?.length) systemPrompt += `- Evidence: ${detector.evidence.slice(0, 3).join(" | ")}\n`;
-
-      // Vakexpertise knowledge block
-      if (detector?.known_slots?.role_interest === "vakexpertise") {
-        systemPrompt += `\n## KENNISBLOK: VAKEXPERTISE-ROLLEN
-- **Instructeur (MBO)**: Je geeft praktijklessen vanuit je vakkennis. Geen bevoegdheid nodig, wel PDG aanbevolen.
-- **Vakleerkracht (VO)**: Je geeft les in je eigen vak. Tweedegraads of eerstegraads bevoegdheid nodig, afhankelijk van niveau.
-- **Onderwijsondersteuner (PO/VO)**: Je ondersteunt lessen met je expertise, bijv. als techniekcoach of taalspecialist. Vaak geen volledige bevoegdheid vereist.
-- **Gastdocent/specialist**: Tijdelijk of parttime je kennis delen. Laagdrempelig, goed om te testen of het past.\n`;
-      }
-      // Profile metadata for personalization
-      if (profileMeta) {
-        if (profileMeta.first_name) systemPrompt += `- Naam gebruiker: ${profileMeta.first_name}\n`;
-        if (profileMeta.bio) systemPrompt += `- Bio: ${profileMeta.bio}\n`;
-        if (profileMeta.test_completed && profileMeta.test_results) {
-          const tr = profileMeta.test_results as Record<string, unknown>;
-          if (tr.recommendedSector) systemPrompt += `- Interessetest resultaat: ${tr.recommendedSector}\n`;
-          if (tr.ranking && Array.isArray(tr.ranking)) {
-            const rankStr = (tr.ranking as Array<{sector: string; score: number}>)
-              .map((r) => `${r.sector}(${r.score})`)
-              .join(", ");
-            systemPrompt += `- Sector ranking: ${rankStr}\n`;
-          }
-        }
-      }
-      if (phase_transition) {
-        systemPrompt += `\n## FASE-VERSCHUIVING\nDe gebruiker verschuift van "${phase_transition.from}" naar "${phase_transition.to}". Erken dit kort en positief (bijv. "Je bent een stap verder"). Pas je begeleiding aan op de nieuwe fase.\n`;
-      }
+      const dynamicContext = assembleContext(
+        detector?.phase_current || userPhase || "interesseren",
+        detector,
+        profileMeta,
+        userSector,
+        phase_transition,
+      );
+      systemPrompt += `\n\n${dynamicContext}`;
     } else {
       // Public context blijft kort
       systemPrompt += `\n\n## Huidige context\n- Ingelogd: Nee\n`;
