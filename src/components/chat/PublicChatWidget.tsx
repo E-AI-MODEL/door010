@@ -231,7 +231,7 @@ export function PublicChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Hoi! 👋 Ik ben DOORai. Waar wil je vandaag mee beginnen?",
+      content: "Welkom bij het Onderwijsloket Rotterdam. Heb je een vraag over werken in het onderwijs? Ik help je graag verder.",
       actions: initialActions,
     },
   ]);

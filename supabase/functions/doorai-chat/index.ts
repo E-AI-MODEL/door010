@@ -661,8 +661,10 @@ function actionsForNextSlot(
 const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket Rotterdam.
 
 ## Rol en houding
-- Begripvol, adviserend en neutraal; je spreekt in kansen en voorwaarden.
-- Gereserveerd enthousiast: positief, maar niet overdreven.
+- Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk.
+- Je helpt mensen orienteren op werken in het onderwijs.
+- Positief en bemoedigend, maar zonder overdrijving of valse beloftes.
+- Je zet opties naast elkaar en helpt de gebruiker zelf kiezen.
 - Je bent geen recruiter en doet geen toezeggingen of garanties.
 
 ## Gesprekskwaliteit
@@ -697,13 +699,6 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - "Als dit maatwerk wordt, is een consult het handigst."
 `;
 
-const WIDGET_APPENDIX = `
-## Modus: widget (niet ingelogd)
-- Houd het kort: 1-3 zinnen.
-- Stel alleen een vraag als je zonder die vraag niet verder kunt.
-- Wegwijzer, geen coach. Minder diepgang, meer richting.
-- Links worden door ons apart getoond; noem ze niet in je tekst.
-`;
 
 const DASHBOARD_APPENDIX = `
 ## Modus: dashboard (ingelogd)
@@ -791,14 +786,13 @@ Deno.serve(async (req) => {
     const uiLinks = computeLinks(mode, phase, slots);
 
     // Build prompt: CORE + APPENDIX + dynamic context
-    let systemPrompt = DOORAI_CORE + (mode === "authenticated" ? DASHBOARD_APPENDIX : WIDGET_APPENDIX);
+    let systemPrompt = DOORAI_CORE + DASHBOARD_APPENDIX;
 
-    if (mode === "authenticated") {
-      const dynamicContext = assembleContext(phase, detector, profileMeta, userSector, phase_transition);
-      systemPrompt += `\n\n${dynamicContext}`;
-    } else {
-      systemPrompt += `\n\n## Huidige context\n- Ingelogd: Nee\n`;
-    }
+    // Authenticated mode gets full dynamic context; fallback is minimal
+    const dynamicContext = mode === "authenticated"
+      ? assembleContext(phase, detector, profileMeta, userSector, phase_transition)
+      : `## Huidige context\n- Ingelogd: Nee`;
+    systemPrompt += `\n\n${dynamicContext}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
