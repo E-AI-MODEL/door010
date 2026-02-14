@@ -1,139 +1,63 @@
 
 
-## Refactor: Orchestra/LLM scheiding + dynamische SSOT-kennis
+## Fix: Naam-unificatie, toon en opruimen dode code
 
-### Drie problemen die we oplossen
+### Wat er nu mis is
 
-**A. Links in prompt zorgen voor rommelige output**
-De LLM krijgt links in de `DYNAMISCHE CONTEXT` (regel 222) en gaat ze herhalen, opsommen of als CTA gebruiken. Tegelijkertijd stuurt de server ook actions als knoppen. Resultaat: dubbel en niet-nuchter.
-
-**B. Twee gedupliceerde mega-prompts**
-`DOORAI_SYSTEM_PROMPT` (95 regels) en `DOORAI_SYSTEM_PROMPT_AUTH` (102 regels) delen 70% van hun inhoud. Wijzigingen moeten op twee plekken worden doorgevoerd en lopen uit de pas.
-
-**C. SSOT-data wordt niet dynamisch gebruikt**
-De `KNOWLEDGE_BLOCKS` zijn handmatig geschreven samenvattingen. De echte data in `route-steps.json` (3.440 regels met FAQ's, artikelen), `route-questions.json` (1.284 regels met functiebeschrijvingen) en `regional-education-desks.json` (16.728 regels met 20+ loketten) wordt niet gelezen. Bij updates van de SSOT verouderen de blokken.
+1. **Drie namen**: homepage-coach zegt "Doortje", doorai-chat zegt "DoorAI", UI zegt "DOORai"
+2. **Toon te zakelijk**: DOORAI_CORE zegt "begripvol, adviserend, neutraal" terwijl de oorspronkelijke visie "warme, nuchtere wegwijzer" is (die al in homepage-coach staat)
+3. **Emoji's in welkomstberichten** terwijl prompts "geen emojis" zeggen
+4. **Dode code**: `mode: "public"` pad in doorai-chat wordt nooit bereikt (widget gebruikt homepage-coach)
 
 ### Wat we doen
 
-#### Stap 1: Links uit de prompt, naar UI-payload
+**1. Naam overal "DoorAI"**
+- `homepage-coach/index.ts` regel 7: "Doortje" naar "DoorAI"
+- `homepage-coach/index.ts` regels 72-82: "Doortje:" naar "DoorAI:" in voorbeelden
+- UI headers zijn al "DOORai" - dat is visueel en kan zo blijven (merk-stijl)
 
-Verwijder `injectLinks()` uit `assembleContext()`. Maak een nieuwe `computeLinks()` functie die een array `{ label, href }` retourneert. Deze wordt als apart veld meegestuurd in het SSE actions-event:
+**2. DOORAI_CORE toon warmer maken**
+- `doorai-chat/index.ts` regels 663-666 wijzigen van:
+  - "Begripvol, adviserend en neutraal; je spreekt in kansen en voorwaarden."
+  - "Gereserveerd enthousiast: positief, maar niet overdreven."
+- Naar:
+  - "Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk."
+  - "Je helpt mensen orienteren op werken in het onderwijs."
+  - "Positief en bemoedigend, maar zonder overdrijving of valse beloftes."
+  - "Je zet opties naast elkaar en helpt de gebruiker zelf kiezen."
 
-```text
-data: {"actions": [...], "links": [...]}
-```
+Dit brengt DOORAI_CORE in lijn met de homepage-coach definitie.
 
-De frontend (DashboardChat.tsx en Chat.tsx) krijgt een `latestLinks` state en rendert link-chips onder de action-knoppen.
+**3. Welkomstberichten zonder emoji**
+- `PublicChatWidget.tsx` regel 234: "Hoi! (emoji) Ik ben DOORai..." naar "Welkom bij het Onderwijsloket Rotterdam. Heb je een vraag over werken in het onderwijs? Ik help je graag verder."
+- `DashboardChat.tsx` regel 72-75: "Welkom terug! Fijn dat je er bent (emoji)..." naar "Welkom terug, goed dat je er bent.\n\nJe zit in de **${phase}**-fase. ${info}\n\nKies een suggestie hieronder of typ je vraag."
+- `Chat.tsx` reset-bericht: zelfde aanpassing
 
-#### Stap 2: DRY prompt - core + appendix
-
-Vervang de twee mega-prompts door:
-
-- `DOORAI_CORE`: gedeelde regels (identiteit, gedragsregels, stijl, verboden/voorkeurszinnen, scope/veiligheid) -- ongeveer 50 regels
-- `WIDGET_APPENDIX`: kort, wegwijzer, 1-3 zinnen, link-first -- ongeveer 8 regels
-- `DASHBOARD_APPENDIX`: VORM A/B/C, geen vraagtekens, max 90 woorden, SSOT-vraag wordt apart toegevoegd -- ongeveer 15 regels
-
-De prompt wordt `DOORAI_CORE + (mode === "authenticated" ? DASHBOARD_APPENDIX : WIDGET_APPENDIX) + dynamicContext`.
-
-#### Stap 3: Dynamische SSOT-kennis uit de JSON-bestanden
-
-Dit is het kernstuk dat in eerdere versies ontbrak. In plaats van alleen hardcoded `KNOWLEDGE_BLOCKS` te gebruiken, worden de JSON-bestanden bij opstart van de edge function ingelezen en als lookup-tabellen beschikbaar gemaakt.
-
-**route-questions.json**: Functiebeschrijvingen worden geextraheerd per antwoord-titel (bijv. "Leraar", "Onderwijsondersteunend personeel", "Instructeur"). Wanneer een slot als `role_interest` matcht, wordt de originele beschrijving uit de SSOT gebruikt in plaats van een handmatige kopie.
-
-**route-steps.json**: Routes worden geindexeerd op `slug` (bijv. "wo-f", "hbom"). Wanneer een `credential_goal` of specifieke route relevant is, wordt de `body.content[0].content[0].text` (de inleidende paragraaf) als kennisfragment meegegeven. FAQ-teksten worden niet meegestuurd (te lang), maar het bestaan van FAQ's wordt vermeld.
-
-**regional-education-desks.json**: Loketten worden geindexeerd op `regions` en `cities_municipalities`. Wanneer `region_preference` een bekende regio of stad bevat, wordt het juiste loket gevonden met naam, email, website en consultdienst-URL. Dit vervangt het hardcoded "regio_rotterdam" blok en maakt alle 20+ loketten beschikbaar.
-
-**Implementatie**: Drie lookup-functies bovenin de edge function:
-
-- `findRoleDescription(roleName)`: zoekt in route-questions naar de beschrijving bij een antwoord-titel
-- `findRouteStep(slug)`: haalt de inleidende tekst op voor een route uit route-steps
-- `findRegionalDesk(regionOrCity)`: zoekt het juiste loket op basis van regio of stad
-
-De `resolveKnowledge()` functie gebruikt deze lookups als primaire bron en valt terug op de bestaande `KNOWLEDGE_BLOCKS` als er geen match is.
-
-De JSON-bestanden worden in de edge function als `const` geimporteerd (ze zijn statisch en veranderen niet tijdens runtime). Ze worden niet volledig in de prompt gestopt -- alleen het relevante fragment (max 80 woorden per blok, max 3 blokken).
-
-#### Stap 4: Frontend aanpassen voor links-payload
-
-DashboardChat.tsx en Chat.tsx:
-- Nieuwe state: `latestLinks` (array van `{ label, href }`)
-- SSE parse-blok: herken `parsed.links` naast `parsed.actions`
-- Render: compacte link-chips onder de action-knoppen (Link component van react-router-dom)
+**4. Dode public-mode code opruimen in doorai-chat**
+- De `WIDGET_APPENDIX` constante verwijderen (wordt nooit gebruikt - widget roept homepage-coach aan)
+- Regel 794: de `mode === "authenticated" ? DASHBOARD_APPENDIX : WIDGET_APPENDIX` vereenvoudigen - altijd DASHBOARD_APPENDIX gebruiken
+- Regel 800: het `else` blok (`mode !== authenticated`) vereenvoudigen
+- Optioneel: `mode` parameter in RequestBody kan weg, maar we houden het als vangnet
 
 ### Wat er NIET verandert
 
 | Onderdeel | Status |
 |-----------|--------|
+| homepage-coach edge function (functionaliteit) | Ongewijzigd (alleen naam) |
+| doorai-chat orchestratie (SSOT, actions, links, knowledge, tone, profile) | Ongewijzigd |
 | Phase detector (client-side) | Ongewijzigd |
-| SSOT-vragen selectie | Ongewijzigd |
-| Loop-preventie | Ongewijzigd |
-| homepage-coach edge function | Ongewijzigd |
-| PublicChatWidget | Ongewijzigd |
-| Backoffice AdvisorChatPanel | Ongewijzigd |
-| Stream filter (emdash) | Ongewijzigd |
 | SSOT-vraag server-side append | Ongewijzigd |
-| Actions server-side selectie | Ongewijzigd |
-| useChatConversation hook | Ongewijzigd |
-| ChatSuggestions component | Ongewijzigd |
-| Tone Selector | Behouden |
-| Profile Interpreter | Behouden |
+| PublicChatWidget funnel-logica | Ongewijzigd |
+| DashboardChat/Chat.tsx logica | Ongewijzigd (alleen welkomsttekst) |
 
-### Wat er WEL verandert
+### Technische details
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `supabase/functions/doorai-chat/index.ts` | 1. Twee mega-prompts worden 1 core + 2 appendices. 2. `injectLinks()` verwijderd uit assembleContext, vervangen door `computeLinks()` die links als UI-payload stuurt. 3. Drie SSOT-lookup functies toegevoegd die de JSON-bestanden lezen. 4. `resolveKnowledge()` gebruikt SSOT-lookups als primaire bron. 5. SSE stream stuurt `links` mee in het actions-event. 6. Ongebruikte `PHASE_RULES` constante verwijderd. |
-| `src/components/dashboard/DashboardChat.tsx` | `latestLinks` state. Parse `parsed.links` uit SSE. Render link-chips onder actions. |
-| `src/pages/Chat.tsx` | Zelfde links-verwerking als DashboardChat. |
+| `supabase/functions/homepage-coach/index.ts` | Regel 7: "Doortje" naar "DoorAI". Regels 72-82: "Doortje:" naar "DoorAI:" |
+| `supabase/functions/doorai-chat/index.ts` | Regels 663-666: toon warmer. Regels 700-706: WIDGET_APPENDIX verwijderen. Regel 794: vereenvoudigen. |
+| `src/components/chat/PublicChatWidget.tsx` | Regel 234: welkomstbericht zonder emoji |
+| `src/components/dashboard/DashboardChat.tsx` | Regels 72-75: welkomstbericht zonder emoji, zonder vraagteken |
+| `src/pages/Chat.tsx` | Reset-welkomstbericht aanpassen (zelfde als DashboardChat) |
 
-### Dataflow na refactor
-
-```text
-Edge function start
-  |
-  v
-JSON bestanden inlezen (eenmalig als const)
-  - route-questions.json -> functiebeschrijvingen index
-  - route-steps.json -> route-paragrafen index  
-  - regional-education-desks.json -> loket index per regio/stad
-  |
-  v
-Per chat-beurt:
-  |
-  +-- resolveKnowledge(slots, phase)
-  |     1. Zoek functiebeschrijving via findRoleDescription()
-  |     2. Zoek route-info via findRouteStep()
-  |     3. Zoek regionaal loket via findRegionalDesk()
-  |     4. Fallback naar KNOWLEDGE_BLOCKS als geen match
-  |     -> Max 3 fragmenten, max 80 woorden elk
-  |
-  +-- selectTone(phase, slotsCount) -> toonblok (ongewijzigd)
-  |
-  +-- interpretProfile(profileMeta) -> profielzin (ongewijzigd)
-  |
-  +-- computeLinks(mode, phase, slots)
-  |     -> Array { label, href } voor UI (niet in prompt)
-  |
-  +-- assembleContext() -> dynamisch contextblok (zonder links)
-  |
-  v
-DOORAI_CORE + APPENDIX + dynamicContext -> LLM call
-  |
-  v
-Stream -> emdash filter -> SSOT-vraag append -> { actions, links } event
-  |
-  v
-Frontend: chat tekst + action knoppen + link chips (gescheiden)
-```
-
-### Risico's en mitigatie
-
-| Risico | Mitigatie |
-|--------|----------|
-| JSON-bestanden zijn groot (21.000+ regels totaal) | Worden als const geladen, niet in prompt. Alleen relevante fragmenten (max 240 woorden per beurt). |
-| Edge function cold start iets trager | JSON parsing is eenmalig en snel (milliseconden). Geen merkbaar verschil. |
-| Functiebeschrijvingen uit route-questions kunnen lang zijn | Truncatie op 80 woorden per fragment. |
-| Niet elke regio heeft een loket | Fallback naar algemene tekst "Zoek een onderwijsloket in je regio via onderwijsloketten.nl". |
-
+Vijf bestanden, alleen tekst/string-wijzigingen plus verwijderen van ongebruikte constante. Geen logica-wijzigingen.
