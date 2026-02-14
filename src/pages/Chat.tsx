@@ -307,7 +307,7 @@ export default function Chat() {
     };
     setMessages([{
       role: "assistant",
-      content: `Welkom terug! Fijn dat je er bent 👋\n\nJe zit nu in de **${phase}**-fase. ${info[phase] || info.interesseren}\n\nWaar kan ik je vandaag mee helpen?`,
+      content: `Welkom terug, goed dat je er bent.\n\nJe zit in de **${phase}**-fase. ${info[phase] || info.interesseren}\n\nKies een suggestie hieronder of typ je vraag.`,
     }]);
   }, [profile, resetConversation, setMessages]);
 
