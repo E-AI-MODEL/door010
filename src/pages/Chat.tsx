@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, ArrowLeft, Trash2 } from "lucide-react";
+import { Send, ArrowLeft, Trash2, ArrowRight } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useChatConversation } from "@/hooks/useChatConversation";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
@@ -39,6 +39,7 @@ export default function Chat() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
+  const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -150,6 +151,7 @@ export default function Chat() {
     setInput("");
     setIsLoading(true);
     setLatestActions([]);
+    setLatestLinks([]);
 
     let assistantContent = "";
 
@@ -234,9 +236,17 @@ export default function Chat() {
           try {
             const parsed = JSON.parse(jsonStr);
 
-            // Server-side actions event
+            // Server-side actions + links event
             if (parsed.actions && Array.isArray(parsed.actions)) {
               setLatestActions(parsed.actions);
+              if (parsed.links && Array.isArray(parsed.links)) {
+                setLatestLinks(parsed.links);
+              }
+              continue;
+            }
+
+            if (parsed.links && Array.isArray(parsed.links)) {
+              setLatestLinks(parsed.links);
               continue;
             }
 
@@ -280,6 +290,7 @@ export default function Chat() {
 
   const handleActionClick = (value: string) => {
     setLatestActions([]);
+    setLatestLinks([]);
     sendMessage(value);
   };
 
@@ -392,6 +403,26 @@ export default function Chat() {
           {latestActions.length > 0 && (
             <div className="px-5 pb-2">
               <ChatSuggestions actions={latestActions} onActionClick={handleActionClick} disabled={isLoading} />
+            </div>
+          )}
+
+          {/* Link chips (server-side, not in LLM output) */}
+          {latestLinks.length > 0 && (
+            <div className="px-5 pb-2">
+              <div className="flex flex-wrap gap-2">
+                {latestLinks.map((link, i) => (
+                  <Link
+                    key={i}
+                    to={link.href.startsWith("http") ? link.href : link.href}
+                    target={link.href.startsWith("http") ? "_blank" : undefined}
+                    rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                    className="px-3 py-1.5 text-xs rounded-full border border-muted-foreground/30 text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors inline-flex items-center gap-1"
+                  >
+                    {link.label}
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
 

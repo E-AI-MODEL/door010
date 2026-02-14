@@ -37,6 +37,7 @@ interface DashboardChatProps {
 
 export function DashboardChat({ userId, currentPhase, preferredSector, profileMeta }: DashboardChatProps) {
   const [input, setInput] = useState("");
+  const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>(() => {
     const st = sectorToSchoolType(preferredSector);
     return st ? { school_type: st } : {};
@@ -132,6 +133,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
     setInput("");
     setIsLoading(true);
     setLatestActions([]);
+    setLatestLinks([]);
 
     let assistantContent = "";
 
@@ -213,6 +215,14 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
 
             if (parsed.actions && Array.isArray(parsed.actions)) {
               setLatestActions(parsed.actions);
+              if (parsed.links && Array.isArray(parsed.links)) {
+                setLatestLinks(parsed.links);
+              }
+              continue;
+            }
+
+            if (parsed.links && Array.isArray(parsed.links)) {
+              setLatestLinks(parsed.links);
               continue;
             }
 
@@ -328,6 +338,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
                 key={i}
                 onClick={() => {
                   setLatestActions([]);
+                  setLatestLinks([]);
                   sendMessage(action.value);
                 }}
                 disabled={isLoading}
@@ -335,6 +346,26 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
               >
                 {action.label}
               </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Link chips (server-side, not in LLM output) */}
+      {latestLinks.length > 0 && (
+        <div className="px-4 pb-2">
+          <div className="flex flex-wrap gap-1.5">
+            {latestLinks.map((link, i) => (
+              <Link
+                key={i}
+                to={link.href.startsWith("http") ? link.href : link.href}
+                target={link.href.startsWith("http") ? "_blank" : undefined}
+                rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                className="px-3 py-1.5 text-xs rounded-full border border-muted-foreground/30 text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors inline-flex items-center gap-1"
+              >
+                {link.label}
+                <ArrowRight className="h-3 w-3" />
+              </Link>
             ))}
           </div>
         </div>

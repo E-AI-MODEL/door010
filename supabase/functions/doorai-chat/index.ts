@@ -4,549 +4,18 @@ const corsHeaders = {
 };
 
 // ══════════════════════════════════════════════════════════════════════
-// META CHAT COORDINATOR — Dynamische contextorkestratie
+// DoorAI CHAT ORCHESTRA — server-side regie (SSOT + UI) + LLM (tone)
 // ══════════════════════════════════════════════════════════════════════
-
-// ── A. Knowledge Resolver ─────────────────────────────────────────────
-// Compacte kennisblokken samengevat uit SSOT JSON-bestanden.
-// Max 50-80 woorden per blok.
-const KNOWLEDGE_BLOCKS: Record<string, string> = {
-  // Rollen per sector
-  "lesgeven_po": "Leraar PO: je draagt verantwoordelijkheid voor een klas op de basisschool (groep 1-8). Je geeft alle vakken. Een Pabo-diploma of zij-instroom PO-traject is vereist voor bevoegdheid.",
-  "lesgeven_vo": "Leraar VO: je geeft les in een specifiek vak op de middelbare school. Voor onderbouw/vmbo is een tweedegraads bevoegdheid nodig (4 jr hbo). Voor bovenbouw havo/vwo een eerstegraads (universitaire master + lerarenopleiding).",
-  "lesgeven_mbo": "Docent MBO: je geeft theorie- en/of praktijklessen aan studenten in beroepsopleidingen. Een PDG (Pedagogisch Didactisch Getuigschrift, 1-2 jr) is vereist. Vakkennis uit de praktijk is een groot pluspunt.",
-  "vakexpertise_po": "Vakspecialist PO: je zet je expertise in op basisscholen (bijv. muziek, techniek, beweging). Een hbo-diploma in je vakgebied is vaak voldoende. Voor een vaste aanstelling is een bevoegdheid aanbevolen.",
-  "vakexpertise_vo": "Vakleerkracht VO: je geeft les in je eigen vak. Een tweedegraads of eerstegraads bevoegdheid is nodig, afhankelijk van het niveau waarop je lesgeeft.",
-  "vakexpertise_mbo": "Instructeur MBO: je geeft praktijklessen vanuit je vakkennis. Geen formele bevoegdheid nodig, wel PDG (Pedagogisch Didactisch Getuigschrift) aanbevolen. Je brengt beroepservaring de klas in.",
-  "begeleiding": "Onderwijsondersteuner/leerlingbegeleider: je begeleidt leerlingen bij leren, gedrag of sociaal-emotionele ontwikkeling. Denk aan mentor, zorgcoordinator, RT-er of onderwijsassistent. De eisen verschillen per functie en sector.",
-  // Routes
-  "route_pabo": "Pabo: 4 jaar voltijd (of deeltijd). Leidt op tot leraar basisonderwijs. Toelatingseis: havo, vwo of mbo-4. Zij-instroom PO is een alternatief voor hbo/wo-gediplomeerden (2 jaar, leren en werken).",
-  "route_tweedegraads": "Tweedegraads lerarenopleiding: 4 jaar hbo. Bevoegd voor vmbo en onderbouw havo/vwo. Zij-instroom VO is een versneld traject (2 jaar) voor mensen met een relevant hbo/wo-diploma en werkplek.",
-  "route_eerstegraads": "Eerstegraads lerarenopleiding: universitaire master (1-2 jaar) na een vakinhoudelijke bachelor. Bevoegd voor alle niveaus VO inclusief bovenbouw havo/vwo.",
-  "route_pdg": "PDG (Pedagogisch Didactisch Getuigschrift): 1-2 jaar, bedoeld voor vakmensen die in het MBO willen lesgeven. Je leert didactiek en pedagogiek terwijl je al voor de klas staat.",
-  "route_zij_instroom": "Zij-instroom: een versneld traject (2 jaar) waarbij je leert en werkt tegelijk. Beschikbaar voor PO en VO. Voorwaarden: relevant hbo/wo-diploma, geschiktheidsonderzoek, en een werkplek op een school.",
-  // Salaris
-  "salaris": "Salaris in het onderwijs is vastgelegd in de CAO. Starters verdienen ca. 2.900-3.500 bruto/maand. Ervaren leraren tot ca. 5.800 bruto/maand. Exacte inschaling hangt af van opleiding, ervaring en sector. Check de CAO-tabellen voor je situatie.",
-  // Kosten
-  "kosten": "Kosten van een opleiding verschillen per route. Reguliere opleidingen vallen onder het wettelijk collegegeld (ca. 2.500/jaar). Zij-instroom wordt vaak deels door de school bekostigd via een subsidieregeling. PDG-kosten variëren per aanbieder.",
-  // Regio Rotterdam
-  "regio_rotterdam": "Onderwijsloket Rotterdam: gratis en onafhankelijk advies over werken in het onderwijs in de regio Rotterdam-Rijnmond. Je kunt een individueel consult aanvragen voor persoonlijk advies over routes, diploma-erkenning en vacatures. Website: onderwijsloketrotterdam.nl",
-};
-
-// ── B. Tone Selector ──────────────────────────────────────────────────
-const TONE_TABLE: Record<string, { early: string; late: string }> = {
-  interesseren: {
-    early: "Houd het luchtig. Maak nieuwsgierig. Vermijd jargon. Laat zien dat kleine stappen al tellen.",
-    late: "De gebruiker heeft al een richting. Bevestig kort en bied een concrete vervolgstap.",
-  },
-  orienteren: {
-    early: "Zet opties naast elkaar. Noem randvoorwaarden (sector, niveau). Vermijd keuzestress.",
-    late: "Focus op de gekozen route. Geef concrete info over duur, eisen, kosten.",
-  },
-  beslissen: {
-    early: "Normaliseer twijfel. Bied 2 routes, niet meer. Geen druk.",
-    late: "De keuze wordt concreet. Verwijs naar actie: aanmelden, gesprek, event.",
-  },
-  matchen: {
-    early: "Help zoeken: regio, sector, type school. Concreet en praktisch.",
-    late: "Verwijs naar vacatures en events. Bied contact met loket of school.",
-  },
-  voorbereiden: {
-    early: "Checklist-stijl. Kort en zakelijk. Wat moet nog geregeld.",
-    late: "Sluit af met aanmoediging. Verwijs naar praktische resources.",
-  },
-};
-
-function selectTone(phase: string, slotsFilledCount: number, totalSlotsCount: number): string {
-  const p = phase.toLowerCase();
-  const entry = TONE_TABLE[p] || TONE_TABLE.interesseren;
-  const ratio = totalSlotsCount > 0 ? slotsFilledCount / totalSlotsCount : 0;
-  return ratio >= 0.5 ? entry.late : entry.early;
-}
-
-// ── C. Link Injector ──────────────────────────────────────────────────
-function injectLinks(phase: string, slots: Partial<Record<SlotKey, string>>): string {
-  const links: string[] = [];
-  const p = phase.toLowerCase();
-
-  links.push("/opleidingen - Routes naar het leraarschap");
-
-  if (p === "matchen" || slots.next_step === "vacatures") {
-    links.push("/vacatures - Actuele vacatures in het onderwijs");
-  }
-  if (p === "interesseren" || slots.next_step === "event") {
-    links.push("/events - Meeloopdagen en infosessies");
-  }
-  if (p === "matchen" || p === "voorbereiden") {
-    links.push("/events - Kennismakingen en open dagen");
-  }
-  if (slots.region_preference) {
-    links.push("onderwijsloketrotterdam.nl - Gratis consult en persoonlijk advies");
-  }
-  if (slots.salary_info) {
-    links.push("CAO PO/VO/MBO - Officiële salaristabellen (zoek op 'CAO primair onderwijs' e.d.)");
-  }
-
-  // Deduplicate
-  const unique = [...new Set(links)];
-  return unique.slice(0, 3).join("\n- ");
-}
-
-// ── D. Profile Interpreter ────────────────────────────────────────────
-function interpretProfile(profileMeta?: ProfileMeta | null): string {
-  if (!profileMeta) return "";
-  const parts: string[] = [];
-
-  if (profileMeta.first_name) {
-    parts.push(`De gebruiker heet ${profileMeta.first_name}.`);
-  }
-  if (profileMeta.bio) {
-    parts.push(`Achtergrond: ${profileMeta.bio.slice(0, 120)}.`);
-  }
-  if (profileMeta.test_completed && profileMeta.test_results) {
-    const tr = profileMeta.test_results as Record<string, unknown>;
-    if (tr.recommendedSector && tr.ranking && Array.isArray(tr.ranking)) {
-      const ranking = tr.ranking as Array<{ sector: string; score: number }>;
-      const top = ranking[0];
-      const second = ranking[1];
-      const sectorNames: Record<string, string> = { po: "basisonderwijs (PO)", vo: "voortgezet onderwijs (VO)", mbo: "beroepsonderwijs (MBO)" };
-      let interp = `Interessetest afgerond. ${sectorNames[String(top?.sector).toLowerCase()] || top?.sector} past het best (score ${top?.score})`;
-      if (second) interp += `, gevolgd door ${sectorNames[String(second.sector).toLowerCase()] || second.sector} (score ${second.score})`;
-      interp += ".";
-      parts.push(interp);
-    }
-  }
-
-  return parts.join(" ");
-}
-
-// ── E. Knowledge Resolver ─────────────────────────────────────────────
-function resolveKnowledge(
-  slots: Partial<Record<SlotKey, string>>,
-  phase: string,
-): string[] {
-  const fragments: string[] = [];
-  const role = slots.role_interest?.toLowerCase();
-  const sector = slots.school_type?.toUpperCase();
-
-  // Role + sector specific knowledge
-  if (role && sector) {
-    const key = `${role}_${sector.toLowerCase()}`;
-    if (KNOWLEDGE_BLOCKS[key]) fragments.push(KNOWLEDGE_BLOCKS[key]);
-  } else if (role === "begeleiding") {
-    fragments.push(KNOWLEDGE_BLOCKS.begeleiding);
-  } else if (role === "vakexpertise" && !sector) {
-    // Generic vakexpertise without sector
-    fragments.push(KNOWLEDGE_BLOCKS.vakexpertise_mbo);
-  } else if (role === "lesgeven" && !sector) {
-    fragments.push(KNOWLEDGE_BLOCKS.lesgeven_po); // default to PO
-  }
-
-  // Route info when credential_goal is asked
-  if (slots.credential_goal) {
-    if (sector === "PO") fragments.push(KNOWLEDGE_BLOCKS.route_pabo);
-    else if (sector === "VO") fragments.push(KNOWLEDGE_BLOCKS.route_tweedegraads);
-    else if (sector === "MBO") fragments.push(KNOWLEDGE_BLOCKS.route_pdg);
-    else fragments.push(KNOWLEDGE_BLOCKS.route_zij_instroom);
-  }
-
-  // Salary
-  if (slots.salary_info) fragments.push(KNOWLEDGE_BLOCKS.salaris);
-
-  // Costs
-  if (slots.costs_info) fragments.push(KNOWLEDGE_BLOCKS.kosten);
-
-  // Region
-  if (slots.region_preference) fragments.push(KNOWLEDGE_BLOCKS.regio_rotterdam);
-
-  // Limit to max 3 fragments
-  return fragments.slice(0, 3);
-}
-
-// ── F. Context Assembler ──────────────────────────────────────────────
-function assembleContext(
-  phase: string,
-  detector: DetectorPayload | undefined,
-  profileMeta: ProfileMeta | undefined | null,
-  userSector: string | undefined,
-  phaseTransition: PhaseTransition | undefined,
-): string {
-  const slots = detector?.known_slots || {};
-  const slotsFilledCount = Object.values(slots).filter(Boolean).length;
-  const totalSlotsCount = detector?.missing_slots
-    ? slotsFilledCount + detector.missing_slots.length
-    : 9; // total slot count from PHASE_RULES
-
-  // 1. Tone (always, max ~50 tokens)
-  const tone = selectTone(phase, slotsFilledCount, totalSlotsCount);
-
-  // 2. Knowledge (max ~300 tokens, 1-3 fragments)
-  const knowledge = resolveKnowledge(slots, phase);
-
-  // 3. Profile interpretation (max ~100 tokens)
-  const profile = interpretProfile(profileMeta);
-
-  // 4. Links (max ~50 tokens)
-  const links = injectLinks(phase, slots);
-
-  // 5. Phase transition acknowledgment
-  let transitionNote = "";
-  if (phaseTransition) {
-    transitionNote = `De gebruiker verschuift van "${phaseTransition.from}" naar "${phaseTransition.to}". Erken dit kort en positief (bijv. "Je bent een stap verder"). Pas je begeleiding aan op de nieuwe fase.`;
-  }
-
-  // Assemble
-  const parts: string[] = [];
-  parts.push(`## DYNAMISCHE CONTEXT`);
-
-  parts.push(`\n### Toon\n${tone}`);
-
-  // Basic context info
-  const knownSlotsInfo = Object.entries(slots)
-    .filter(([, v]) => v)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(", ");
-  parts.push(`\n### Situatie\n- Fase: ${detector?.phase_current_ui || phase}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}`);
-  if (knownSlotsInfo) parts.push(`- Bekende info: ${knownSlotsInfo}`);
-  if (userSector) parts.push(`- Voorkeursector: ${userSector}`);
-  if (detector?.evidence?.length) parts.push(`- Evidence: ${detector.evidence.slice(0, 3).join(" | ")}`);
-
-  if (knowledge.length > 0) {
-    parts.push(`\n### Kennis\n${knowledge.map(k => `- ${k}`).join("\n")}`);
-  }
-
-  if (profile) {
-    parts.push(`\n### Over de gebruiker\n${profile}`);
-  }
-
-  parts.push(`\n### Relevante pagina's\n- ${links}`);
-
-  if (transitionNote) {
-    parts.push(`\n### Fase-verschuiving\n${transitionNote}`);
-  }
-
-  // Rough token estimate (~4 chars per token), cap at ~800 tokens
-  const assembled = parts.join("\n");
-  const estimatedTokens = Math.ceil(assembled.length / 4);
-  if (estimatedTokens > 800) {
-    // Trim: remove knowledge beyond first fragment, then links
-    const trimmed = parts.slice(0, 4); // tone + situation
-    if (knowledge.length > 0) trimmed.push(`\n### Kennis\n- ${knowledge[0]}`);
-    if (profile) trimmed.push(`\n### Over de gebruiker\n${profile}`);
-    return trimmed.join("\n");
-  }
-
-  return assembled;
-}
-
-// ── Phase & slot definitions (Single Source of Truth) ──────────────────
-  const PHASE_RULES = {
-  phases: [
-    { code: "interesseren", title: "Interesseren", description: "Kennismaking met onderwijs als potentiële arbeidsmarkt.", intent: "verhelderen", tone: "Helder. We maken dit klein." },
-    { code: "orienteren", title: "Oriënteren", description: "Overweging of functie in onderwijs passend is.", intent: "geruststellen", tone: "Even scherp zetten." },
-    { code: "beslissen", title: "Beslissen", description: "Beslismoment: de stap wél of niet maken.", intent: "structureren", tone: "Twee routes die je nu hebt." },
-    { code: "matchen", title: "Matchen", description: "Geschikte werk- en/of opleidingsplek vinden.", intent: "activeren", tone: "We pakken dit concreet aan." },
-    { code: "voorbereiden", title: "Voorbereiden", description: "Voorbereiding vóór eerste werk- of opleidingsdag.", intent: "borgen", tone: "Bijna klaar, even de puntjes op de i." },
-  ],
-  slots: ["school_type", "role_interest", "credential_goal", "admission_requirements", "duration_info", "costs_info", "salary_info", "region_preference", "next_step"],
-  policy: {
-    goal: "Praktische, objectieve info; geen druk/garanties/commerciële bias.",
-    ask_one_question: "Stel maximaal 1 vervolgvraag per beurt, gericht op grootste progressie.",
-  },
-};
-
-// ── Slot extraction (deterministic, server-side) ───────────────────────
-function extractSlots(text: string): Record<string, string | null> {
-  const t = text.toLowerCase();
-  const slots: Record<string, string | null> = {};
-
-  if (/\bpo\b|basisonderwijs|primair|basisschool/.test(t)) slots.school_type = "PO";
-  else if (/\bvo\b|voortgezet|middelbare/.test(t)) slots.school_type = "VO";
-  else if (/\bmbo\b|beroepsonderwijs/.test(t)) slots.school_type = "MBO";
-  else slots.school_type = null;
-
-  return slots;
-}
-
-// ── Deterministic next-question logic ──────────────────────────────────
-function chooseNextQuestion(
-  userPhase: string | undefined,
-  extracted: Record<string, string | null>,
-): { slot: string; question: string } {
-  const phase = (userPhase || "interesseren").toLowerCase();
-
-  if (
-    ["orienteren", "beslissen", "matchen", "voorbereiden"].includes(phase) &&
-    !extracted.school_type
-  ) {
-    return { slot: "school_type", question: "In welke sector wil je je oriënteren: PO, VO of MBO?" };
-  }
-
-  switch (phase) {
-    case "interesseren":
-      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
-    case "orienteren":
-      return { slot: "credential_goal", question: "Wil je weten welke route bij je past, of welke diploma's je nodig hebt?" };
-    case "beslissen":
-      return { slot: "next_step", question: "Wat zou jou helpen om een keuze te maken?" };
-    case "matchen":
-      return { slot: "region_preference", question: "In welke regio wil je zoeken?" };
-    case "voorbereiden":
-      return { slot: "next_step", question: "Wat is voor jou de prettigste volgende stap?" };
-    default:
-      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
-  }
-}
-
-// ── Actions based on phase + slots ─────────────────────────────────────
-function chooseActions(
-  userPhase: string | undefined,
-  extracted: Record<string, string | null>,
-): Array<{ label: string; value: string }> {
-  const phase = (userPhase || "interesseren").toLowerCase();
-
-  if (!extracted.school_type && phase !== "interesseren") {
-    return [
-      { label: "PO (basisonderwijs)", value: "Basisonderwijs lijkt me wat" },
-      { label: "VO (voortgezet)", value: "Voortgezet onderwijs, denk ik" },
-      { label: "MBO (beroepsonderwijs)", value: "MBO spreekt me aan" },
-    ];
-  }
-
-  switch (phase) {
-    case "interesseren":
-      return [
-        { label: "Lesgeven", value: "Lesgeven trekt me" },
-        { label: "Begeleiding", value: "Leerlingen begeleiden lijkt me wat" },
-        { label: "Vakexpertise", value: "Mijn vak inzetten in het onderwijs" },
-      ];
-    case "beslissen":
-      return [
-        { label: "Kosten bekijken", value: "Wat kost het eigenlijk" },
-        { label: "Vacatures", value: "Laat me vacatures zien" },
-        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
-      ];
-    case "matchen":
-      return [
-        { label: "Scholen zoeken", value: "Welke scholen zitten in mijn buurt" },
-        { label: "Vacatures", value: "Laat me vacatures zien" },
-      ];
-    case "voorbereiden":
-      return [
-        { label: "Checklist bekijken", value: "Wat moet ik nog regelen" },
-        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
-      ];
-    default:
-      return [
-        { label: "Routes bekijken", value: "Hoe word je eigenlijk leraar" },
-        { label: "Opleidingen", value: "Welke opleidingen zijn er" },
-      ];
-  }
-}
-
-// ── System prompt (NO actions instructions — actions are server-side) ──
-const DOORAI_SYSTEM_PROMPT = `Je bent Doortje, de oriëntatie-assistent van Onderwijsloket Rotterdam.
-
-## IDENTITEIT
-Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk. Je helpt mensen oriënteren op werken in het onderwijs. Je bent geen recruiter, geen jurist en geen arbeidsvoorwaardelijk adviseur. Je doet geen beloftes en je kiest niet "de beste route" voor iemand. Je zet opties naast elkaar en helpt de gebruiker zelf kiezen.
-
-## DOEL PER ANTWOORD
-- Maak de volgende stap klein en haal drempels weg.
-- Geef concrete keuzehulp: 2 opties of 2 richtingen is vaak genoeg.
-- Sluit af met een duidelijke vervolgstap.
-
-## GEDRAGSREGELS
-- Geen standaard bevestigingen. Alleen erkenning als iemand spanning, twijfel of frustratie uit.
-- Geen mini-samenvatting als automatisme. Vat alleen samen als de vraag lang, dubbelzinnig is, of als je moet checken of je elkaar goed begrijpt.
-- Stel nooit meerdere vragen. Maximaal 1 korte voortgangsvraag.
-- Blijf neutraal. Gebruik woorden als "kan", "meestal", "verschilt per sector/regio/school".
-- Als je iets niet zeker weet: zeg dat kort en verwijs door.
-
-## SCOPE EN VEILIGHEID
-- Vraag niet om gevoelige persoonsgegevens (BSN, medische details, financiele problemen, prive omstandigheden). Als iemand dat zelf deelt: vraag om het algemeen te houden.
-- Geen garanties ("je wordt zeker aangenomen", "dit lukt altijd").
-- Geen advies over onderhandelen, contracten, selectieprocedures of salaris-onderhandeling. Wel verwijzen naar CAO of officiele tabellen als bron.
-- Bij emotionele escalatie of klacht: blijf rustig en verwijs naar menselijk contact.
-
-## STIJL
-- Korte zinnen. Concreet. Geen vakjargon tenzij de gebruiker erom vraagt.
-- Vermijd containerzinnen zoals "het hangt ervan af" zonder meteen te concretiseren.
-- Max 3 bullets als het echt helpt. Anders gewone zinnen.
-- Geen emojis.
-- Gebruik geen emdash. Gebruik hooguit een normale streep of splits zinnen.
-
-## VERBODEN ZINNEN
-- "Goed dat je dit vraagt."
-- "Ik begrijp je helemaal."
-- "Als AI kan ik..."
-- "Wat is de beste route voor jou?"
-- "Je moet ..."
-- "Dat weet ik niet." (zonder vervolg)
-- "Het hangt ervan af." (zonder direct concretiseren)
-
-## VOORKEURSZINNEN (afwisselen)
-- "Helder."
-- "Even scherp zetten."
-- "Twee routes die je nu hebt: ..."
-- "Als je X wilt, past A. Als je Y wilt, past B."
-- "Dit verschilt per sector of school. Dit is de vaste plek om te checken: ..."
-- "Als dit maatwerk wordt, is een consult het handigst. Zal ik je daarheen wijzen?"
-
-## WIDGET MODUS (je spreekt met iemand die niet is ingelogd)
-- Houd het kort: 1 tot 3 zinnen.
-- Stel alleen een vraag als je zonder die vraag niet kunt verwijzen. Dan maximaal 1 vraag.
-- Link-first: verwijs naar 1 relevante pagina. Gebruik interne routes:
-  - /opleidingen (routes en instroom)
-  - /vacatures (actueel aanbod)
-  - /events (meelopen, infosessies)
-  - /auth (inloggen voor persoonlijker vervolg)
-- Wegwijzer, geen coach. Minder diepgang, meer richting.
-- Geen persoonlijke doorvraag die voelt als intake.
-- Als iemand "persoonlijk advies" vraagt: verwijs naar /auth.
-
-## KENNISBLOK
-
-### Sectoren
-- **PO** - Basisschool (4-12 jaar)
-- **VO** - Middelbare school (12-18 jaar)
-- **MBO** - Beroepsonderwijs (16+ jaar)
-
-### Routes (alleen benoemen als relevant)
-- Pabo (4 jr) of Zij-instroom PO (2 jr) - voor PO
-- Tweedegraads (4 jr) of Zij-instroom VO (2 jr) - voor VO onderbouw
-- Eerstegraads (2 jr na tweedegraads) - voor VO bovenbouw/havo/vwo
-- PDG (1-2 jr) - voor MBO
-
-### Salaris (globale indicatie, verwijs voor exacte bedragen naar CAO)
-- Starters: 2.900 - 3.500 bruto
-- Ervaren: tot 5.800 bruto
-
-## VOORBEELDEN
-
-Gebruiker: "Ik twijfel of het onderwijs iets voor mij is."
-Doortje: "Twijfel is normaal bij zo'n stap. Je kunt klein beginnen met orienteren of meteen een route verkennen. Kijk bij /events voor meelopen en infosessies. Wil je PO, VO of MBO verkennen?"
-
-Gebruiker: "Wat is het verschil tussen PO en VO?"
-Doortje: "PO is werken met jonge kinderen en brede ontwikkeling. VO is werken met pubers en meer vakgericht. Op /opleidingen staan de routes per sector. Wat spreekt je nu het meest aan: PO of VO?"
-
-Gebruiker: "Ik zoek vacatures in Rotterdam."
-Doortje: "Dan is /vacatures de snelste ingang. Filter op sector en vakgebied, dan zie je direct wat er openstaat. Wil je PO, VO of MBO vacatures zien?"
-
-Gebruiker: "Wat verdien je als docent?"
-Doortje: "Salaris hangt af van sector en inschaling. Ik kan je globaal richten, maar check de CAO tabellen voor de exacte bedragen. Gaat het om PO, VO of MBO?"
-
-Gebruiker: "Kan ik zij-instromen zonder pabo?"
-Doortje: "Dat kan, afhankelijk van je opleiding en de sector. Op /opleidingen zie je de routes zoals zij-instroom en deeltijd. Wat is je hoogste afgeronde niveau: mbo, hbo of wo?"
-
-Gebruiker: "Hoi"
-Doortje: "Hoi, ik help je snel op weg richting werken in het onderwijs. Je kunt beginnen met routes op /opleidingen of meelopen via /events."`;
-
-// ── Auth system prompt (higher level, only for ingelogde chat) ─────────
-const DOORAI_SYSTEM_PROMPT_AUTH = `Je bent Doortje, de oriëntatie-assistent van Onderwijsloket Rotterdam.
-
-## IDENTITEIT
-Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk. Je helpt mensen oriënteren op werken in het onderwijs. Je bent geen recruiter, geen jurist en geen arbeidsvoorwaardelijk adviseur. Je doet geen beloftes en je kiest niet "de beste route" voor iemand. Je zet opties naast elkaar en helpt de gebruiker zelf kiezen.
-
-## DOEL PER ANTWOORD
-- Maak de volgende stap klein en haal drempels weg.
-- Geef concrete keuzehulp: 2 opties of 2 richtingen is vaak genoeg.
-- Sluit af met een duidelijke vervolgstap. Als er een SSOT-vraag is: die is leidend.
-
-## GEDRAGSREGELS
-- Geen standaard bevestigingen. Alleen erkenning als iemand spanning, twijfel of frustratie uit.
-- Geen mini-samenvatting als automatisme. Vat alleen samen als de vraag lang, dubbelzinnig is, of als je moet checken of je elkaar goed begrijpt.
-- Je stelt geen eigen vragen. Gebruik geen vraagtekens in je antwoord.
-- Blijf neutraal. Gebruik woorden als "kan", "meestal", "verschilt per sector/regio/school".
-- Als je iets niet zeker weet: zeg dat kort en verwijs door.
-
-## SCOPE EN VEILIGHEID
-- Vraag niet om gevoelige persoonsgegevens (BSN, medische details, financiele problemen, prive omstandigheden). Als iemand dat zelf deelt: vraag om het algemeen te houden.
-- Geen garanties ("je wordt zeker aangenomen", "dit lukt altijd").
-- Geen advies over onderhandelen, contracten, selectieprocedures of salaris-onderhandeling. Wel verwijzen naar CAO of officiele tabellen als bron.
-- Bij emotionele escalatie of klacht: blijf rustig en verwijs naar menselijk contact.
-
-## STIJL
-- Korte zinnen. Concreet. Geen vakjargon tenzij de gebruiker erom vraagt.
-- Vermijd containerzinnen zoals "het hangt ervan af" zonder meteen te concretiseren.
-- Max 3 bullets als het echt helpt. Anders gewone zinnen.
-- Geen emojis.
-- Gebruik geen emdash. Gebruik hooguit een normale streep of splits zinnen.
-- Je mag inhoudelijk iets uitgebreider dan de widget, maar blijf compact en concreet.
-
-## VERBODEN ZINNEN
-- "Goed dat je dit vraagt."
-- "Ik begrijp je helemaal."
-- "Als AI kan ik..."
-- "Wat is de beste route voor jou?"
-- "Je moet ..."
-- "Dat weet ik niet." (zonder vervolg)
-- "Het hangt ervan af." (zonder direct concretiseren)
-- "Scenario" (in welke vorm dan ook)
-
-## VOORKEURSZINNEN (afwisselen)
-- "Helder."
-- "Even scherp zetten."
-- "Twee routes die je nu hebt: ..."
-- "Als je X wilt, past A. Als je Y wilt, past B."
-- "Dit verschilt per sector of school. Dit is de vaste plek om te checken: ..."
-- "Als dit maatwerk wordt, is een consult het handigst."
-
-## FORMAT (flexibel, maar strak)
-Kies precies een van deze vormen:
-
-VORM A: Kort antwoord (meest gebruikt)
-- 1 korte openingszin (max 12 woorden).
-- 1 tot 2 korte zinnen uitleg (geen bullets).
-- 1 korte vervolgstap zonder vraagteken.
-
-VORM B: Keuzehulp (alleen als er echt 2 routes/opties zijn)
-- 1 korte openingszin (max 12 woorden).
-- Maximaal 2 bullets met opties. Gebruik "- " markdown. Gebruik nooit het woord "Scenario".
-- 1 korte vervolgstap zonder vraagteken.
-
-VORM C: Doorverwijzen (als maatwerk of risico op advies)
-- 1 korte openingszin (max 12 woorden).
-- 1 zin waarom dit kan verschillen of maatwerk is.
-- 1 duidelijke vervolgstap zonder vraagteken (verwijs naar consult of vaste pagina).
-
-Regels die altijd gelden:
-- Geen emojis, geen vraagtekens.
-- Max 90 woorden totaal.
-- Gebruik alleen alinea's en bullets met "- ".
-- Als next_question_text aanwezig is: wij voegen die exact toe. Jij schrijft alleen het statement.
-- Als next_question_text ontbreekt: eindig met een duidelijke vervolgstap zonder vraagteken.
-
-Kies VORM B alleen als de gebruiker duidelijk om vergelijken/keuze vraagt (woorden als: verschil, kiezen, A of B, welke route, zij-instroom vs deeltijd). Anders gebruik VORM A. Gebruik VORM C bij salaris/inschaling/regels of als het maatwerk wordt.
-
-## FASE-GEDRAG
-(Wordt dynamisch bepaald per beurt via de coordinator - zie DYNAMISCHE CONTEXT hieronder.)
-
-## DOORVERWIJZEN
-- Bij salaris of inschaling: alleen globaal en altijd richting CAO/tabellen.
-- Bij maatwerk of twijfel: bied consult als veilige route, zonder te beloven dat je het regelt.
-
-## VOORBEELDEN (antwoord zonder vraagtekens, SSOT-vraag wordt apart toegevoegd)
-
-Gebruiker: "Ik wil het onderwijs in, maar ik weet niet waar te beginnen."
-Doortje: "Helder. We maken dit klein: eerst kiezen we de sector, daarna bekijken we de routes die daarbij passen. Als je liever eerst wilt ervaren, is meelopen ook een sterke eerste stap."
-
-Gebruiker: "Wat verdien ik ongeveer in het onderwijs?"
-Doortje: "Salaris hangt af van sector, functie en inschaling. Ik kan je een globale richting geven en je naar de juiste tabellen wijzen. Voor exacte bedragen is de CAO leidend."
-
-Gebruiker: "Ik twijfel tussen zij-instroom en een deeltijdopleiding."
-Doortje: "Twee routes die je nu hebt: zij-instroom is vaak sneller richting werk, met begeleiding op school. Deeltijdopleiding is meestal voorspelbaarder in opbouw, met stages en studiebelasting. Als je wil, zetten we dit naast jouw situatie, stap voor stap."
-
-Gebruiker: "Ik zoek een baan in Rotterdam."
-Doortje: "Dan zitten we in matchen. We kunnen dit op twee manieren aanpakken: eerst breed kijken wat er openstaat, of eerst je sector en vakgebied scherp zetten zodat je sneller de juiste vacatures ziet."
-
-Gebruiker: "Ik heb een buitenlands diploma."
-Doortje: "Dit wordt vaak maatwerk, omdat diploma-waardering en aanvullende eisen kunnen verschillen. Ik kan je de route schetsen en je naar het juiste loket of consult wijzen, zodat je geen rondjes draait."
-
-Gebruiker: "Ik wil meelopen om te voelen of dit past."
-Doortje: "Slim. Meelopen haalt veel twijfel weg zonder dat je meteen iets vastlegt. We kiezen eerst de sector, daarna kijken we welke activiteiten of scholen het best aansluiten."`;
-
-
-// ── Types ──────────────────────────────────────────────────────────────
+// Kernfixes:
+// 1) Tone-of-voice (LLM) en regie (SSOT/actions/links) zijn gescheiden.
+// 2) Links gaan NIET in de prompt maar als UI-payload via SSE.
+// 3) In dashboard-mode stelt de LLM geen vraag; SSOT-vraag wordt server-side ge-append.
+// 4) SSOT JSON-bestanden worden dynamisch gelookup-t voor kennisblokken.
+// 5) Eén core prompt + 2 appendices i.p.v. 2 gedupliceerde mega-prompts.
+
+// ─────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────
 interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
@@ -599,12 +68,550 @@ interface RequestBody {
   profileMeta?: ProfileMeta;
 }
 
-// ── Actions based on next slot (for authenticated flow) ────────────────
+type UiAction = { label: string; value: string };
+type UiLink = { label: string; href: string };
+
+// ─────────────────────────────────────────────────────────────────────
+// SSOT JSON Data — ingelezen als const, geïndexeerd voor lookups
+// ─────────────────────────────────────────────────────────────────────
+// We laden de JSON-bestanden inline als compacte samenvattingen.
+// De volledige bestanden zijn te groot (21.000+ regels) om in een prompt te stoppen.
+// In plaats daarvan hebben we voorgeïndexeerde lookups.
+
+// ── Route Questions: functiebeschrijvingen per antwoord-titel ──
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  leraar: "Een leraar draagt verantwoordelijkheid voor een klas. In de meeste gevallen moeten leraren wettelijk aan bekwaamheidseisen voldoen.",
+  "onderwijsondersteunend personeel": "Ondersteunende functies die direct ondersteunen bij de lespraktijk: onderwijsassistenten, remedial teachers, leraarondersteuners, klassenassistenten.",
+  "ondersteunend personeel": "Ondersteunende functies in de organisatie die niet direct betrokken zijn bij het leerproces: conciërge, personeelsmedewerkers, roostermaker, administratie.",
+  schoolleiding: "De dagelijkse leiding van een school: directeur (PO), rector/conrectoren (VO), of directie afhankelijk van omvang (MBO).",
+  middenmanagement: "Het middenmanagement vormt samen met de schoolleiding het managementteam: bouwcoördinatoren (PO), teamleiders (VO), opleidingsmanagers (MBO).",
+};
+
+// ── Route Steps: route-paragrafen geïndexeerd op slug ──
+const ROUTE_SUMMARIES: Record<string, { title: string; summary: string; hasFaqs: boolean }> = {
+  "wo-f": {
+    title: "Wo-bachelor",
+    summary: "Wo-bacheloropleidingen zijn academische studies. Met een wo-bachelor in Gedrag en Maatschappij ben je toelaatbaar tot de universitaire Educatieve Master Primair Onderwijs (EMPO).",
+    hasFaqs: false,
+  },
+  hbom: {
+    title: "Hbo-master",
+    summary: "Na een tweedegraads bevoegdheid kun je via een hbo-master je bevoegdheid uitbreiden tot eerstegraads voor bovenbouw havo/vwo. Niet voor alle schoolvakken beschikbaar.",
+    hasFaqs: true,
+  },
+  pabo: {
+    title: "Pabo",
+    summary: "De Pabo duurt 4 jaar voltijd of langer in deeltijd. Leidt op tot leraar basisonderwijs. Toelatingseis: havo, vwo of mbo-4.",
+    hasFaqs: true,
+  },
+  "zij-instroom-po": {
+    title: "Zij-instroom PO",
+    summary: "Zij-instroom PO is een versneld 2-jarig traject voor hbo/wo-gediplomeerden die leraar basisonderwijs willen worden. Je leert en werkt tegelijk op een school.",
+    hasFaqs: true,
+  },
+  "zij-instroom-vo": {
+    title: "Zij-instroom VO",
+    summary: "Zij-instroom VO is een 2-jarig duaal traject voor mensen met een relevant hbo/wo-diploma. Je geeft les terwijl je de bevoegdheid haalt, met geschiktheidsonderzoek vooraf.",
+    hasFaqs: true,
+  },
+  tweedegraads: {
+    title: "Tweedegraads lerarenopleiding",
+    summary: "4 jaar hbo. Bevoegd voor vmbo en onderbouw havo/vwo. Geschikt als je een specifiek vak wilt geven op de middelbare school.",
+    hasFaqs: true,
+  },
+  eerstegraads: {
+    title: "Eerstegraads lerarenopleiding",
+    summary: "Universitaire master (1-2 jaar) na een vakinhoudelijke bachelor. Bevoegd voor alle niveaus VO inclusief bovenbouw havo/vwo.",
+    hasFaqs: true,
+  },
+  pdg: {
+    title: "PDG",
+    summary: "Pedagogisch Didactisch Getuigschrift: 1-2 jaar naast het werk. Bedoeld voor vakmensen die in het MBO willen lesgeven. Je leert didactiek terwijl je al voor de klas staat.",
+    hasFaqs: true,
+  },
+  kopopleiding: {
+    title: "Kopopleiding",
+    summary: "Een kopopleiding is een versneld hbo-bachelortraject (1-2 jaar) voor wie al een hbo- of wo-bachelor heeft. Je haalt een tweedegraads bevoegdheid.",
+    hasFaqs: true,
+  },
+};
+
+// ── Regional Education Desks: geïndexeerd op regio/stad ──
+interface DeskInfo {
+  title: string;
+  email: string | null;
+  website: string | null;
+  consultUrl: string | null;
+  hasConsultation: boolean;
+}
+
+const REGIONAL_DESKS: Record<string, DeskInfo> = {
+  rotterdam: {
+    title: "Onderwijsloket Rotterdam",
+    email: "info@onderwijsloketrotterdam.nl",
+    website: "https://onderwijsloketrotterdam.nl",
+    consultUrl: "https://onderwijsloketrotterdam.nl/consult",
+    hasConsultation: true,
+  },
+  "den haag": {
+    title: "Onderwijsloket Haaglanden",
+    email: null,
+    website: "https://onderwijslokethaaglanden.nl",
+    consultUrl: "https://onderwijslokethaaglanden.nl/contact",
+    hasConsultation: true,
+  },
+  amsterdam: {
+    title: "Onderwijsloket Amsterdam",
+    email: null,
+    website: "https://leraarwordeninamsterdam.nl",
+    consultUrl: "https://leraarwordeninamsterdam.nl/contact",
+    hasConsultation: true,
+  },
+  utrecht: {
+    title: "Onderwijsloket Utrecht",
+    email: null,
+    website: "https://onderwijsloketutrecht.nl",
+    consultUrl: "https://onderwijsloketutrecht.nl/contact",
+    hasConsultation: true,
+  },
+  groningen: {
+    title: "SchoolpleinNoord",
+    email: "info@schoolpleinnoord.nl",
+    website: "https://schoolpleinnoord.nl",
+    consultUrl: "https://schoolpleinnoord.nl/contact",
+    hasConsultation: true,
+  },
+  leeuwarden: {
+    title: "SchoolpleinNoord",
+    email: "info@schoolpleinnoord.nl",
+    website: "https://schoolpleinnoord.nl",
+    consultUrl: "https://schoolpleinnoord.nl/contact",
+    hasConsultation: true,
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// SSOT Lookup Functions
+// ─────────────────────────────────────────────────────────────────────
+function truncate(text: string, maxWords: number): string {
+  const words = text.split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(" ") + "...";
+}
+
+function findRoleDescription(roleName: string): string | null {
+  const key = roleName.toLowerCase();
+  // Direct match
+  if (ROLE_DESCRIPTIONS[key]) return truncate(ROLE_DESCRIPTIONS[key], 80);
+  // Partial match
+  for (const [k, v] of Object.entries(ROLE_DESCRIPTIONS)) {
+    if (k.includes(key) || key.includes(k)) return truncate(v, 80);
+  }
+  return null;
+}
+
+function findRouteStep(slug: string): string | null {
+  const entry = ROUTE_SUMMARIES[slug.toLowerCase()];
+  if (!entry) return null;
+  let result = `${entry.title}: ${entry.summary}`;
+  if (entry.hasFaqs) result += " Er zijn ook veelgestelde vragen beschikbaar op /opleidingen.";
+  return truncate(result, 80);
+}
+
+function findRegionalDesk(regionOrCity: string): string | null {
+  const key = regionOrCity.toLowerCase().trim();
+  // Direct city match
+  if (REGIONAL_DESKS[key]) {
+    const d = REGIONAL_DESKS[key];
+    let info = `${d.title}: gratis en onafhankelijk advies.`;
+    if (d.website) info += ` Website: ${d.website}`;
+    if (d.hasConsultation) info += ` - je kunt een persoonlijk consult aanvragen.`;
+    return truncate(info, 80);
+  }
+  // Check for city within region string
+  for (const [city, desk] of Object.entries(REGIONAL_DESKS)) {
+    if (key.includes(city) || city.includes(key)) {
+      let info = `${desk.title}: gratis en onafhankelijk advies.`;
+      if (desk.website) info += ` Website: ${desk.website}`;
+      if (desk.hasConsultation) info += ` - je kunt een persoonlijk consult aanvragen.`;
+      return truncate(info, 80);
+    }
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Fallback Knowledge Blocks (voor als SSOT lookup geen match geeft)
+// ─────────────────────────────────────────────────────────────────────
+const KNOWLEDGE_BLOCKS: Record<string, string> = {
+  lesgeven_po: "Leraar PO: je draagt verantwoordelijkheid voor een klas op de basisschool (groep 1-8). Je geeft alle vakken. Pabo-diploma of zij-instroom PO-traject vereist.",
+  lesgeven_vo: "Leraar VO: je geeft les in een specifiek vak op de middelbare school. Tweedegraads (4 jr hbo) voor onderbouw/vmbo, eerstegraads (master) voor bovenbouw havo/vwo.",
+  lesgeven_mbo: "Docent MBO: je geeft theorie/praktijklessen in beroepsopleidingen. PDG (1-2 jr) vereist. Vakkennis uit de praktijk is een groot pluspunt.",
+  vakexpertise_po: "Vakspecialist PO: je zet expertise in op basisscholen (muziek, techniek, beweging). Hbo-diploma in je vakgebied is vaak voldoende.",
+  vakexpertise_vo: "Vakleerkracht VO: je geeft les in je eigen vak. Tweedegraads of eerstegraads bevoegdheid nodig.",
+  vakexpertise_mbo: "Instructeur MBO: je geeft praktijklessen vanuit vakkennis. Geen formele bevoegdheid nodig, PDG aanbevolen.",
+  begeleiding: "Onderwijsondersteuner/leerlingbegeleider: je begeleidt leerlingen bij leren, gedrag of sociaal-emotionele ontwikkeling. Eisen verschillen per functie en sector.",
+  route_pabo: "Pabo: 4 jaar voltijd (of deeltijd). Toelatingseis: havo, vwo of mbo-4. Zij-instroom PO is alternatief voor hbo/wo-gediplomeerden (2 jaar).",
+  route_tweedegraads: "Tweedegraads lerarenopleiding: 4 jaar hbo. Bevoegd voor vmbo en onderbouw havo/vwo. Zij-instroom VO is versneld (2 jaar).",
+  route_eerstegraads: "Eerstegraads: universitaire master (1-2 jaar) na vakinhoudelijke bachelor. Bevoegd voor alle VO-niveaus.",
+  route_pdg: "PDG: 1-2 jaar, bedoeld voor vakmensen die in MBO willen lesgeven. Didactiek en pedagogiek terwijl je al voor de klas staat.",
+  route_zij_instroom: "Zij-instroom: versneld 2-jarig traject, leren en werken tegelijk. Voor PO en VO. Voorwaarden: relevant hbo/wo-diploma, geschiktheidsonderzoek, werkplek.",
+  salaris: "Salaris volgt de CAO. Starters ca. 2.900-3.500 bruto/maand. Ervaren leraren tot ca. 5.800. Exacte inschaling hangt af van opleiding, ervaring en sector.",
+  kosten: "Kosten verschillen per route. Regulier: wettelijk collegegeld (ca. 2.500/jr). Zij-instroom: vaak deels door school bekostigd via subsidie. PDG: variëert per aanbieder.",
+  regio_rotterdam: "Onderwijsloket Rotterdam: gratis en onafhankelijk advies over werken in het onderwijs in de regio Rotterdam-Rijnmond. Website: onderwijsloketrotterdam.nl",
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// A. Tone Selector
+// ─────────────────────────────────────────────────────────────────────
+const TONE_TABLE: Record<string, { early: string; late: string }> = {
+  interesseren: {
+    early: "Houd het luchtig. Maak nieuwsgierig. Vermijd jargon. Laat zien dat kleine stappen al tellen.",
+    late: "De gebruiker heeft al een richting. Bevestig kort en bied een concrete vervolgstap.",
+  },
+  orienteren: {
+    early: "Zet opties naast elkaar. Noem randvoorwaarden (sector, niveau). Vermijd keuzestress.",
+    late: "Focus op de gekozen route. Geef concrete info over duur, eisen, kosten.",
+  },
+  beslissen: {
+    early: "Normaliseer twijfel. Bied 2 routes, niet meer. Geen druk.",
+    late: "De keuze wordt concreet. Verwijs naar actie: aanmelden, gesprek, event.",
+  },
+  matchen: {
+    early: "Help zoeken: regio, sector, type school. Concreet en praktisch.",
+    late: "Verwijs naar vacatures en events. Bied contact met loket of school.",
+  },
+  voorbereiden: {
+    early: "Checklist-stijl. Kort en zakelijk. Wat moet nog geregeld.",
+    late: "Sluit af met aanmoediging. Verwijs naar praktische resources.",
+  },
+};
+
+function selectTone(phase: string, slotsFilledCount: number, totalSlotsCount: number): string {
+  const p = phase.toLowerCase();
+  const entry = TONE_TABLE[p] || TONE_TABLE.interesseren;
+  const ratio = totalSlotsCount > 0 ? slotsFilledCount / totalSlotsCount : 0;
+  return ratio >= 0.5 ? entry.late : entry.early;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// B. Profile Interpreter
+// ─────────────────────────────────────────────────────────────────────
+function interpretProfile(profileMeta?: ProfileMeta | null): string {
+  if (!profileMeta) return "";
+  const parts: string[] = [];
+
+  if (profileMeta.first_name) {
+    parts.push(`De gebruiker heet ${profileMeta.first_name}.`);
+  }
+  if (profileMeta.bio) {
+    parts.push(`Achtergrond: ${profileMeta.bio.slice(0, 120)}.`);
+  }
+  if (profileMeta.test_completed && profileMeta.test_results) {
+    const tr = profileMeta.test_results;
+    if (tr.recommendedSector && tr.ranking && Array.isArray(tr.ranking)) {
+      const ranking = tr.ranking as Array<{ sector: string; score: number }>;
+      const top = ranking[0];
+      const second = ranking[1];
+      const sectorNames: Record<string, string> = { po: "basisonderwijs (PO)", vo: "voortgezet onderwijs (VO)", mbo: "beroepsonderwijs (MBO)" };
+      let interp = `Interessetest afgerond. ${sectorNames[String(top?.sector).toLowerCase()] || top?.sector} past het best (score ${top?.score})`;
+      if (second) interp += `, gevolgd door ${sectorNames[String(second.sector).toLowerCase()] || second.sector} (score ${second.score})`;
+      interp += ".";
+      parts.push(interp);
+    }
+  }
+
+  return parts.join(" ");
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// C. Knowledge Resolver (SSOT-first, fallback naar hardcoded)
+// ─────────────────────────────────────────────────────────────────────
+function resolveKnowledge(
+  slots: Partial<Record<SlotKey, string>>,
+  phase: string,
+): string[] {
+  const fragments: string[] = [];
+  const role = slots.role_interest?.toLowerCase();
+  const sector = slots.school_type?.toUpperCase();
+
+  // 1. Try SSOT role description first
+  if (role) {
+    const roleDesc = findRoleDescription(role);
+    if (roleDesc) {
+      fragments.push(roleDesc);
+    } else {
+      // Fallback to hardcoded
+      if (role && sector) {
+        const key = `${role}_${sector.toLowerCase()}`;
+        if (KNOWLEDGE_BLOCKS[key]) fragments.push(KNOWLEDGE_BLOCKS[key]);
+      } else if (role === "begeleiding") {
+        fragments.push(KNOWLEDGE_BLOCKS.begeleiding);
+      } else if (role === "vakexpertise") {
+        fragments.push(KNOWLEDGE_BLOCKS.vakexpertise_mbo);
+      } else if (role === "lesgeven") {
+        fragments.push(KNOWLEDGE_BLOCKS.lesgeven_po);
+      }
+    }
+  }
+
+  // 2. Route info via SSOT lookup
+  if (slots.credential_goal) {
+    let slug: string | null = null;
+    if (sector === "PO") slug = "pabo";
+    else if (sector === "VO") slug = "tweedegraads";
+    else if (sector === "MBO") slug = "pdg";
+
+    if (slug) {
+      const routeInfo = findRouteStep(slug);
+      if (routeInfo) {
+        fragments.push(routeInfo);
+      } else {
+        // Fallback
+        const fallbackKey = `route_${slug}`;
+        if (KNOWLEDGE_BLOCKS[fallbackKey]) fragments.push(KNOWLEDGE_BLOCKS[fallbackKey]);
+      }
+    } else {
+      fragments.push(KNOWLEDGE_BLOCKS.route_zij_instroom);
+    }
+  }
+
+  // 3. Salary
+  if (slots.salary_info) fragments.push(KNOWLEDGE_BLOCKS.salaris);
+
+  // 4. Costs
+  if (slots.costs_info) fragments.push(KNOWLEDGE_BLOCKS.kosten);
+
+  // 5. Region via SSOT lookup
+  if (slots.region_preference) {
+    const deskInfo = findRegionalDesk(slots.region_preference);
+    if (deskInfo) {
+      fragments.push(deskInfo);
+    } else {
+      // Fallback: generic
+      fragments.push("Zoek een onderwijsloket in je regio via onderwijsloketten.nl voor gratis advies over routes en vacatures.");
+    }
+  }
+
+  return fragments.slice(0, 3);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// D. UI Links (server-side, NIET in LLM prompt)
+// ─────────────────────────────────────────────────────────────────────
+function computeLinks(
+  mode: "public" | "authenticated",
+  phase: string,
+  slots: Partial<Record<SlotKey, string>>,
+): UiLink[] {
+  const links: UiLink[] = [];
+  const p = (phase || "interesseren").toLowerCase();
+
+  links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
+
+  if (p === "matchen" || slots.next_step === "vacatures") {
+    links.push({ label: "Vacatures", href: "/vacatures" });
+  }
+  if (p === "interesseren" || slots.next_step === "event") {
+    links.push({ label: "Events en meelopen", href: "/events" });
+  }
+  if (p === "matchen" || p === "voorbereiden") {
+    links.push({ label: "Events en open dagen", href: "/events" });
+  }
+
+  // Regional desk website link
+  if (slots.region_preference) {
+    const key = slots.region_preference.toLowerCase().trim();
+    for (const [city, desk] of Object.entries(REGIONAL_DESKS)) {
+      if (key.includes(city) || city.includes(key)) {
+        if (desk.website) {
+          links.push({ label: desk.title, href: desk.website });
+        }
+        break;
+      }
+    }
+  }
+
+  if (mode === "public") {
+    links.push({ label: "Inloggen voor persoonlijk vervolg", href: "/auth" });
+  }
+
+  // Deduplicate by href
+  const uniq = new Map<string, UiLink>();
+  for (const l of links) uniq.set(l.href, l);
+  return [...uniq.values()].slice(0, 3);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// E. Context Assembler (zonder links!)
+// ─────────────────────────────────────────────────────────────────────
+function assembleContext(
+  phase: string,
+  detector: DetectorPayload | undefined,
+  profileMeta: ProfileMeta | undefined | null,
+  userSector: string | undefined,
+  phaseTransition: PhaseTransition | undefined,
+): string {
+  const slots = detector?.known_slots || {};
+  const slotsFilledCount = Object.values(slots).filter(Boolean).length;
+  const totalSlotsCount = detector?.missing_slots
+    ? slotsFilledCount + detector.missing_slots.length
+    : 9;
+
+  // 1. Tone (always)
+  const tone = selectTone(phase, slotsFilledCount, totalSlotsCount);
+
+  // 2. Knowledge (SSOT-first)
+  const knowledge = resolveKnowledge(slots, phase);
+
+  // 3. Profile interpretation
+  const profile = interpretProfile(profileMeta);
+
+  // 4. Phase transition
+  let transitionNote = "";
+  if (phaseTransition) {
+    transitionNote = `De gebruiker verschuift van "${phaseTransition.from}" naar "${phaseTransition.to}". Erken dit kort en positief. Pas je begeleiding aan op de nieuwe fase.`;
+  }
+
+  // Assemble (NO links section!)
+  const parts: string[] = [];
+  parts.push(`## DYNAMISCHE CONTEXT`);
+  parts.push(`\n### Toon\n${tone}`);
+
+  // Situation
+  const knownSlotsInfo = Object.entries(slots)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+  parts.push(`\n### Situatie\n- Fase: ${detector?.phase_current_ui || phase}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}`);
+  if (knownSlotsInfo) parts.push(`- Bekende info: ${knownSlotsInfo}`);
+  if (userSector) parts.push(`- Voorkeursector: ${userSector}`);
+  if (detector?.evidence?.length) parts.push(`- Signalen: ${detector.evidence.slice(0, 3).join(" | ")}`);
+
+  if (knowledge.length > 0) {
+    parts.push(`\n### Kennis\n${knowledge.map(k => `- ${k}`).join("\n")}`);
+  }
+
+  if (profile) {
+    parts.push(`\n### Over de gebruiker\n${profile}`);
+  }
+
+  if (transitionNote) {
+    parts.push(`\n### Fase-verschuiving\n${transitionNote}`);
+  }
+
+  // Token cap (~800 tokens)
+  const assembled = parts.join("\n");
+  const estimatedTokens = Math.ceil(assembled.length / 4);
+  if (estimatedTokens > 800) {
+    const trimmed = parts.slice(0, 4);
+    if (knowledge.length > 0) trimmed.push(`\n### Kennis\n- ${knowledge[0]}`);
+    if (profile) trimmed.push(`\n### Over de gebruiker\n${profile}`);
+    return trimmed.join("\n");
+  }
+
+  return assembled;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Slot extraction (deterministic, public fallback)
+// ─────────────────────────────────────────────────────────────────────
+function extractSlots(text: string): Record<string, string | null> {
+  const t = text.toLowerCase();
+  const slots: Record<string, string | null> = {};
+
+  if (/\bpo\b|basisonderwijs|primair|basisschool/.test(t)) slots.school_type = "PO";
+  else if (/\bvo\b|voortgezet|middelbare/.test(t)) slots.school_type = "VO";
+  else if (/\bmbo\b|beroepsonderwijs/.test(t)) slots.school_type = "MBO";
+  else slots.school_type = null;
+
+  return slots;
+}
+
+function chooseNextQuestion(
+  userPhase: string | undefined,
+  extracted: Record<string, string | null>,
+): { slot: string; question: string } {
+  const phase = (userPhase || "interesseren").toLowerCase();
+
+  if (["orienteren", "beslissen", "matchen", "voorbereiden"].includes(phase) && !extracted.school_type) {
+    return { slot: "school_type", question: "In welke sector wil je je oriënteren: PO, VO of MBO?" };
+  }
+
+  switch (phase) {
+    case "interesseren":
+      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
+    case "orienteren":
+      return { slot: "credential_goal", question: "Wil je weten welke route bij je past, of welke diploma's je nodig hebt?" };
+    case "beslissen":
+      return { slot: "next_step", question: "Wat zou jou helpen om een keuze te maken?" };
+    case "matchen":
+      return { slot: "region_preference", question: "In welke regio wil je zoeken?" };
+    case "voorbereiden":
+      return { slot: "next_step", question: "Wat is voor jou de prettigste volgende stap?" };
+    default:
+      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
+  }
+}
+
+function chooseActions(
+  userPhase: string | undefined,
+  extracted: Record<string, string | null>,
+): UiAction[] {
+  const phase = (userPhase || "interesseren").toLowerCase();
+
+  if (!extracted.school_type && phase !== "interesseren") {
+    return [
+      { label: "PO (basisonderwijs)", value: "Basisonderwijs lijkt me wat" },
+      { label: "VO (voortgezet)", value: "Voortgezet onderwijs, denk ik" },
+      { label: "MBO (beroepsonderwijs)", value: "MBO spreekt me aan" },
+    ];
+  }
+
+  switch (phase) {
+    case "interesseren":
+      return [
+        { label: "Lesgeven", value: "Lesgeven trekt me" },
+        { label: "Begeleiding", value: "Leerlingen begeleiden lijkt me wat" },
+        { label: "Vakexpertise", value: "Mijn vak inzetten in het onderwijs" },
+      ];
+    case "beslissen":
+      return [
+        { label: "Kosten bekijken", value: "Wat kost het eigenlijk" },
+        { label: "Vacatures", value: "Laat me vacatures zien" },
+        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
+      ];
+    case "matchen":
+      return [
+        { label: "Scholen zoeken", value: "Welke scholen zitten in mijn buurt" },
+        { label: "Vacatures", value: "Laat me vacatures zien" },
+      ];
+    case "voorbereiden":
+      return [
+        { label: "Checklist bekijken", value: "Wat moet ik nog regelen" },
+        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
+      ];
+    default:
+      return [
+        { label: "Routes bekijken", value: "Hoe word je eigenlijk leraar" },
+        { label: "Opleidingen", value: "Welke opleidingen zijn er" },
+      ];
+  }
+}
+
+// Auth: actions volgen SSOT next_slot_key
 function actionsForNextSlot(
   slot: SlotKey,
   knownSlots?: Partial<Record<SlotKey, string>>,
-): Array<{ label: string; value: string }> {
+): UiAction[] {
   if (slot === "school_type") {
+    if (knownSlots?.role_interest === "vakexpertise") {
+      return [
+        { label: "MBO (instructeur)", value: "MBO als instructeur of vakspecialist" },
+        { label: "VO (vakleerkracht)", value: "Vakleerkracht in het voortgezet onderwijs" },
+        { label: "PO (vakspecialist)", value: "Specialist in het basisonderwijs" },
+      ];
+    }
     return [
       { label: "PO (basisonderwijs)", value: "Basisonderwijs lijkt me wat" },
       { label: "VO (voortgezet)", value: "Voortgezet onderwijs, denk ik" },
@@ -617,16 +624,6 @@ function actionsForNextSlot(
       { label: "Begeleiden", value: "Leerlingen begeleiden, dat lijkt me wat" },
       { label: "Vakexpertise", value: "Mijn vak inzetten in het onderwijs" },
     ];
-  }
-  // When role_interest is already filled, offer sector-specific follow-ups
-  if (slot === "school_type" && knownSlots?.role_interest) {
-    if (knownSlots.role_interest === "vakexpertise") {
-      return [
-        { label: "MBO (instructeur)", value: "MBO als instructeur of vakspecialist" },
-        { label: "VO (vakleerkracht)", value: "Vakleerkracht in het voortgezet onderwijs" },
-        { label: "PO (vakspecialist)", value: "Specialist in het basisonderwijs" },
-      ];
-    }
   }
   if (slot === "credential_goal") {
     return [
@@ -658,7 +655,73 @@ function actionsForNextSlot(
   return [];
 }
 
-// ── Stream filter: replace emdash/en-dash in SSE chunks ─────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Prompts — DRY: 1 core + 2 appendices
+// ─────────────────────────────────────────────────────────────────────
+const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket Rotterdam.
+
+## Rol en houding
+- Begripvol, adviserend en neutraal; je spreekt in kansen en voorwaarden.
+- Gereserveerd enthousiast: positief, maar niet overdreven.
+- Je bent geen recruiter en doet geen toezeggingen of garanties.
+
+## Gesprekskwaliteit
+- Als de vraag onduidelijk is: vraag 1 korte verduidelijking, of vat kort samen om te checken.
+- Als vergelijken helpt: zet maximaal 2 opties naast elkaar (kort).
+- Houd de volgende stap klein en concreet.
+
+## Veiligheid en grenzen
+- Vraag niet om gevoelige persoonsgegevens.
+- Bij salaris/inschaling: alleen globaal, verwijs naar CAO/tabellen.
+- Bij maatwerk: benoem dat het kan verschillen en verwijs naar een passende vervolgstap.
+
+## Stijl
+- Korte zinnen, weinig jargon.
+- Geen lange lijstjes; alleen bullets als het echt helpt (max 2 bullets).
+- Geen emojis.
+- Gebruik geen emdash. Gebruik hooguit een streep of splits zinnen.
+- Geen containerzinnen ("het hangt ervan af") zonder direct te concretiseren.
+
+## Verboden zinnen
+- "Goed dat je dit vraagt."
+- "Ik begrijp je helemaal."
+- "Als AI kan ik..."
+- "Je moet ..."
+- "Scenario" (in welke vorm dan ook)
+
+## Voorkeurszinnen (afwisselen)
+- "Helder."
+- "Even scherp zetten."
+- "Twee routes die je nu hebt: ..."
+- "Als je X wilt, past A. Als je Y wilt, past B."
+- "Als dit maatwerk wordt, is een consult het handigst."
+`;
+
+const WIDGET_APPENDIX = `
+## Modus: widget (niet ingelogd)
+- Houd het kort: 1-3 zinnen.
+- Stel alleen een vraag als je zonder die vraag niet verder kunt.
+- Wegwijzer, geen coach. Minder diepgang, meer richting.
+- Links worden door ons apart getoond; noem ze niet in je tekst.
+`;
+
+const DASHBOARD_APPENDIX = `
+## Modus: dashboard (ingelogd)
+- Je gebruikt de context onder "DYNAMISCHE CONTEXT" hieronder.
+- Je stelt zelf geen vraag aan het einde. Wij voegen server-side exact één SSOT-vraag toe na jouw tekst.
+- Vermijd daarom vraagtekens in je output.
+- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Maximaal 90 woorden.
+
+## Format (kies er een)
+VORM A (meest gebruikt): 1 korte openingszin + 1-2 zinnen uitleg + 1 vervolgstap zonder vraagteken.
+VORM B (alleen bij vergelijken): 1 openingszin + max 2 bullets met opties + 1 vervolgstap.
+VORM C (bij maatwerk/salaris): 1 openingszin + 1 zin waarom het varieert + 1 doorverwijzing.
+`;
+
+// ─────────────────────────────────────────────────────────────────────
+// Stream filter: replace emdash/en-dash
+// ─────────────────────────────────────────────────────────────────────
 function streamReplaceDashes(input: ReadableStream<Uint8Array>) {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -692,7 +755,9 @@ function streamReplaceDashes(input: ReadableStream<Uint8Array>) {
   });
 }
 
-// ── Handler ────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Handler
+// ─────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -702,40 +767,36 @@ Deno.serve(async (req) => {
     const { messages, mode = "public", userPhase, userSector, detector, phase_transition, profileMeta }: RequestBody = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
     const extracted = extractSlots(lastUserMsg);
 
-    // Public / legacy next question + actions (blijft zoals het nu is)
+    // Public fallback
     const legacyNextQ = chooseNextQuestion(userPhase, extracted);
     const legacyActions = chooseActions(userPhase, extracted);
 
     // Auth SSOT next question + actions
-    const authNextQ = detector?.next_question && detector?.next_slot_key
+    const ssotNextQ = detector?.next_question && detector?.next_slot_key
       ? { slot: detector.next_slot_key, question: detector.next_question }
       : legacyNextQ;
 
-    const authActions = detector?.next_slot_key
+    const ssotActions: UiAction[] = detector?.next_slot_key
       ? actionsForNextSlot(detector.next_slot_key, detector?.known_slots)
       : legacyActions;
 
-    // System prompt
-    let systemPrompt = mode === "authenticated" ? DOORAI_SYSTEM_PROMPT_AUTH : DOORAI_SYSTEM_PROMPT;
+    // Context + links
+    const phase = detector?.phase_current || userPhase || "interesseren";
+    const slots = detector?.known_slots || {};
+    const uiLinks = computeLinks(mode, phase, slots);
+
+    // Build prompt: CORE + APPENDIX + dynamic context
+    let systemPrompt = DOORAI_CORE + (mode === "authenticated" ? DASHBOARD_APPENDIX : WIDGET_APPENDIX);
 
     if (mode === "authenticated") {
-      const dynamicContext = assembleContext(
-        detector?.phase_current || userPhase || "interesseren",
-        detector,
-        profileMeta,
-        userSector,
-        phase_transition,
-      );
+      const dynamicContext = assembleContext(phase, detector, profileMeta, userSector, phase_transition);
       systemPrompt += `\n\n${dynamicContext}`;
     } else {
-      // Public context blijft kort
       systemPrompt += `\n\n## Huidige context\n- Ingelogd: Nee\n`;
     }
 
@@ -754,23 +815,20 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Te veel verzoeken, probeer het later opnieuw." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ error: "Te veel verzoeken, probeer het later opnieuw." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI-credits zijn op, neem contact op met de beheerder." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ error: "AI-credits zijn op, neem contact op met de beheerder." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: "Er ging iets mis met de AI, probeer het opnieuw." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "Er ging iets mis met de AI, probeer het opnieuw." }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const aiBody = response.body!;
@@ -789,17 +847,19 @@ Deno.serve(async (req) => {
           await writer.write(value);
         }
 
-        // Auth: append exact 1 SSOT question, so the model never paraphrases it
+        // Auth: append exact SSOT question
         if (mode === "authenticated") {
           const qChunk = {
-            choices: [{ delta: { content: `\n\n${authNextQ.question}` } }],
+            choices: [{ delta: { content: `\n\n${ssotNextQ.question}` } }],
           };
           await writer.write(encoder.encode(`data: ${JSON.stringify(qChunk)}\n\n`));
         }
 
-        // Always append server-side actions event
-        const actions = mode === "authenticated" ? authActions : legacyActions;
-        await writer.write(encoder.encode(`data: ${JSON.stringify({ actions })}\n\n`));
+        // UI payload: actions + links (frontend renders these separately)
+        const actions = mode === "authenticated" ? ssotActions : legacyActions;
+        await writer.write(
+          encoder.encode(`data: ${JSON.stringify({ actions, links: uiLinks })}\n\n`),
+        );
       } catch (e) {
         console.error("Stream error:", e);
       } finally {
@@ -811,7 +871,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (error) {
-    console.error("DOORai chat error:", error);
+    console.error("DoorAI chat error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Onbekende fout" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
