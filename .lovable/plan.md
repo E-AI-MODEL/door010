@@ -1,63 +1,128 @@
 
 
-## Fix: Naam-unificatie, toon en opruimen dode code
+# Audit en multi-stap orchestratie DoorAI
 
-### Wat er nu mis is
+## Audit-bevindingen
 
-1. **Drie namen**: homepage-coach zegt "Doortje", doorai-chat zegt "DoorAI", UI zegt "DOORai"
-2. **Toon te zakelijk**: DOORAI_CORE zegt "begripvol, adviserend, neutraal" terwijl de oorspronkelijke visie "warme, nuchtere wegwijzer" is (die al in homepage-coach staat)
-3. **Emoji's in welkomstberichten** terwijl prompts "geen emojis" zeggen
-4. **Dode code**: `mode: "public"` pad in doorai-chat wordt nooit bereikt (widget gebruikt homepage-coach)
+### Wat goed werkt (niet aanraken)
+- Phase detector engine (client-side): solide, deterministische slot-extractie en fase-scoring
+- Actions en links (server-side UI-payload via SSE): correct gescheiden van LLM-output
+- Knowledge resolver: goede fase-filtering, landelijk/regionaal labeling
+- PublicChatWidget funnel-logica: eigen state machine, eigen edge function (homepage-coach)
+- Welkomstberichten: correct, zonder emoji
+- DOORAI_CORE prompt: warme toon, verboden zinnen, stijlregels - alles consistent
 
-### Wat we doen
+### Problemen gevonden
 
-**1. Naam overal "DoorAI"**
-- `homepage-coach/index.ts` regel 7: "Doortje" naar "DoorAI"
-- `homepage-coach/index.ts` regels 72-82: "Doortje:" naar "DoorAI:" in voorbeelden
-- UI headers zijn al "DOORai" - dat is visueel en kan zo blijven (merk-stijl)
+| # | Probleem | Locatie | Impact |
+|---|----------|---------|--------|
+| 1 | Raw metadata naar LLM (confidence, slotnamen, evidence-arrays) | `assembleContext()` r619-654 | LLM gedraagt zich als "fase-analist" |
+| 2 | TONE_TABLE te prescriptief (meerdere zinnen per fase) | r402-423 | Beperkt LLM's natuurlijke variatie |
+| 3 | Emoji in error-bericht widget | PublicChatWidget r376 | Inconsistent met "geen emojis" regel |
+| 4 | Dode code: `extractSlots()` + `chooseNextQuestion()` + `chooseActions()` server-side | doorai-chat r660-741 | Wordt nooit bereikt (widget gebruikt homepage-coach) |
+| 5 | Dode code: `mode === "public"` pad | doorai-chat r933 | Nooit bereikt |
+| 6 | Stale comment regel 12 | doorai-chat r12 | Zegt "LLM stelt geen vraag" maar dat is nu wel zo |
+| 7 | Geen basiskennis bij lege slots | `resolveKnowledge()` r465-551 | Bij vage openers heeft LLM nul context |
+| 8 | Geen multi-stap: alles in een prompt | Handler r928-946 | Informatiedumps bij vage input |
 
-**2. DOORAI_CORE toon warmer maken**
-- `doorai-chat/index.ts` regels 663-666 wijzigen van:
-  - "Begripvol, adviserend en neutraal; je spreekt in kansen en voorwaarden."
-  - "Gereserveerd enthousiast: positief, maar niet overdreven."
-- Naar:
-  - "Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk."
-  - "Je helpt mensen orienteren op werken in het onderwijs."
-  - "Positief en bemoedigend, maar zonder overdrijving of valse beloftes."
-  - "Je zet opties naast elkaar en helpt de gebruiker zelf kiezen."
+### Tone of voice per kanaal (behouden en bewaken)
 
-Dit brengt DOORAI_CORE in lijn met de homepage-coach definitie.
+| Kanaal | Prompt | Toon | Verschil |
+|--------|--------|------|----------|
+| Homepage widget | `SITE_GUIDE_PROMPT` (homepage-coach) | Kort, max 2 zinnen, altijd een link, site-gids | Puur navigatie, geen persoonlijke begeleiding |
+| Dashboard chat | `DOORAI_CORE` + `DASHBOARD_APPENDIX` (doorai-chat) | Warm, conversationeel, max 120 woorden, wedervragen | Persoonlijke oriëntatie-begeleiding |
 
-**3. Welkomstberichten zonder emoji**
-- `PublicChatWidget.tsx` regel 234: "Hoi! (emoji) Ik ben DOORai..." naar "Welkom bij het Onderwijsloket Rotterdam. Heb je een vraag over werken in het onderwijs? Ik help je graag verder."
-- `DashboardChat.tsx` regel 72-75: "Welkom terug! Fijn dat je er bent (emoji)..." naar "Welkom terug, goed dat je er bent.\n\nJe zit in de **${phase}**-fase. ${info}\n\nKies een suggestie hieronder of typ je vraag."
-- `Chat.tsx` reset-bericht: zelfde aanpassing
+De "Voorkeurszinnen" in homepage-coach ("Helder.", "Even scherp zetten.") blijven staan - die passen bij het korte, bondige karakter van de site-gids. Ze zijn eerder verwijderd uit doorai-chat waar ze niet pasten.
 
-**4. Dode public-mode code opruimen in doorai-chat**
-- De `WIDGET_APPENDIX` constante verwijderen (wordt nooit gebruikt - widget roept homepage-coach aan)
-- Regel 794: de `mode === "authenticated" ? DASHBOARD_APPENDIX : WIDGET_APPENDIX` vereenvoudigen - altijd DASHBOARD_APPENDIX gebruiken
-- Regel 800: het `else` blok (`mode !== authenticated`) vereenvoudigen
-- Optioneel: `mode` parameter in RequestBody kan weg, maar we houden het als vangnet
+## Plan van aanpak
 
-### Wat er NIET verandert
+### Stap 1: Context humaniseren (assembleContext)
+
+De functie `assembleContext()` wordt herschreven zodat de LLM menselijk leesbare context krijgt in plaats van raw metadata.
+
+**Van**:
+```
+### Situatie
+- Fase: interesseren
+- Confidence: 0.45
+- Bekende info: school_type: PO, role_interest: lesgeven
+- Signalen: match:interested | keyword:po
+```
+
+**Naar**:
+```
+### Situatie
+De gebruiker verkent of het onderwijs iets is. Ze hebben interesse in lesgeven in het basisonderwijs.
+```
+
+Confidence, evidence en slotnamen worden niet meer meegegeven - die worden intern al gebruikt door de orchestrator voor actions en links.
+
+### Stap 2: Basiskennis toevoegen (resolveKnowledge)
+
+Een compact kennisblok (3-4 zinnen) dat altijd beschikbaar is als er geen specifieke kennis matcht. Inhoud: wat het Onderwijsloket doet en de hoofdrichtingen. Zodat het LLM bij "hoi" of "ik twijfel" iets kan bieden.
+
+### Stap 3: TONE_TABLE vereenvoudigen
+
+Van 2 zinnen per fase-moment naar 1 beknopte sfeerinstructie. Geeft het LLM meer ruimte voor eigen formulering.
+
+### Stap 4: Multi-stap intent classificatie
+
+Een snelle eerste LLM-call (geen streaming, klein antwoord) die het intent classificeert als `greeting`, `question`, `exploration` of `followup`. Op basis daarvan wordt de context voor de tweede (hoofd)call samengesteld:
+
+- **greeting**: geen kennisblokken, alleen profiel + warm welkom + wedervraag
+- **question**: volledige kennis, gericht antwoord
+- **exploration**: alleen basiskennis, wedervraag om richting te vinden
+- **followup**: kennis alleen als relevant voor het onderwerp
+
+Bij falen van de intent-call: fallback naar huidig gedrag (alles meesturen).
+
+### Stap 5: Opruimen dode code en stale comments
+
+- Verwijder server-side `extractSlots()`, `chooseNextQuestion()`, `chooseActions()` (r660-741) - worden nooit bereikt
+- Verwijder `mode === "public"` pad (r933)
+- Update stale comment r12
+- Fix emoji in PublicChatWidget error-bericht (r376)
+
+## Wat er NIET verandert
 
 | Onderdeel | Status |
 |-----------|--------|
-| homepage-coach edge function (functionaliteit) | Ongewijzigd (alleen naam) |
-| doorai-chat orchestratie (SSOT, actions, links, knowledge, tone, profile) | Ongewijzigd |
-| Phase detector (client-side) | Ongewijzigd |
-| SSOT-vraag server-side append | Ongewijzigd |
-| PublicChatWidget funnel-logica | Ongewijzigd |
-| DashboardChat/Chat.tsx logica | Ongewijzigd (alleen welkomsttekst) |
+| homepage-coach edge function (incl. Voorkeurszinnen) | Ongewijzigd |
+| Phase detector engine (client-side) | Ongewijzigd |
+| DOORAI_CORE prompt (toon, verboden zinnen, stijl) | Ongewijzigd |
+| PublicChatWidget funnel-logica | Ongewijzigd (alleen emoji-fix) |
+| DashboardChat.tsx / Chat.tsx logica | Ongewijzigd |
+| Actions en links (SSE UI-payload) | Ongewijzigd |
+| actionsForNextSlot() (SSOT-gestuurde acties) | Ongewijzigd |
+| Knowledge blocks inhoud | Ongewijzigd |
 
-### Technische details
+## Technische details
+
+### Bestanden en wijzigingen
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `supabase/functions/homepage-coach/index.ts` | Regel 7: "Doortje" naar "DoorAI". Regels 72-82: "Doortje:" naar "DoorAI:" |
-| `supabase/functions/doorai-chat/index.ts` | Regels 663-666: toon warmer. Regels 700-706: WIDGET_APPENDIX verwijderen. Regel 794: vereenvoudigen. |
-| `src/components/chat/PublicChatWidget.tsx` | Regel 234: welkomstbericht zonder emoji |
-| `src/components/dashboard/DashboardChat.tsx` | Regels 72-75: welkomstbericht zonder emoji, zonder vraagteken |
-| `src/pages/Chat.tsx` | Reset-welkomstbericht aanpassen (zelfde als DashboardChat) |
+| `supabase/functions/doorai-chat/index.ts` | assembleContext() herschrijven, resolveKnowledge() basiskennis toevoegen, TONE_TABLE vereenvoudigen, classifyIntent() toevoegen, handler aanpassen voor 2-staps flow, dode code verwijderen, comments updaten |
+| `src/components/chat/PublicChatWidget.tsx` | Emoji verwijderen uit error-bericht (r376) |
 
-Vijf bestanden, alleen tekst/string-wijzigingen plus verwijderen van ongebruikte constante. Geen logica-wijzigingen.
+### classifyIntent() specificatie
+
+```text
+Input:  laatste gebruikersbericht + 2 voorgaande turns (voor context)
+Model:  google/gemini-3-flash-preview (zelfde als hoofd-call)
+Stream: false
+Output: { "intent": "greeting|question|exploration|followup" }
+Timeout/fallback: bij falen -> default "question" (huidig gedrag)
+Verwachte latentie: 200-400ms extra
+```
+
+### Tegenstrijdigheden die worden opgelost
+
+1. Comment "LLM stelt geen vraag" vs. daadwerkelijk gedrag (LLM stelt nu wel vragen) - comment wordt bijgewerkt
+2. Raw metadata in prompt vs. instructie "verwerk feiten natuurlijk" - metadata wordt gehumaniseerd
+3. "Geen emojis" regel vs. emoji in error-bericht widget - emoji wordt verwijderd
+
+### Geen nieuwe tegenstrijdigheden
+
+De intent-classificatie voegt geen nieuwe regels toe aan de LLM-prompt. Het bepaalt alleen welke bestaande context wordt meegegeven. De DOORAI_CORE en DASHBOARD_APPENDIX blijven de enige instructies die het LLM ontvangt.
+
