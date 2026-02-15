@@ -848,16 +848,12 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 
 const DASHBOARD_APPENDIX = `
 ## Modus: dashboard (ingelogd)
-- Je gebruikt de context onder "DYNAMISCHE CONTEXT" hieronder.
-- Je stelt zelf geen vraag aan het einde. Wij voegen server-side exact één SSOT-vraag toe na jouw tekst.
-- Vermijd daarom vraagtekens in je output.
+- Je voert een echt gesprek. Reageer op wat de gebruiker zegt, niet op een script.
+- Je mag vragen stellen als dat het gesprek verder helpt. Doe dit natuurlijk, niet geforceerd.
+- Gebruik de achtergrondinformatie uit de context om inhoudelijk te antwoorden.
 - Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
-- Maximaal 90 woorden.
-
-## Format (kies er een)
-VORM A (meest gebruikt): 1 korte openingszin + 1-2 zinnen uitleg + 1 vervolgstap zonder vraagteken.
-VORM B (alleen bij vergelijken): 1 openingszin + max 2 bullets met opties + 1 vervolgstap.
-VORM C (bij maatwerk/salaris): 1 openingszin + 1 zin waarom het varieert + 1 doorverwijzing.
+- Houd je antwoord beknopt: maximaal 120 woorden. Liever korter.
+- Als de gebruiker iets vaags zegt ("hey hallo"), reageer dan kort en warm en vraag wat hem of haar bezighoudt.
 `;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -986,13 +982,7 @@ Deno.serve(async (req) => {
           await writer.write(value);
         }
 
-        // Auth: append exact SSOT question
-        if (mode === "authenticated") {
-          const qChunk = {
-            choices: [{ delta: { content: `\n\n${ssotNextQ.question}` } }],
-          };
-          await writer.write(encoder.encode(`data: ${JSON.stringify(qChunk)}\n\n`));
-        }
+        // SSOT question no longer force-appended — LLM asks naturally
 
         // UI payload: actions + links
         const actions = mode === "authenticated" ? ssotActions : legacyActions;
