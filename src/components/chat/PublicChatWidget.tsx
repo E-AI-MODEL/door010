@@ -373,7 +373,7 @@ export function PublicChatWidget() {
         ...prev,
         {
           role: "assistant",
-          content: "Sorry, er ging iets mis. Probeer het zo nog eens 🙏",
+          content: "Sorry, er ging iets mis. Probeer het zo nog eens.",
           actions: [
             { kind: "ask", label: shortLabel("Kun je dat nog eens proberen?"), text: "Kun je dat nog eens uitleggen?" },
             { kind: "nav", label: shortLabel("Bekijk de kennisbank"), href: ROUTES.kennisbank },

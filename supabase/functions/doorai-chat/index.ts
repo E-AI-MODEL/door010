@@ -6,13 +6,14 @@ const corsHeaders = {
 // ══════════════════════════════════════════════════════════════════════
 // DoorAI CHAT ORCHESTRA — server-side regie (SSOT + UI) + LLM (tone)
 // ══════════════════════════════════════════════════════════════════════
-// Kernfixes:
+// Kernprincipes:
 // 1) Tone-of-voice (LLM) en regie (SSOT/actions/links) zijn gescheiden.
 // 2) Links gaan NIET in de prompt maar als UI-payload via SSE.
-// 3) In dashboard-mode stelt de LLM geen vraag; SSOT-vraag wordt server-side ge-append.
+// 3) SSOT-vraag wordt server-side bepaald; LLM mag natuurlijk doorvragen.
 // 4) SSOT JSON-bestanden worden dynamisch gelookup-t voor kennisblokken.
-// 5) Eén core prompt + 1 appendix (dashboard). Dode public-mode code verwijderd.
+// 5) Eén core prompt + 1 appendix (dashboard).
 // 6) Kennis gelabeld als landelijk/regionaal en fase-gefilterd.
+// 7) Multi-stap: intent-classificatie bepaalt welke context de LLM krijgt.
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
@@ -61,7 +62,7 @@ interface ProfileMeta {
 
 interface RequestBody {
   messages: ChatMessage[];
-  mode?: "public" | "authenticated";
+  mode?: "authenticated";
   userPhase?: string;
   userSector?: string;
   detector?: DetectorPayload;
@@ -69,6 +70,7 @@ interface RequestBody {
   profileMeta?: ProfileMeta;
 }
 
+type IntentType = "greeting" | "question" | "exploration" | "followup";
 type UiAction = { label: string; value: string };
 type UiLink = { label: string; href: string };
 
@@ -396,29 +398,32 @@ const KNOWLEDGE_BLOCKS: Record<string, string> = {
   regio_rotterdam: "Onderwijsloket Rotterdam: gratis en onafhankelijk advies over werken in het onderwijs in de regio Rotterdam-Rijnmond. Website: onderwijsloketrotterdam.nl",
 };
 
+// Basiskennis: altijd beschikbaar, ongeacht gevulde slots
+const BASELINE_KNOWLEDGE = `Het Onderwijsloket Rotterdam helpt je gratis en onafhankelijk bij het verkennen van werken in het onderwijs. Er zijn verschillende richtingen: lesgeven (voor de klas), begeleiden (leerlingen ondersteunen), ondersteunende functies, of je vakexpertise inzetten als instructeur of specialist. Routes lopen via reguliere opleidingen of via zij-instroom als je al werkervaring hebt.`;
+
 // ─────────────────────────────────────────────────────────────────────
-// A. Tone Selector
+// A. Tone Selector — vereenvoudigd: 1 sfeerinstructie per fase-moment
 // ─────────────────────────────────────────────────────────────────────
 const TONE_TABLE: Record<string, { early: string; late: string }> = {
   interesseren: {
-    early: "Houd het luchtig. Maak nieuwsgierig. Vermijd jargon. Laat zien dat kleine stappen al tellen.",
-    late: "De gebruiker heeft al een richting. Bevestig kort en bied een concrete vervolgstap.",
+    early: "Luchtig en nieuwsgierig.",
+    late: "Bevestigend, richting concrete stap.",
   },
   orienteren: {
-    early: "Zet opties naast elkaar. Noem randvoorwaarden (sector, niveau). Vermijd keuzestress.",
-    late: "Focus op de gekozen route. Geef concrete info over duur, eisen, kosten.",
+    early: "Opties naast elkaar, zonder keuzestress.",
+    late: "Gericht op de gekozen route.",
   },
   beslissen: {
-    early: "Normaliseer twijfel. Bied 2 routes, niet meer. Geen druk.",
-    late: "De keuze wordt concreet. Verwijs naar actie: aanmelden, gesprek, event.",
+    early: "Twijfel normaliseren, twee opties max.",
+    late: "Concreet: aanmelden, gesprek, event.",
   },
   matchen: {
-    early: "Help zoeken: regio, sector, type school. Concreet en praktisch.",
-    late: "Verwijs naar vacatures en events. Bied contact met loket of school.",
+    early: "Praktisch: regio, sector, type school.",
+    late: "Doorverwijzen naar vacatures of loket.",
   },
   voorbereiden: {
-    early: "Checklist-stijl. Kort en zakelijk. Wat moet nog geregeld.",
-    late: "Sluit af met aanmoediging. Verwijs naar praktische resources.",
+    early: "Kort en zakelijk, checklist-stijl.",
+    late: "Afsluitend met aanmoediging.",
   },
 };
 
@@ -544,7 +549,7 @@ function resolveKnowledge(
     if (deskInfo) regionaal.push(deskInfo);
   }
 
-  // Assemble without labels in text — section headers in assembleContext handle the distinction
+  // Assemble
   for (const l of landelijk.slice(0, 2)) fragments.push(l);
   for (const r of regionaal.slice(0, 2)) fragments.push(r);
 
@@ -555,7 +560,6 @@ function resolveKnowledge(
 // D. UI Links (server-side, NIET in LLM prompt)
 // ─────────────────────────────────────────────────────────────────────
 function computeLinks(
-  mode: "public" | "authenticated",
   phase: string,
   slots: Partial<Record<SlotKey, string>>,
 ): UiLink[] {
@@ -582,24 +586,68 @@ function computeLinks(
     }
   }
 
-  if (mode === "public") {
-    links.push({ label: "Inloggen voor persoonlijk vervolg", href: "/auth" });
-  }
-
   const uniq = new Map<string, UiLink>();
   for (const l of links) uniq.set(l.href, l);
   return [...uniq.values()].slice(0, 3);
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// E. Context Assembler — met landelijk/regionaal labels
+// E. Context Assembler — gehumaniseerd, geen raw metadata
 // ─────────────────────────────────────────────────────────────────────
+
+// Vertaal slots + fase naar menselijk leesbare situatieschets
+function humanizeSituation(
+  phase: string,
+  slots: Partial<Record<SlotKey, string>>,
+  userSector: string | undefined,
+): string {
+  const parts: string[] = [];
+  const p = (phase || "interesseren").toLowerCase();
+
+  // Fase-beschrijving
+  const phaseDescriptions: Record<string, string> = {
+    interesseren: "verkent of het onderwijs iets is",
+    orienteren: "bekijkt welke richting het beste past",
+    beslissen: "staat voor een keuze en wilt het helder krijgen",
+    matchen: "zoekt een concrete school of opleiding",
+    voorbereiden: "maakt zich klaar voor de start",
+  };
+  parts.push(`De gebruiker ${phaseDescriptions[p] || phaseDescriptions.interesseren}.`);
+
+  // Bekende interesses vertalen naar zinnen
+  const role = slots.role_interest;
+  const sector = slots.school_type || userSector?.toUpperCase();
+
+  if (role && sector) {
+    const sectorNames: Record<string, string> = { PO: "het basisonderwijs", VO: "het voortgezet onderwijs", MBO: "het mbo" };
+    parts.push(`Interesse in ${role} in ${sectorNames[sector.toUpperCase()] || sector}.`);
+  } else if (role) {
+    parts.push(`Interesse in ${role}.`);
+  } else if (sector) {
+    const sectorNames: Record<string, string> = { PO: "het basisonderwijs", VO: "het voortgezet onderwijs", MBO: "het mbo" };
+    parts.push(`Gericht op ${sectorNames[sector.toUpperCase()] || sector}.`);
+  }
+
+  if (slots.credential_goal) {
+    parts.push(`Wil een bevoegdheid halen.`);
+  }
+  if (slots.region_preference) {
+    parts.push(`Zoekt in de regio ${slots.region_preference}.`);
+  }
+  if (slots.admission_requirements) {
+    parts.push(`Achtergrond: ${slots.admission_requirements}.`);
+  }
+
+  return parts.join(" ");
+}
+
 function assembleContext(
   phase: string,
   detector: DetectorPayload | undefined,
   profileMeta: ProfileMeta | undefined | null,
   userSector: string | undefined,
   phaseTransition: PhaseTransition | undefined,
+  intent: IntentType,
 ): string {
   const slots = detector?.known_slots || {};
   const slotsFilledCount = Object.values(slots).filter(Boolean).length;
@@ -608,7 +656,6 @@ function assembleContext(
     : 9;
 
   const tone = selectTone(phase, slotsFilledCount, totalSlotsCount);
-  const knowledge = resolveKnowledge(slots, phase);
   const profile = interpretProfile(profileMeta);
 
   let transitionNote = "";
@@ -620,18 +667,28 @@ function assembleContext(
   parts.push(`## DYNAMISCHE CONTEXT`);
   parts.push(`\n### Toon\n${tone}`);
 
-  const knownSlotsInfo = Object.entries(slots)
-    .filter(([, v]) => v)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(", ");
-  parts.push(`\n### Situatie\n- Fase: ${detector?.phase_current_ui || phase}\n- Confidence: ${detector?.phase_confidence ?? "n.v.t."}`);
-  if (knownSlotsInfo) parts.push(`- Bekende info: ${knownSlotsInfo}`);
-  if (userSector) parts.push(`- Voorkeursector: ${userSector}`);
-  if (detector?.evidence?.length) parts.push(`- Signalen: ${detector.evidence.slice(0, 3).join(" | ")}`);
+  // Gehumaniseerde situatie (geen raw metadata)
+  const situation = humanizeSituation(phase, slots, userSector);
+  parts.push(`\n### Situatie\n${situation}`);
 
-  if (knowledge.length > 0) {
-    parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${knowledge.map(k => `- ${k}`).join("\n")}`);
+  // Kennis: afhankelijk van intent
+  if (intent === "question") {
+    const knowledge = resolveKnowledge(slots, phase);
+    if (knowledge.length > 0) {
+      parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${knowledge.map(k => `- ${k}`).join("\n")}`);
+    } else {
+      parts.push(`\n### Achtergrondinformatie\n${BASELINE_KNOWLEDGE}`);
+    }
+  } else if (intent === "exploration") {
+    parts.push(`\n### Achtergrondinformatie\n${BASELINE_KNOWLEDGE}`);
+  } else if (intent === "followup") {
+    const knowledge = resolveKnowledge(slots, phase);
+    if (knowledge.length > 0) {
+      parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${knowledge.map(k => `- ${k}`).join("\n")}`);
+    }
+    // Bij followup zonder relevante kennis: geen kennisblok (LLM bouwt voort op gesprek)
   }
+  // greeting: geen kennisblokken
 
   if (profile) {
     parts.push(`\n### Over de gebruiker\n${profile}`);
@@ -646,7 +703,6 @@ function assembleContext(
   const estimatedTokens = Math.ceil(assembled.length / 4);
   if (estimatedTokens > 800) {
     const trimmed = parts.slice(0, 4);
-    if (knowledge.length > 0) trimmed.push(`\n### Kennis\n- ${knowledge[0]}`);
     if (profile) trimmed.push(`\n### Over de gebruiker\n${profile}`);
     return trimmed.join("\n");
   }
@@ -655,92 +711,8 @@ function assembleContext(
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Slot extraction (deterministic, public fallback)
+// Actions: SSOT-gestuurde acties (ongewijzigd)
 // ─────────────────────────────────────────────────────────────────────
-function extractSlots(text: string): Record<string, string | null> {
-  const t = text.toLowerCase();
-  const slots: Record<string, string | null> = {};
-
-  if (/\bpo\b|basisonderwijs|primair|basisschool/.test(t)) slots.school_type = "PO";
-  else if (/\bvo\b|voortgezet|middelbare/.test(t)) slots.school_type = "VO";
-  else if (/\bmbo\b|beroepsonderwijs/.test(t)) slots.school_type = "MBO";
-  else slots.school_type = null;
-
-  return slots;
-}
-
-function chooseNextQuestion(
-  userPhase: string | undefined,
-  extracted: Record<string, string | null>,
-): { slot: string; question: string } {
-  const phase = (userPhase || "interesseren").toLowerCase();
-
-  if (["orienteren", "beslissen", "matchen", "voorbereiden"].includes(phase) && !extracted.school_type) {
-    return { slot: "school_type", question: "In welke sector wil je je oriënteren: PO, VO of MBO?" };
-  }
-
-  switch (phase) {
-    case "interesseren":
-      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
-    case "orienteren":
-      return { slot: "credential_goal", question: "Wil je weten welke route bij je past, of welke diploma's je nodig hebt?" };
-    case "beslissen":
-      return { slot: "next_step", question: "Wat zou jou helpen om een keuze te maken?" };
-    case "matchen":
-      return { slot: "region_preference", question: "In welke regio wil je zoeken?" };
-    case "voorbereiden":
-      return { slot: "next_step", question: "Wat is voor jou de prettigste volgende stap?" };
-    default:
-      return { slot: "role_interest", question: "Wat trekt je het meest aan?" };
-  }
-}
-
-function chooseActions(
-  userPhase: string | undefined,
-  extracted: Record<string, string | null>,
-): UiAction[] {
-  const phase = (userPhase || "interesseren").toLowerCase();
-
-  if (!extracted.school_type && phase !== "interesseren") {
-    return [
-      { label: "PO (basisonderwijs)", value: "Basisonderwijs lijkt me wat" },
-      { label: "VO (voortgezet)", value: "Voortgezet onderwijs, denk ik" },
-      { label: "MBO (beroepsonderwijs)", value: "MBO spreekt me aan" },
-    ];
-  }
-
-  switch (phase) {
-    case "interesseren":
-      return [
-        { label: "Lesgeven", value: "Lesgeven trekt me" },
-        { label: "Begeleiding", value: "Leerlingen begeleiden lijkt me wat" },
-        { label: "Vakexpertise", value: "Mijn vak inzetten in het onderwijs" },
-      ];
-    case "beslissen":
-      return [
-        { label: "Kosten bekijken", value: "Wat kost het eigenlijk" },
-        { label: "Vacatures", value: "Laat me vacatures zien" },
-        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
-      ];
-    case "matchen":
-      return [
-        { label: "Scholen zoeken", value: "Welke scholen zitten in mijn buurt" },
-        { label: "Vacatures", value: "Laat me vacatures zien" },
-      ];
-    case "voorbereiden":
-      return [
-        { label: "Checklist bekijken", value: "Wat moet ik nog regelen" },
-        { label: "Gesprek plannen", value: "Kan ik ergens terecht voor een gesprek" },
-      ];
-    default:
-      return [
-        { label: "Routes bekijken", value: "Hoe word je eigenlijk leraar" },
-        { label: "Opleidingen", value: "Welke opleidingen zijn er" },
-      ];
-  }
-}
-
-// Auth: actions volgen SSOT next_slot_key
 function actionsForNextSlot(
   slot: SlotKey,
   knownSlots?: Partial<Record<SlotKey, string>>,
@@ -843,16 +815,107 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - Pak aan wat de gebruiker zegt en bouw daarop voort, in plaats van een standaard structuur te volgen.
 `;
 
-
-const DASHBOARD_APPENDIX = `
-## Modus: dashboard (ingelogd)
-- Je voert een echt gesprek. Reageer op wat de gebruiker zegt, niet op een script.
-- Je mag vragen stellen als dat het gesprek verder helpt. Doe dit natuurlijk, niet geforceerd.
-- Als de gebruiker geen duidelijke vraag stelt, geef dan GEEN informatiedump. Stel eerst een korte wedervraag om te begrijpen waar de interesse ligt. Pas als je dat weet, deel je gerichte info.
-- Gebruik de achtergrondinformatie uit de context om inhoudelijk te antwoorden, maar alleen als je weet wat de gebruiker wil weten.
+// Intent-specifieke appendix: vervangt de generieke DASHBOARD_APPENDIX
+const INTENT_APPENDIX: Record<IntentType, string> = {
+  greeting: `
+## Modus: dashboard (ingelogd) - Begroeting
+- De gebruiker groet je. Reageer warm en kort.
+- Stel een open wedervraag om te ontdekken wat hen bezighoudt.
+- Deel geen inhoudelijke info tenzij de gebruiker er specifiek om vraagt.
 - Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
-- Houd je antwoord beknopt: maximaal 120 woorden. Liever korter.
-`;
+- Maximaal 60 woorden.
+`,
+  question: `
+## Modus: dashboard (ingelogd) - Vraag
+- De gebruiker heeft een specifieke vraag. Beantwoord deze gericht met de achtergrondinformatie.
+- Gebruik de context om inhoudelijk te antwoorden.
+- Als je niet genoeg weet voor een volledig antwoord, geef wat je weet en stel een gerichte wedervraag.
+- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Maximaal 120 woorden.
+`,
+  exploration: `
+## Modus: dashboard (ingelogd) - Verkenning
+- De gebruiker verkent, twijfelt of is nieuwsgierig. Geen informatiedump.
+- Stel een korte wedervraag om te begrijpen waar de interesse ligt.
+- Je mag de basisinfo gebruiken als het natuurlijk past, maar hou het kort.
+- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Maximaal 80 woorden.
+`,
+  followup: `
+## Modus: dashboard (ingelogd) - Vervolg
+- De gebruiker reageert op een eerder antwoord. Bouw voort op het gesprek.
+- Gebruik de context alleen als het relevant is voor het lopende onderwerp.
+- Houd het conversationeel en beknopt.
+- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Maximaal 120 woorden.
+`,
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// F. Intent Classifier — stap 1 van multi-stap orchestratie
+// ─────────────────────────────────────────────────────────────────────
+const INTENT_CLASSIFY_PROMPT = `Classificeer het laatste bericht van de gebruiker. Antwoord ALLEEN met valide JSON.
+
+Categorieën:
+- "greeting": begroeting, kennismaking, hoi/hey/hallo, "ik ben nieuw"
+- "question": specifieke vraag over routes, opleidingen, bevoegdheden, salaris, kosten
+- "exploration": vage verkenning, twijfel, "ik ben benieuwd", "ik weet niet", "wat kan ik"
+- "followup": reactie op een eerder antwoord, bevestiging, verduidelijking, "ja maar", "en als"
+
+Antwoord formaat: {"intent":"greeting|question|exploration|followup"}`;
+
+async function classifyIntent(
+  messages: ChatMessage[],
+  apiKey: string,
+): Promise<IntentType> {
+  try {
+    // Neem de laatste 5 berichten voor context
+    const recentMessages = messages.slice(-5);
+    const lastUserMsg = [...recentMessages].reverse().find(m => m.role === "user")?.content ?? "";
+
+    if (!lastUserMsg.trim()) return "greeting";
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [
+          { role: "system", content: INTENT_CLASSIFY_PROMPT },
+          ...recentMessages.map(m => ({ role: m.role, content: m.content })),
+        ],
+        stream: false,
+        temperature: 0,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("Intent classification failed, falling back to 'question'");
+      return "question";
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+
+    // Parse JSON response
+    const match = content.match(/\{[^}]*"intent"\s*:\s*"(\w+)"[^}]*\}/);
+    if (match) {
+      const intent = match[1] as IntentType;
+      if (["greeting", "question", "exploration", "followup"].includes(intent)) {
+        return intent;
+      }
+    }
+
+    console.warn("Intent parse failed, content:", content);
+    return "question";
+  } catch (e) {
+    console.warn("Intent classification error:", e);
+    return "question";
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Stream filter: replace emdash/en-dash
@@ -891,7 +954,7 @@ function streamReplaceDashes(input: ReadableStream<Uint8Array>) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Handler
+// Handler — 2-staps orchestratie
 // ─────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -899,39 +962,27 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, mode = "authenticated", userPhase, userSector, detector, phase_transition, profileMeta }: RequestBody = await req.json();
+    const { messages, userPhase, userSector, detector, phase_transition, profileMeta }: RequestBody = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-    const extracted = extractSlots(lastUserMsg);
+    // ── Stap 1: Intent classificatie (snel, niet-streaming) ──
+    const intent = await classifyIntent(messages, LOVABLE_API_KEY);
 
-    // Public fallback
-    const legacyNextQ = chooseNextQuestion(userPhase, extracted);
-    const legacyActions = chooseActions(userPhase, extracted);
-
-    // Auth SSOT next question + actions
-    const ssotNextQ = detector?.next_question && detector?.next_slot_key
-      ? { slot: detector.next_slot_key, question: detector.next_question }
-      : legacyNextQ;
+    // ── SSOT actions + links (deterministisch, ongewijzigd) ──
+    const phase = detector?.phase_current || userPhase || "interesseren";
+    const slots = detector?.known_slots || {};
 
     const ssotActions: UiAction[] = detector?.next_slot_key
       ? actionsForNextSlot(detector.next_slot_key, detector?.known_slots)
-      : legacyActions;
+      : [];
 
-    // Context + links
-    const phase = detector?.phase_current || userPhase || "interesseren";
-    const slots = detector?.known_slots || {};
-    const uiLinks = computeLinks(mode || "authenticated", phase, slots);
+    const uiLinks = computeLinks(phase, slots);
 
-    // Build prompt: CORE + APPENDIX + dynamic context
-    let systemPrompt = DOORAI_CORE + DASHBOARD_APPENDIX;
-
-    const dynamicContext = mode === "authenticated"
-      ? assembleContext(phase, detector, profileMeta, userSector, phase_transition)
-      : `## Huidige context\n- Ingelogd: Nee`;
-    systemPrompt += `\n\n${dynamicContext}`;
+    // ── Stap 2: Context samenstellen op basis van intent ──
+    const dynamicContext = assembleContext(phase, detector, profileMeta, userSector, phase_transition, intent);
+    const systemPrompt = DOORAI_CORE + INTENT_APPENDIX[intent] + `\n\n${dynamicContext}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -980,12 +1031,9 @@ Deno.serve(async (req) => {
           await writer.write(value);
         }
 
-        // SSOT question no longer force-appended — LLM asks naturally
-
         // UI payload: actions + links
-        const actions = mode === "authenticated" ? ssotActions : legacyActions;
         await writer.write(
-          encoder.encode(`data: ${JSON.stringify({ actions, links: uiLinks })}\n\n`),
+          encoder.encode(`data: ${JSON.stringify({ actions: ssotActions, links: uiLinks })}\n\n`),
         );
       } catch (e) {
         console.error("Stream error:", e);
