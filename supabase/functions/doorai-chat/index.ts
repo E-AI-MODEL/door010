@@ -544,13 +544,9 @@ function resolveKnowledge(
     if (deskInfo) regionaal.push(deskInfo);
   }
 
-  // Assemble met labels
-  if (landelijk.length > 0) {
-    fragments.push(`[Landelijk] ${landelijk.slice(0, 2).join(" | ")}`);
-  }
-  if (regionaal.length > 0) {
-    fragments.push(`[Regionaal] ${regionaal.slice(0, 2).join(" | ")}`);
-  }
+  // Assemble without labels in text — section headers in assembleContext handle the distinction
+  for (const l of landelijk.slice(0, 2)) fragments.push(l);
+  for (const r of regionaal.slice(0, 2)) fragments.push(r);
 
   return fragments.slice(0, 3);
 }
@@ -634,7 +630,7 @@ function assembleContext(
   if (detector?.evidence?.length) parts.push(`- Signalen: ${detector.evidence.slice(0, 3).join(" | ")}`);
 
   if (knowledge.length > 0) {
-    parts.push(`\n### Kennis\n${knowledge.map(k => `- ${k}`).join("\n")}`);
+    parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${knowledge.map(k => `- ${k}`).join("\n")}`);
   }
 
   if (profile) {
@@ -822,10 +818,10 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - Bij salaris/inschaling: alleen globaal, verwijs naar CAO/tabellen.
 - Bij maatwerk: benoem dat het kan verschillen en verwijs naar een passende vervolgstap.
 
-## Kennis-labels
-- Informatie gelabeld als [Landelijk] geldt voor heel Nederland (routes, bevoegdheden, opleidingen, salaris, kosten).
-- Informatie gelabeld als [Regionaal] is specifiek voor een regio of stad (loketten, vacatures, events, scholen).
-- Maak dit onderscheid duidelijk in je antwoord wanneer relevant.
+## Achtergrondinformatie
+- Je krijgt achtergrondinformatie over routes, loketten en opleidingen in de context.
+- Gebruik deze info inhoudelijk in je antwoord, maar noem NOOIT labels als "[Landelijk]" of "[Regionaal]".
+- Verwerk de feiten natuurlijk in je tekst. Noem geen metadata of sectienames uit de context.
 
 ## Stijl
 - Korte zinnen, weinig jargon.

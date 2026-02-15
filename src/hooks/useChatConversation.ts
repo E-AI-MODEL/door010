@@ -101,7 +101,7 @@ export function useChatConversation(userId: string | undefined, profile: Profile
     const info = PHASE_INFO[phase] || PHASE_INFO.interesseren;
     const actions = PHASE_WELCOME_ACTIONS[phase] || PHASE_WELCOME_ACTIONS.interesseren;
     return {
-      content: `Welkom terug! Fijn dat je er bent 👋\n\nJe zit nu in de **${info.title}**-fase. ${info.context}\n\nWaar kan ik je vandaag mee helpen?`,
+      content: `Welkom terug, goed dat je er bent.\n\nJe zit in de **${info.title}**-fase. ${info.context}\n\nKies een suggestie hieronder of typ je vraag.`,
       actions,
     };
   }, []);
