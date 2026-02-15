@@ -11,7 +11,8 @@ const corsHeaders = {
 // 2) Links gaan NIET in de prompt maar als UI-payload via SSE.
 // 3) In dashboard-mode stelt de LLM geen vraag; SSOT-vraag wordt server-side ge-append.
 // 4) SSOT JSON-bestanden worden dynamisch gelookup-t voor kennisblokken.
-// 5) Eén core prompt + 2 appendices i.p.v. 2 gedupliceerde mega-prompts.
+// 5) Eén core prompt + 1 appendix (dashboard). Dode public-mode code verwijderd.
+// 6) Kennis gelabeld als landelijk/regionaal en fase-gefilterd.
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
@@ -72,123 +73,258 @@ type UiAction = { label: string; value: string };
 type UiLink = { label: string; href: string };
 
 // ─────────────────────────────────────────────────────────────────────
-// SSOT JSON Data — ingelezen als const, geïndexeerd voor lookups
+// SSOT Data — Complete lookups from JSON sources
 // ─────────────────────────────────────────────────────────────────────
-// We laden de JSON-bestanden inline als compacte samenvattingen.
-// De volledige bestanden zijn te groot (21.000+ regels) om in een prompt te stoppen.
-// In plaats daarvan hebben we voorgeïndexeerde lookups.
 
-// ── Route Questions: functiebeschrijvingen per antwoord-titel ──
+// ── Route Questions: alle 7 functiebeschrijvingen ──
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   leraar: "Een leraar draagt verantwoordelijkheid voor een klas. In de meeste gevallen moeten leraren wettelijk aan bekwaamheidseisen voldoen.",
   "onderwijsondersteunend personeel": "Ondersteunende functies die direct ondersteunen bij de lespraktijk: onderwijsassistenten, remedial teachers, leraarondersteuners, klassenassistenten.",
   "ondersteunend personeel": "Ondersteunende functies in de organisatie die niet direct betrokken zijn bij het leerproces: conciërge, personeelsmedewerkers, roostermaker, administratie.",
   schoolleiding: "De dagelijkse leiding van een school: directeur (PO), rector/conrectoren (VO), of directie afhankelijk van omvang (MBO).",
   middenmanagement: "Het middenmanagement vormt samen met de schoolleiding het managementteam: bouwcoördinatoren (PO), teamleiders (VO), opleidingsmanagers (MBO).",
+  instructeur: "Binnen het mbo zijn instructeurs verantwoordelijk voor de praktijkonderdelen van een opleiding. Een instructeur geeft zelfstandig (delen van) lessen, maar valt altijd onder de verantwoordelijkheid van een docent of het onderwijsteam.",
+  leerlingenzorg: "Binnen elke vorm van onderwijs zijn er mensen specifiek gericht op leerlingenzorg: Intern Begeleider (PO), Zorgcoördinator (VO), studieadviseur (MBO/HO), orthopedagoog (speciaal onderwijs).",
 };
 
-// ── Route Steps: route-paragrafen geïndexeerd op slug ──
+// ── Route Steps: alle routes geïndexeerd op slug ──
 const ROUTE_SUMMARIES: Record<string, { title: string; summary: string; hasFaqs: boolean }> = {
-  "wo-f": {
-    title: "Wo-bachelor",
-    summary: "Wo-bacheloropleidingen zijn academische studies. Met een wo-bachelor in Gedrag en Maatschappij ben je toelaatbaar tot de universitaire Educatieve Master Primair Onderwijs (EMPO).",
-    hasFaqs: false,
-  },
-  hbom: {
-    title: "Hbo-master",
-    summary: "Na een tweedegraads bevoegdheid kun je via een hbo-master je bevoegdheid uitbreiden tot eerstegraads voor bovenbouw havo/vwo. Niet voor alle schoolvakken beschikbaar.",
-    hasFaqs: true,
-  },
-  pabo: {
-    title: "Pabo",
-    summary: "De Pabo duurt 4 jaar voltijd of langer in deeltijd. Leidt op tot leraar basisonderwijs. Toelatingseis: havo, vwo of mbo-4.",
-    hasFaqs: true,
-  },
-  "zij-instroom-po": {
-    title: "Zij-instroom PO",
-    summary: "Zij-instroom PO is een versneld 2-jarig traject voor hbo/wo-gediplomeerden die leraar basisonderwijs willen worden. Je leert en werkt tegelijk op een school.",
-    hasFaqs: true,
-  },
-  "zij-instroom-vo": {
-    title: "Zij-instroom VO",
-    summary: "Zij-instroom VO is een 2-jarig duaal traject voor mensen met een relevant hbo/wo-diploma. Je geeft les terwijl je de bevoegdheid haalt, met geschiktheidsonderzoek vooraf.",
-    hasFaqs: true,
-  },
-  tweedegraads: {
-    title: "Tweedegraads lerarenopleiding",
-    summary: "4 jaar hbo. Bevoegd voor vmbo en onderbouw havo/vwo. Geschikt als je een specifiek vak wilt geven op de middelbare school.",
-    hasFaqs: true,
-  },
-  eerstegraads: {
-    title: "Eerstegraads lerarenopleiding",
-    summary: "Universitaire master (1-2 jaar) na een vakinhoudelijke bachelor. Bevoegd voor alle niveaus VO inclusief bovenbouw havo/vwo.",
-    hasFaqs: true,
-  },
-  pdg: {
-    title: "PDG",
-    summary: "Pedagogisch Didactisch Getuigschrift: 1-2 jaar naast het werk. Bedoeld voor vakmensen die in het MBO willen lesgeven. Je leert didactiek terwijl je al voor de klas staat.",
-    hasFaqs: true,
-  },
-  kopopleiding: {
-    title: "Kopopleiding",
-    summary: "Een kopopleiding is een versneld hbo-bachelortraject (1-2 jaar) voor wie al een hbo- of wo-bachelor heeft. Je haalt een tweedegraads bevoegdheid.",
-    hasFaqs: true,
-  },
+  "wo-f": { title: "Wo-bachelor (doorstroom PO)", summary: "Wo-bacheloropleidingen zijn academische studies. Met een wo-bachelor in Gedrag en Maatschappij ben je toelaatbaar tot de universitaire Educatieve Master Primair Onderwijs (EMPO).", hasFaqs: false },
+  hbom: { title: "Hbo-master", summary: "Na een tweedegraads bevoegdheid kun je via een hbo-master je bevoegdheid uitbreiden tot eerstegraads voor bovenbouw havo/vwo. Niet voor alle schoolvakken beschikbaar.", hasFaqs: true },
+  pabo: { title: "Pabo", summary: "De Pabo duurt 4 jaar voltijd of langer in deeltijd. Leidt op tot leraar basisonderwijs. Toelatingseis: havo, vwo of mbo-4.", hasFaqs: true },
+  "zij-instroom-po": { title: "Zij-instroom PO", summary: "Versneld 2-jarig traject voor hbo/wo-gediplomeerden die leraar basisonderwijs willen worden. Je leert en werkt tegelijk op een school.", hasFaqs: true },
+  "zij-instroom-vo": { title: "Zij-instroom VO", summary: "2-jarig duaal traject voor mensen met een relevant hbo/wo-diploma. Je geeft les terwijl je de bevoegdheid haalt, met geschiktheidsonderzoek vooraf.", hasFaqs: true },
+  tweedegraads: { title: "Tweedegraads lerarenopleiding", summary: "4 jaar hbo. Bevoegd voor vmbo en onderbouw havo/vwo. Geschikt als je een specifiek vak wilt geven op de middelbare school.", hasFaqs: true },
+  eerstegraads: { title: "Eerstegraads lerarenopleiding", summary: "Universitaire master (1-2 jaar) na een vakinhoudelijke bachelor. Bevoegd voor alle niveaus VO inclusief bovenbouw havo/vwo.", hasFaqs: true },
+  pdg: { title: "PDG", summary: "Pedagogisch Didactisch Getuigschrift: 1-2 jaar naast het werk. Bedoeld voor vakmensen die in het MBO willen lesgeven. Je leert didactiek terwijl je al voor de klas staat.", hasFaqs: true },
+  kopopleiding: { title: "Kopopleiding", summary: "Versneld hbo-bachelortraject (1-2 jaar) voor wie al een hbo- of wo-bachelor heeft. Je haalt een tweedegraads bevoegdheid.", hasFaqs: true },
+  "wo-a": { title: "Universitaire pabo", summary: "Combinatie van hbo-pabo en wo-bachelor Onderwijswetenschappen of Pedagogische Wetenschappen. In ca. 4 jaar behaal je twee bachelors.", hasFaqs: true },
+  "mbo4-b": { title: "Mbo-4 (doorstroom)", summary: "Mbo 4-opleiding als middenkaderopleiding (3-4 jaar). Na afronding kun je doorstromen naar een AD of hbo-bachelor.", hasFaqs: true },
+  "vavo-b": { title: "Vavo", summary: "Via volwassenenonderwijs je havodiploma halen. Voor 18+ zonder juist middelbareschooldiploma. Regulier havo-eindexamen.", hasFaqs: true },
+  "pdg-a": { title: "PDG-traject", summary: "Met een PDG mag je lesgeven in het mbo. Leer-werktraject via zij-instroom. Hbo/wo-diploma of 3 jaar werkervaring + hbo-denkniveau vereist.", hasFaqs: true },
+  "sl-a": { title: "Schoolleiding PO", summary: "Schoolleiders PO moeten geregistreerd staan in het Schoolleidersregister PO. Kwalificatie via schoolleidersopleiding, master, assessment of EVC.", hasFaqs: false },
+  "mbo3-a": { title: "Mbo-3", summary: "Vakopleiding van 2-3 jaar. Na afronding doorstroom naar mbo-4 mogelijk.", hasFaqs: false },
+  "hbo-f": { title: "Hbo-bachelor (ongegradeerde bevoegdheid)", summary: "Ongegradeerde bevoegdheid voor lichamelijke opvoeding, muziek en andere kunstvakken. Bevoegd in alle onderwijssectoren.", hasFaqs: false },
+  "mm-b": { title: "Middenmanagement VO", summary: "Teamleiders en afdelingsleiders in het voortgezet onderwijs. Vaak nog deels voor de klas, met lesbevoegdheid.", hasFaqs: false },
+  "wom-a": { title: "Wo-master (eerstegraads)", summary: "Educatieve master of zij-instroomtraject aan universiteit. 1-2 jaar. Bevoegd voor alle VO-niveaus.", hasFaqs: true },
+  "ad-a": { title: "Associate degree (leraarondersteuner)", summary: "2-jarige praktijkgerichte hbo-opleiding. AD-PEP leidt op tot leraarondersteuner in alle sectoren. Ook instructeur MBO of pedagogisch coach.", hasFaqs: true },
+  "wo-c": { title: "Wo-bachelor (doorstroom VO)", summary: "Wo-bachelor die aansluit bij een schoolvak. Daarna educatieve wo-master, kopopleiding of zij-instroom mogelijk.", hasFaqs: false },
+  "mm-c": { title: "Middenmanagement MBO", summary: "Teamleiders in het mbo die leiding geven aan onderwijsteams. Vaak zelf ook uit de opleiding afkomstig.", hasFaqs: false },
+  "21a": { title: "21+-toets", summary: "Toelatingstoets voor een associate degree als je geen mbo-4, havo of vwo-diploma hebt. Vanaf 21 jaar.", hasFaqs: true },
+  "mbo4-d": { title: "Mbo-4 (doorstroom tweedegraads)", summary: "Mbo 4-opleiding waarna doorstroom naar tweedegraads lerarenopleiding mogelijk is.", hasFaqs: false },
+  "wo-d": { title: "Wo-bachelor (doorstroom wo-master)", summary: "Wo-bachelor waarna doorstroom naar wo-master en vervolgens educatieve master of zij-instroom.", hasFaqs: false },
+  "hbo-c": { title: "Hbo-bachelor (doorstroom kopopleiding)", summary: "Hbo-bachelor waarna verkorte lerarenopleiding (kopopleiding) mogelijk is voor tweedegraads bevoegdheid.", hasFaqs: false },
+  "p-hbo-b": { title: "Verkorte pabo", summary: "Verkorte deeltijd pabo (2-3 jaar) voor wie al een hbo- of wo-opleiding heeft afgerond.", hasFaqs: true },
+  "mbotoets-b": { title: "Mbo-toets", summary: "Toelatingstoets voor mbo 3-opleiding als je niet de gevraagde vooropleiding hebt.", hasFaqs: false },
+  "hbo-b": { title: "Hbo-bachelor (tweedegraads)", summary: "Tweedegraads lerarenopleiding aan de hogeschool. 4 jaar voltijd. Bevoegd voor vmbo en onderbouw havo/vwo.", hasFaqs: true },
+  "op-a": { title: "Ondersteunend personeel PO", summary: "Diverse functies: conciërge, administratie, technische dienst. Geen wettelijke eisen, direct solliciteren met relevante ervaring.", hasFaqs: true },
+  "ad-e": { title: "Associate degree (instructeur)", summary: "2-jarige AD-opleiding om instructeur te worden in het mbo.", hasFaqs: false },
+  "mbo4sp-b": { title: "Mbo-4 specialistenopleiding", summary: "Korte variant mbo-4 (1-2 jaar). Leer-werktraject na afronding aansluitende mbo-3 of mbo-4.", hasFaqs: false },
+  "wom-b": { title: "Wo-master (doorstroom)", summary: "Wo-master waarna educatieve master of zij-instroom voor eerstegraads bevoegdheid.", hasFaqs: false },
+  "mbo4-e": { title: "Mbo-4 (instructeur)", summary: "Mbo 4-opleiding als route naar instructeur in het mbo.", hasFaqs: false },
+  "ad-b": { title: "Associate degree (doorstroom pabo)", summary: "AD als opstap naar de pabo of verkorte pabo.", hasFaqs: true },
+  hbop: { title: "Hbo-P (pedagogisch)", summary: "Pedagogische hbo-opleiding, ca. 1 jaar. Richt zich op pedagogisch-didactische vaardigheden.", hasFaqs: false },
+  "onbler-a": { title: "Gastdocent", summary: "Als gastdocent kun je zonder bevoegdheid voor de klas staan, maximaal een beperkt aantal uren per week.", hasFaqs: false },
+  "op-b": { title: "Ondersteunend personeel VO", summary: "Ondersteunende functies in het voortgezet onderwijs. Geen wettelijke eisen, direct solliciteren.", hasFaqs: false },
+  mbo1: { title: "Mbo-1", summary: "Entree-opleiding mbo. Duur: 1 jaar. Doorstroom naar mbo-2 mogelijk.", hasFaqs: false },
+  "op-c": { title: "Ondersteunend personeel MBO", summary: "Ondersteunende functies in het mbo. Geen wettelijke eisen, direct solliciteren.", hasFaqs: false },
+  "lz-a": { title: "Leerlingenzorg PO", summary: "Intern begeleider (IB'er) als spil van leerlingenzorg op de basisschool. HBO-opleiding tot IB'er.", hasFaqs: false },
+  "lz-c": { title: "Leerlingenzorg VO", summary: "Zorgcoördinator als spil van leerlingenzorg op de middelbare school.", hasFaqs: false },
+  "hbo-a": { title: "Hbo-bachelor (pabo)", summary: "Reguliere pabo: 4-jarige hbo-opleiding tot leraar basisonderwijs.", hasFaqs: true },
+  "lz-d": { title: "Leerlingenzorg MBO", summary: "Zorgcoördinator, loopbaanbegeleider, leer-werkcoach en andere zorgfuncties in het mbo.", hasFaqs: false },
+  "wo-b": { title: "Educatieve minor/module", summary: "30 ECTS minor tijdens of na wo-bachelor. Levert beperkte tweedegraads bevoegdheid op voor vmbo en onderbouw havo/vwo.", hasFaqs: true },
+  "lz-e": { title: "Leerlingenzorg HO", summary: "Studentenpsycholoog, vertrouwenspersoon, studieadviseur in het hoger onderwijs.", hasFaqs: false },
+  "onbler-b": { title: "Leraar HO", summary: "Lesgeven in het hoger onderwijs. Geen wettelijke bevoegdheid vereist. Vaak afgeronde master en BKO/BDB gevraagd.", hasFaqs: true },
 };
 
-// ── Regional Education Desks: geïndexeerd op regio/stad ──
+// ── Regional Education Desks: alle loketten met stad-matching ──
 interface DeskInfo {
   title: string;
   email: string | null;
   website: string | null;
   consultUrl: string | null;
   hasConsultation: boolean;
+  cities: string[];
 }
 
-const REGIONAL_DESKS: Record<string, DeskInfo> = {
-  rotterdam: {
+const REGIONAL_DESKS_LIST: DeskInfo[] = [
+  {
+    title: "SchoolpleinNoord",
+    email: "info@schoolpleinnoord.nl",
+    website: "https://schoolpleinnoord.nl/",
+    consultUrl: "https://schoolpleinnoord.nl/contact",
+    hasConsultation: true,
+    cities: ["groningen", "leeuwarden", "drachten", "heerenveen", "assen", "sneek", "delfzijl", "stadskanaal", "veendam", "winschoten", "appingedam", "emmen", "hoogeveen", "meppel"],
+  },
+  {
+    title: "VOTA",
+    email: "instroommakelaar@vota.nl",
+    website: "https://vota.nl",
+    consultUrl: "https://vota.nl/contact",
+    hasConsultation: true,
+    cities: ["almelo", "enschede", "hengelo", "deventer", "oldenzaal", "borne", "haaksbergen", "lochem", "raalte", "rijssen", "twente"],
+  },
+  {
+    title: "Foodvalley Leerwerkloket",
+    email: "arbeidsmarktregio@ede.nl",
+    website: "https://kiesjekans.nl/branches/onderwijs",
+    consultUrl: "https://www.kiesjekans.nl/contact",
+    hasConsultation: true,
+    cities: ["barneveld", "veenendaal", "ede", "wageningen", "renkum", "rhenen", "nijkerk", "oosterbeek", "foodvalley"],
+  },
+  {
+    title: "Onderwijsloket Nijmegen",
+    email: "contact@onderwijsloketnijmegen.nl",
+    website: "https://onderwijsloketnijmegen.nl/",
+    consultUrl: "https://onderwijsloketnijmegen.nl/contact",
+    hasConsultation: true,
+    cities: ["nijmegen", "lent"],
+  },
+  {
+    title: "Grijp je kans in het onderwijs",
+    email: "info@grijpjekansinhetonderwijs.nl",
+    website: "https://grijpjekansinhetonderwijs.nl",
+    consultUrl: "https://www.grijpjekansinhetonderwijs.nl/contact",
+    hasConsultation: true,
+    cities: ["eindhoven", "helmond", "'s-hertogenbosch", "den bosch", "geldrop", "deurne", "vught", "bladel", "meierijstad", "boxtel", "oss", "valkenswaard", "best", "veldhoven", "brabant-oost"],
+  },
+  {
+    title: "Onderwijsloket Arnhem",
+    email: "info@onderwijsloketarnhem.nl",
+    website: "https://onderwijsregioloa.nl",
+    consultUrl: "https://onderwijsloketarnhem.nl/contact",
+    hasConsultation: true,
+    cities: ["arnhem", "lingewaard", "overbetuwe"],
+  },
+  {
+    title: "Aan de slag in het Haagse Basisonderwijs",
+    email: "info@aandeslaginhethaagsebasisonderwijs.nl",
+    website: "https://www.aandeslaginhethaagsebasisonderwijs.nl/",
+    consultUrl: "https://www.aandeslaginhethaagsebasisonderwijs.nl/",
+    hasConsultation: true,
+    cities: ["den haag", "haaglanden"],
+  },
+  {
+    title: "Leraar worden in Leiden, Duin- en Bollenstreek",
+    email: "info@leraarwordeninleidenduinenbollenstreek.nl",
+    website: "https://www.leraarwordeninleidenduinenbollenstreek.nl/",
+    consultUrl: "https://www.leraarwordeninleidenduinenbollenstreek.nl/leraar-worden/meld-je-aan/",
+    hasConsultation: true,
+    cities: ["leiden", "leiderdorp", "katwijk", "noordwijk", "oegstgeest", "voorschoten", "wassenaar", "hillegom", "lisse", "bollenstreek"],
+  },
+  {
+    title: "Samen voor de Haagse Klas",
+    email: "info@samenvoordehaagseklas.nl",
+    website: "https://samenvoordehaagseklas.nl",
+    consultUrl: null,
+    hasConsultation: false,
+    cities: ["den haag"],
+  },
+  {
+    title: "Utrecht leert",
+    email: "welkom@utrechtleert.nl",
+    website: "https://utrechtleert.nl/utrechtse-energie/",
+    consultUrl: null,
+    hasConsultation: false,
+    cities: ["utrecht"],
+  },
+  {
+    title: "Hatseklas",
+    email: "info@hatseklas.nl",
+    website: "https://hatseklas.nl",
+    consultUrl: "https://hatseklas.nl/contact/",
+    hasConsultation: true,
+    cities: ["zwolle", "apeldoorn", "kampen", "harderwijk", "nunspeet", "ermelo", "putten", "elburg", "epe", "heerde", "hattem", "hoogeveen", "meppel", "dronten", "zeewolde", "urk", "overijssel"],
+  },
+  {
+    title: "Midden Nederland Leert",
+    email: "Instroom@middennederlandleert.nl",
+    website: "https://middennederlandleert.nl/",
+    consultUrl: "https://middennederlandleert.nl/contact/",
+    hasConsultation: true,
+    cities: ["amersfoort", "hilversum", "houten", "zeist", "leusden", "soest", "baarn", "woerden", "culemborg", "nieuwegein", "ijsselstein"],
+  },
+  {
+    title: "Liever voor de klas",
+    email: "info@lievervoordeklas.nl",
+    website: "https://www.lievervoordeklas.nl/pagina/1loket-voor-zij-instromers-in-het-amsterdamse-basisonderwijs",
+    consultUrl: "https://www.lievervoordeklas.nl/persoonlijk-advies",
+    hasConsultation: true,
+    cities: ["amsterdam"],
+  },
+  {
+    title: "Stappen in het onderwijs",
+    email: "info@stappeninhetonderwijs.nl",
+    website: "https://stappeninhetonderwijs.nl/",
+    consultUrl: null,
+    hasConsultation: false,
+    cities: ["breda", "tilburg", "roosendaal", "bergen op zoom", "brabant-west", "west-brabant"],
+  },
+  {
     title: "Onderwijsloket Rotterdam",
     email: "info@onderwijsloketrotterdam.nl",
-    website: "https://onderwijsloketrotterdam.nl",
-    consultUrl: "https://onderwijsloketrotterdam.nl/consult",
-    hasConsultation: true,
+    website: "https://onderwijsloketrotterdam.nl/",
+    consultUrl: null,
+    hasConsultation: false,
+    cities: ["rotterdam", "barendrecht", "capelle aan den ijssel", "schiedam", "vlaardingen", "maassluis", "ridderkerk", "delft", "gouda", "lansingerland", "nissewaard", "albrandswaard", "zuidplas", "westland"],
   },
-  "den haag": {
-    title: "Onderwijsloket Haaglanden",
+  {
+    title: "Ik word leerkracht",
+    email: "info@ikwordleerkracht.nl",
+    website: "https://ikwordleerkracht.nl/",
+    consultUrl: "https://ikwordleerkracht.nl/persoonlijk-advies/",
+    hasConsultation: true,
+    cities: ["haarlemmermeer", "hoofddorp", "nieuw-vennep"],
+  },
+  {
+    title: "Koerskracht",
+    email: "info@koerskracht.nu",
+    website: "https://koerskracht.nu",
+    consultUrl: "https://koerskracht.nu",
+    hasConsultation: true,
+    cities: ["dordrecht", "gorinchem", "papendrecht", "sliedrecht", "zwijndrecht", "alblasserdam"],
+  },
+  {
+    title: "Landelijk Groen",
+    email: "info@werkeningroenonderwijs.nl",
+    website: "https://www.werkeningroenonderwijs.nl/",
+    consultUrl: "https://www.werkeningroenonderwijs.nl/contact",
+    hasConsultation: true,
+    cities: ["groen onderwijs", "agrarisch"],
+  },
+  {
+    title: "Talent als Docent",
+    email: "info@talentalsdocent.nl",
+    website: "https://talentalsdocent.nl/",
+    consultUrl: null,
+    hasConsultation: false,
+    cities: ["haarlem", "velsen", "zandvoort", "bloemendaal", "heemstede", "amstelveen", "uithoorn", "aalsmeer", "beverwijk"],
+  },
+  {
+    title: "Leraar van Buiten",
+    email: "info@leraarvanbuiten.nl",
+    website: "https://www.leraarvanbuiten.nl/",
+    consultUrl: null,
+    hasConsultation: false,
+    cities: ["dordrecht", "rotterdam", "schiedam", "vlaardingen", "ridderkerk", "barendrecht", "capelle aan den ijssel", "krimpen aan den ijssel", "papendrecht", "sliedrecht", "zwijndrecht", "rijnmond"],
+  },
+  {
+    title: "Onderwijsloket Friesland",
+    email: "m.swiebel@dcterrra.nl",
+    website: "https://www.onderwijsloketfriesland.nl/",
+    consultUrl: "https://www.onderwijsloketfriesland.nl/contact",
+    hasConsultation: true,
+    cities: ["leeuwarden", "heerenveen", "drachten", "harlingen", "sneek", "friesland"],
+  },
+  {
+    title: "Blijf zitten in Haarlem",
     email: null,
-    website: "https://onderwijslokethaaglanden.nl",
-    consultUrl: "https://onderwijslokethaaglanden.nl/contact",
-    hasConsultation: true,
+    website: null,
+    consultUrl: null,
+    hasConsultation: false,
+    cities: ["haarlem", "heemstede", "bloemendaal", "kennemerland"],
   },
-  amsterdam: {
-    title: "Onderwijsloket Amsterdam",
-    email: null,
-    website: "https://leraarwordeninamsterdam.nl",
-    consultUrl: "https://leraarwordeninamsterdam.nl/contact",
-    hasConsultation: true,
-  },
-  utrecht: {
-    title: "Onderwijsloket Utrecht",
-    email: null,
-    website: "https://onderwijsloketutrecht.nl",
-    consultUrl: "https://onderwijsloketutrecht.nl/contact",
-    hasConsultation: true,
-  },
-  groningen: {
-    title: "SchoolpleinNoord",
-    email: "info@schoolpleinnoord.nl",
-    website: "https://schoolpleinnoord.nl",
-    consultUrl: "https://schoolpleinnoord.nl/contact",
-    hasConsultation: true,
-  },
-  leeuwarden: {
-    title: "SchoolpleinNoord",
-    email: "info@schoolpleinnoord.nl",
-    website: "https://schoolpleinnoord.nl",
-    consultUrl: "https://schoolpleinnoord.nl/contact",
-    hasConsultation: true,
-  },
-};
+];
 
 // ─────────────────────────────────────────────────────────────────────
 // SSOT Lookup Functions
@@ -201,9 +337,7 @@ function truncate(text: string, maxWords: number): string {
 
 function findRoleDescription(roleName: string): string | null {
   const key = roleName.toLowerCase();
-  // Direct match
   if (ROLE_DESCRIPTIONS[key]) return truncate(ROLE_DESCRIPTIONS[key], 80);
-  // Partial match
   for (const [k, v] of Object.entries(ROLE_DESCRIPTIONS)) {
     if (k.includes(key) || key.includes(k)) return truncate(v, 80);
   }
@@ -220,17 +354,9 @@ function findRouteStep(slug: string): string | null {
 
 function findRegionalDesk(regionOrCity: string): string | null {
   const key = regionOrCity.toLowerCase().trim();
-  // Direct city match
-  if (REGIONAL_DESKS[key]) {
-    const d = REGIONAL_DESKS[key];
-    let info = `${d.title}: gratis en onafhankelijk advies.`;
-    if (d.website) info += ` Website: ${d.website}`;
-    if (d.hasConsultation) info += ` - je kunt een persoonlijk consult aanvragen.`;
-    return truncate(info, 80);
-  }
-  // Check for city within region string
-  for (const [city, desk] of Object.entries(REGIONAL_DESKS)) {
-    if (key.includes(city) || city.includes(key)) {
+  for (const desk of REGIONAL_DESKS_LIST) {
+    const match = desk.cities.some(c => key.includes(c) || c.includes(key));
+    if (match) {
       let info = `${desk.title}: gratis en onafhankelijk advies.`;
       if (desk.website) info += ` Website: ${desk.website}`;
       if (desk.hasConsultation) info += ` - je kunt een persoonlijk consult aanvragen.`;
@@ -240,8 +366,17 @@ function findRegionalDesk(regionOrCity: string): string | null {
   return null;
 }
 
+// Helper: find desk object for links
+function findDeskObject(regionOrCity: string): DeskInfo | null {
+  const key = regionOrCity.toLowerCase().trim();
+  for (const desk of REGIONAL_DESKS_LIST) {
+    if (desk.cities.some(c => key.includes(c) || c.includes(key))) return desk;
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────
-// Fallback Knowledge Blocks (voor als SSOT lookup geen match geeft)
+// Fallback Knowledge Blocks
 // ─────────────────────────────────────────────────────────────────────
 const KNOWLEDGE_BLOCKS: Record<string, string> = {
   lesgeven_po: "Leraar PO: je draagt verantwoordelijkheid voor een klas op de basisschool (groep 1-8). Je geeft alle vakken. Pabo-diploma of zij-instroom PO-traject vereist.",
@@ -325,72 +460,96 @@ function interpretProfile(profileMeta?: ProfileMeta | null): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// C. Knowledge Resolver (SSOT-first, fallback naar hardcoded)
+// C. Knowledge Resolver — fase-gefilterd, landelijk/regionaal gelabeld
 // ─────────────────────────────────────────────────────────────────────
 function resolveKnowledge(
   slots: Partial<Record<SlotKey, string>>,
   phase: string,
 ): string[] {
   const fragments: string[] = [];
+  const landelijk: string[] = [];
+  const regionaal: string[] = [];
+
   const role = slots.role_interest?.toLowerCase();
   const sector = slots.school_type?.toUpperCase();
+  const p = (phase || "interesseren").toLowerCase();
 
-  // 1. Try SSOT role description first
-  if (role) {
-    const roleDesc = findRoleDescription(role);
-    if (roleDesc) {
-      fragments.push(roleDesc);
-    } else {
-      // Fallback to hardcoded
-      if (role && sector) {
+  // ── Fase-gebaseerde kennis-injectie ──
+
+  // Interesseren: rollen en sectoren (breed, landelijk)
+  if (p === "interesseren" || p === "orienteren") {
+    if (role) {
+      const roleDesc = findRoleDescription(role);
+      if (roleDesc) {
+        landelijk.push(roleDesc);
+      } else if (role && sector) {
         const key = `${role}_${sector.toLowerCase()}`;
-        if (KNOWLEDGE_BLOCKS[key]) fragments.push(KNOWLEDGE_BLOCKS[key]);
+        if (KNOWLEDGE_BLOCKS[key]) landelijk.push(KNOWLEDGE_BLOCKS[key]);
       } else if (role === "begeleiding") {
-        fragments.push(KNOWLEDGE_BLOCKS.begeleiding);
+        landelijk.push(KNOWLEDGE_BLOCKS.begeleiding);
       } else if (role === "vakexpertise") {
-        fragments.push(KNOWLEDGE_BLOCKS.vakexpertise_mbo);
+        landelijk.push(KNOWLEDGE_BLOCKS.vakexpertise_mbo);
       } else if (role === "lesgeven") {
-        fragments.push(KNOWLEDGE_BLOCKS.lesgeven_po);
+        landelijk.push(KNOWLEDGE_BLOCKS.lesgeven_po);
       }
     }
   }
 
-  // 2. Route info via SSOT lookup
-  if (slots.credential_goal) {
-    let slug: string | null = null;
-    if (sector === "PO") slug = "pabo";
-    else if (sector === "VO") slug = "tweedegraads";
-    else if (sector === "MBO") slug = "pdg";
+  // Oriënteren/Beslissen: route-info (landelijk)
+  if (p === "orienteren" || p === "beslissen") {
+    if (slots.credential_goal) {
+      let slug: string | null = null;
+      if (sector === "PO") slug = "pabo";
+      else if (sector === "VO") slug = "tweedegraads";
+      else if (sector === "MBO") slug = "pdg";
 
-    if (slug) {
-      const routeInfo = findRouteStep(slug);
-      if (routeInfo) {
-        fragments.push(routeInfo);
+      if (slug) {
+        const routeInfo = findRouteStep(slug);
+        if (routeInfo) {
+          landelijk.push(routeInfo);
+        } else {
+          const fallbackKey = `route_${slug}`;
+          if (KNOWLEDGE_BLOCKS[fallbackKey]) landelijk.push(KNOWLEDGE_BLOCKS[fallbackKey]);
+        }
       } else {
-        // Fallback
-        const fallbackKey = `route_${slug}`;
-        if (KNOWLEDGE_BLOCKS[fallbackKey]) fragments.push(KNOWLEDGE_BLOCKS[fallbackKey]);
+        landelijk.push(KNOWLEDGE_BLOCKS.route_zij_instroom);
       }
-    } else {
-      fragments.push(KNOWLEDGE_BLOCKS.route_zij_instroom);
     }
   }
 
-  // 3. Salary
-  if (slots.salary_info) fragments.push(KNOWLEDGE_BLOCKS.salaris);
+  // Beslissen: kosten en salaris (landelijk)
+  if (p === "beslissen" || p === "orienteren") {
+    if (slots.salary_info) landelijk.push(KNOWLEDGE_BLOCKS.salaris);
+    if (slots.costs_info) landelijk.push(KNOWLEDGE_BLOCKS.kosten);
+  }
 
-  // 4. Costs
-  if (slots.costs_info) fragments.push(KNOWLEDGE_BLOCKS.kosten);
-
-  // 5. Region via SSOT lookup
-  if (slots.region_preference) {
-    const deskInfo = findRegionalDesk(slots.region_preference);
-    if (deskInfo) {
-      fragments.push(deskInfo);
-    } else {
-      // Fallback: generic
-      fragments.push("Zoek een onderwijsloket in je regio via onderwijsloketten.nl voor gratis advies over routes en vacatures.");
+  // Matchen/Voorbereiden: regionaal loket
+  if (p === "matchen" || p === "voorbereiden") {
+    if (slots.region_preference) {
+      const deskInfo = findRegionalDesk(slots.region_preference);
+      if (deskInfo) {
+        regionaal.push(deskInfo);
+      } else {
+        regionaal.push("Zoek een onderwijsloket in je regio via onderwijsloketten.nl voor gratis advies over routes en vacatures.");
+      }
     }
+    // Also inject salary/costs if available in later phases
+    if (slots.salary_info) landelijk.push(KNOWLEDGE_BLOCKS.salaris);
+    if (slots.costs_info) landelijk.push(KNOWLEDGE_BLOCKS.kosten);
+  }
+
+  // Altijd: als region_preference gezet maar buiten matchen/voorbereiden, toch regionale info geven
+  if (slots.region_preference && p !== "matchen" && p !== "voorbereiden") {
+    const deskInfo = findRegionalDesk(slots.region_preference);
+    if (deskInfo) regionaal.push(deskInfo);
+  }
+
+  // Assemble met labels
+  if (landelijk.length > 0) {
+    fragments.push(`[Landelijk] ${landelijk.slice(0, 2).join(" | ")}`);
+  }
+  if (regionaal.length > 0) {
+    fragments.push(`[Regionaal] ${regionaal.slice(0, 2).join(" | ")}`);
   }
 
   return fragments.slice(0, 3);
@@ -421,14 +580,9 @@ function computeLinks(
 
   // Regional desk website link
   if (slots.region_preference) {
-    const key = slots.region_preference.toLowerCase().trim();
-    for (const [city, desk] of Object.entries(REGIONAL_DESKS)) {
-      if (key.includes(city) || city.includes(key)) {
-        if (desk.website) {
-          links.push({ label: desk.title, href: desk.website });
-        }
-        break;
-      }
+    const desk = findDeskObject(slots.region_preference);
+    if (desk?.website) {
+      links.push({ label: desk.title, href: desk.website });
     }
   }
 
@@ -436,14 +590,13 @@ function computeLinks(
     links.push({ label: "Inloggen voor persoonlijk vervolg", href: "/auth" });
   }
 
-  // Deduplicate by href
   const uniq = new Map<string, UiLink>();
   for (const l of links) uniq.set(l.href, l);
   return [...uniq.values()].slice(0, 3);
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// E. Context Assembler (zonder links!)
+// E. Context Assembler — met landelijk/regionaal labels
 // ─────────────────────────────────────────────────────────────────────
 function assembleContext(
   phase: string,
@@ -458,27 +611,19 @@ function assembleContext(
     ? slotsFilledCount + detector.missing_slots.length
     : 9;
 
-  // 1. Tone (always)
   const tone = selectTone(phase, slotsFilledCount, totalSlotsCount);
-
-  // 2. Knowledge (SSOT-first)
   const knowledge = resolveKnowledge(slots, phase);
-
-  // 3. Profile interpretation
   const profile = interpretProfile(profileMeta);
 
-  // 4. Phase transition
   let transitionNote = "";
   if (phaseTransition) {
     transitionNote = `De gebruiker verschuift van "${phaseTransition.from}" naar "${phaseTransition.to}". Erken dit kort en positief. Pas je begeleiding aan op de nieuwe fase.`;
   }
 
-  // Assemble (NO links section!)
   const parts: string[] = [];
   parts.push(`## DYNAMISCHE CONTEXT`);
   parts.push(`\n### Toon\n${tone}`);
 
-  // Situation
   const knownSlotsInfo = Object.entries(slots)
     .filter(([, v]) => v)
     .map(([k, v]) => `${k}: ${v}`)
@@ -656,7 +801,7 @@ function actionsForNextSlot(
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Prompts — DRY: 1 core + 2 appendices
+// Prompts — DRY: 1 core + 1 appendix (dashboard)
 // ─────────────────────────────────────────────────────────────────────
 const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket Rotterdam.
 
@@ -676,6 +821,11 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - Vraag niet om gevoelige persoonsgegevens.
 - Bij salaris/inschaling: alleen globaal, verwijs naar CAO/tabellen.
 - Bij maatwerk: benoem dat het kan verschillen en verwijs naar een passende vervolgstap.
+
+## Kennis-labels
+- Informatie gelabeld als [Landelijk] geldt voor heel Nederland (routes, bevoegdheden, opleidingen, salaris, kosten).
+- Informatie gelabeld als [Regionaal] is specifiek voor een regio of stad (loketten, vacatures, events, scholen).
+- Maak dit onderscheid duidelijk in je antwoord wanneer relevant.
 
 ## Stijl
 - Korte zinnen, weinig jargon.
@@ -759,7 +909,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, mode = "public", userPhase, userSector, detector, phase_transition, profileMeta }: RequestBody = await req.json();
+    const { messages, mode = "authenticated", userPhase, userSector, detector, phase_transition, profileMeta }: RequestBody = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -783,12 +933,11 @@ Deno.serve(async (req) => {
     // Context + links
     const phase = detector?.phase_current || userPhase || "interesseren";
     const slots = detector?.known_slots || {};
-    const uiLinks = computeLinks(mode, phase, slots);
+    const uiLinks = computeLinks(mode || "authenticated", phase, slots);
 
     // Build prompt: CORE + APPENDIX + dynamic context
     let systemPrompt = DOORAI_CORE + DASHBOARD_APPENDIX;
 
-    // Authenticated mode gets full dynamic context; fallback is minimal
     const dynamicContext = mode === "authenticated"
       ? assembleContext(phase, detector, profileMeta, userSector, phase_transition)
       : `## Huidige context\n- Ingelogd: Nee`;
@@ -849,7 +998,7 @@ Deno.serve(async (req) => {
           await writer.write(encoder.encode(`data: ${JSON.stringify(qChunk)}\n\n`));
         }
 
-        // UI payload: actions + links (frontend renders these separately)
+        // UI payload: actions + links
         const actions = mode === "authenticated" ? ssotActions : legacyActions;
         await writer.write(
           encoder.encode(`data: ${JSON.stringify({ actions, links: uiLinks })}\n\n`),
