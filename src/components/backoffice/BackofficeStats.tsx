@@ -57,18 +57,18 @@ export function BackofficeStats({ profiles }: BackofficeStatsProps) {
       label: 'CV geüpload',
       color: 'bg-primary/10 text-primary',
     },
-    {
-      icon: Clock,
-      value: stats.byPhase['interesseren'] || 0,
-      label: 'Fase: Interesseren',
-      color: 'bg-accent/10 text-accent',
-    },
-    {
-      icon: UserCheck,
-      value: stats.byPhase['matchen'] || 0,
-      label: 'Fase: Matchen',
-      color: 'bg-primary/20 text-primary',
-    },
+    ...([
+      { key: 'interesseren', label: 'Interesseren' },
+      { key: 'orienteren', label: 'Oriënteren' },
+      { key: 'beslissen', label: 'Beslissen' },
+      { key: 'matchen', label: 'Matchen' },
+      { key: 'voorbereiden', label: 'Voorbereiden' },
+    ] as const).map(({ key, label }) => ({
+      icon: key === 'matchen' ? UserCheck : Clock,
+      value: stats.byPhase[key] || 0,
+      label: `Fase: ${label}`,
+      color: key === 'matchen' || key === 'voorbereiden' ? 'bg-primary/20 text-primary' : 'bg-accent/10 text-accent',
+    })),
   ];
 
   return (
