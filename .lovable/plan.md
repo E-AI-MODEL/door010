@@ -1,40 +1,95 @@
 
 
-# Multi-stap orchestratie DoorAI — GEIMPLEMENTEERD
+# Verfijnd plan: fase-tracking, dashboard-zichtbaarheid en chat-link
 
-## Wat is gedaan
+## Overzicht
 
-### 1. Context gehumaniseerd (assembleContext)
-- Raw metadata (confidence, slotnamen, evidence-arrays) vervangen door `humanizeSituation()` die menselijk leesbare zinnen genereert
-- LLM ontvangt nu: "De gebruiker verkent of het onderwijs iets is. Interesse in lesgeven in het basisonderwijs."
-- In plaats van: "Fase: interesseren, Confidence: 0.45, school_type: PO, Signalen: match:interested"
+Vier chirurgische wijzigingen in bestaande code. Geen nieuwe bestanden, geen nieuwe tabellen, geen duplicaten.
 
-### 2. Basiskennis toegevoegd (BASELINE_KNOWLEDGE)
-- Compact kennisblok dat altijd beschikbaar is bij exploration/question-without-matches
-- Inhoud: wat het Onderwijsloket doet, hoofdrichtingen (lesgeven, begeleiden, vakexpertise)
+---
 
-### 3. TONE_TABLE vereenvoudigd
-- Van 2 zinnen per fase-moment naar 1 beknopte sfeerinstructie
-- Voorbeeld: "Luchtig en nieuwsgierig." i.p.v. "Houd het luchtig. Maak nieuwsgierig. Vermijd jargon. Laat zien dat kleine stappen al tellen."
+## Stap 1: Fase-drempel verlagen (0.75 naar 0.60)
 
-### 4. Multi-stap intent classificatie
-- `classifyIntent()` functie toegevoegd (google/gemini-2.5-flash-lite, snel, geen streaming)
-- Categorieën: greeting, question, exploration, followup
-- Fallback bij falen: "question" (huidig gedrag)
-- Intent-specifieke appendix vervangt generieke DASHBOARD_APPENDIX (ander woordenlimiet, andere instructie per intent)
+Iedereen blijft op "interesseren" staan omdat de confidence-drempel te hoog is. De fase-detector geeft +1.5 bias aan de huidige fase, waardoor een nieuwe fase bijna nooit 0.75 haalt.
 
-### 5. Dode code opgeruimd
-- Server-side `extractSlots()`, `chooseNextQuestion()`, `chooseActions()` verwijderd
-- `mode === "public"` pad verwijderd (widget gebruikt homepage-coach)
-- Stale comment r12 bijgewerkt
-- Emoji verwijderd uit PublicChatWidget error-bericht
+Vier plekken, elk 1 regelwijziging:
 
-## Wat NIET is veranderd
-- homepage-coach edge function (incl. Voorkeurszinnen)
-- Phase detector engine (client-side)
-- DOORAI_CORE prompt (toon, verboden zinnen, stijl)
-- PublicChatWidget funnel-logica (alleen emoji-fix)
-- DashboardChat.tsx / Chat.tsx logica
-- Actions en links (SSE UI-payload)
-- actionsForNextSlot() (SSOT-gestuurde acties)
-- Knowledge blocks inhoud
+| Bestand | Regel | Huidig | Nieuw |
+|---------|-------|--------|-------|
+| `src/components/dashboard/DashboardChat.tsx` | 100 | `>= 0.75` | `>= 0.60` |
+| `src/components/dashboard/DashboardChat.tsx` | 159 | `>= 0.75` | `>= 0.60` |
+| `src/pages/Chat.tsx` | 111 | `>= 0.75` | `>= 0.60` |
+| `src/pages/Chat.tsx` | 182 | `>= 0.75` | `>= 0.60` |
+
+---
+
+## Stap 2: Fase-wijziging als melding in backoffice
+
+In `src/pages/Backoffice.tsx`, in de bestaande `generateAlertsFromProfiles()` functie (na het appointments-blok, rond r94). Toevoegen:
+
+```text
+Als current_phase NIET "interesseren" is
+EN updated_at recenter is dan 7 dagen geleden
+-> alert type "phase_change", prioriteit "medium"
+   bericht: "Doorgeschoven naar fase: [fasenaam]"
+```
+
+Dit past naadloos in het bestaande patroon. `BackofficeAlerts` ondersteunt het type `phase_change` al (r44-49, TrendingUp icoon, label "Fase wijziging"). Geen wijziging nodig in `BackofficeAlerts.tsx`.
+
+Omvang: ~8 regels toevoegen.
+
+---
+
+## Stap 3: Dashboard-statistieken uitbreiden met alle fasen
+
+Nieuw gevonden punt: `BackofficeStats.tsx` toont nu alleen tellingen voor "Interesseren" en "Matchen" (r60-71). De drie tussenliggende fasen (orienteren, beslissen, voorbereiden) ontbreken visueel. Als gebruikers gaan doorstromen ziet de adviseur dit niet in het dashboard.
+
+Wijziging in `src/components/backoffice/BackofficeStats.tsx`: de twee hardcoded fase-kaarten vervangen door een dynamische weergave van alle 5 fasen. Dit kan door de `statCards` array uit te breiden met de ontbrekende fasen, of door een compacte fase-balk toe te voegen.
+
+Omvang: ~15 regels aanpassen (de statCards array r35-72).
+
+---
+
+## Stap 4: Link naar afspraaktool vanuit chat
+
+In `supabase/functions/doorai-chat/index.ts`, in de bestaande `computeLinks()` functie (r562-592). Na het regionale loket-blok (r587), toevoegen:
+
+```text
+Als slots.next_step === "gesprek"
+OF fase === "matchen" OF fase === "voorbereiden"
+-> link: { label: "Afspraak aanvragen", href: "/profiel" }
+```
+
+Let op: de conditie voor "matchen"/"voorbereiden" overlapt met een bestaand blok op r577-579 dat events linkt. De nieuwe link is naar `/profiel`, niet naar `/events`, dus geen conflict. De dedup-logica op r589-591 (Map op href) voorkomt duplicaten automatisch.
+
+Omvang: ~3 regels toevoegen.
+
+---
+
+## Overzicht alle wijzigingen
+
+| Bestand | Wat | Omvang |
+|---------|-----|--------|
+| `src/components/dashboard/DashboardChat.tsx` | 0.75 naar 0.60 (r100, r159) | 2 regelwijzigingen |
+| `src/pages/Chat.tsx` | 0.75 naar 0.60 (r111, r182) | 2 regelwijzigingen |
+| `src/pages/Backoffice.tsx` | Alert voor fase-wijziging in generateAlertsFromProfiles() | ~8 regels toevoegen |
+| `src/components/backoffice/BackofficeStats.tsx` | Alle 5 fasen tonen i.p.v. 2 | ~15 regels aanpassen |
+| `supabase/functions/doorai-chat/index.ts` | Link /profiel in computeLinks() | ~3 regels toevoegen |
+
+## Wat NIET wordt aangeraakt
+
+- Geen nieuwe bestanden of componenten
+- Geen nieuwe database tabellen of migraties
+- BackofficeAlerts component (ongewijzigd, ondersteunt phase_change al)
+- AppointmentTile (ongewijzigd, werkt al correct)
+- actionsForNextSlot() (ongewijzigd)
+- DOORAI_CORE prompt (ongewijzigd)
+- homepage-coach edge function (ongewijzigd)
+- PublicChatWidget (ongewijzigd)
+- Phase detector engine (ongewijzigd)
+- Knowledge blocks (ongewijzigd)
+
+## Volgorde van implementatie
+
+De stappen zijn onafhankelijk en kunnen parallel worden uitgevoerd. Geen onderlinge afhankelijkheden.
+
