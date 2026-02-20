@@ -108,7 +108,7 @@ export default function Chat() {
       const updates: Record<string, unknown> = {};
 
       // Update current_phase only when confidence is reasonable
-      if (profile?.current_phase && detector.phase_current_ui !== profile.current_phase && detector.phase_confidence >= 0.75) {
+      if (profile?.current_phase && detector.phase_current_ui !== profile.current_phase && detector.phase_confidence >= 0.60) {
         updates.current_phase = detector.phase_current_ui;
       }
 
@@ -179,7 +179,7 @@ export default function Chat() {
       await maybePersistProfile(detector);
 
       // Phase transition detection
-      const phaseTransition = detector.phase_confidence >= 0.75 && detector.phase_current_ui !== (profile?.current_phase || "interesseren")
+      const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== (profile?.current_phase || "interesseren")
         ? { from: profile?.current_phase || "interesseren", to: detector.phase_current_ui }
         : undefined;
 

@@ -76,6 +76,23 @@ function generateAlertsFromProfiles(profiles: ProfileWithEmail[]): DashboardAler
       });
     }
 
+    // Fase-wijziging alert (niet-interesseren = doorgestroomd)
+    if (p.current_phase && p.current_phase !== 'interesseren' && new Date(p.updated_at) > weekAgo) {
+      const phaseLabels: Record<string, string> = {
+        orienteren: 'Oriënteren', beslissen: 'Beslissen', matchen: 'Matchen', voorbereiden: 'Voorbereiden',
+      };
+      alerts.push({
+        id: `phase-${p.id}`,
+        type: 'phase_change',
+        user_name: name,
+        user_id: p.user_id,
+        message: `Doorgeschoven naar fase: ${phaseLabels[p.current_phase] || p.current_phase}`,
+        created_at: p.updated_at,
+        is_read: false,
+        priority: 'medium',
+      });
+    }
+
     const appointments = p.appointments || [];
     for (const apt of appointments) {
       if (apt.status === 'pending') {

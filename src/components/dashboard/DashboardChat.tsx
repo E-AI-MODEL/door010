@@ -97,7 +97,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       const updates: Record<string, unknown> = {};
       const oldPhase = currentPhase;
 
-      if (detector.phase_current_ui !== oldPhase && detector.phase_confidence >= 0.75) {
+      if (detector.phase_current_ui !== oldPhase && detector.phase_confidence >= 0.60) {
         updates.current_phase = detector.phase_current_ui;
       }
 
@@ -156,7 +156,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       await maybePersistProfile(detector);
 
       // Phase transition detection
-      const phaseTransition = detector.phase_confidence >= 0.75 && detector.phase_current_ui !== currentPhase
+      const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== currentPhase
         ? { from: currentPhase, to: detector.phase_current_ui }
         : undefined;
 

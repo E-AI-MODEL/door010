@@ -578,6 +578,11 @@ function computeLinks(
     links.push({ label: "Events en open dagen", href: "/events" });
   }
 
+  // Afspraak-link bij gesprek-stap of latere fasen
+  if (slots.next_step === "gesprek" || p === "matchen" || p === "voorbereiden") {
+    links.push({ label: "Afspraak aanvragen", href: "/profiel" });
+  }
+
   // Regional desk website link
   if (slots.region_preference) {
     const desk = findDeskObject(slots.region_preference);
