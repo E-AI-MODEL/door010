@@ -1,44 +1,41 @@
 
 
-# Plan: 300+ FAQ's als kennisbron voor DoorAI — GEÏMPLEMENTEERD
+# Plan: FAQ-data verrijken en importeren
 
-## Status: ✅ Infrastructuur klaar
+## Wat ik ga doen
 
-### Wat is gebouwd
+De geüploade `ingest_faqs_payload_DOORTJE_ZIB_MVP_v2_deduped.json` (17 FAQ's) bevat goede vragen maar heeft twee problemen:
 
-1. **`faq_items` tabel** met full-text search (Dutch tsvector, GIN index)
-   - Kolommen: question, answer, category, tags[], peildatum, source_url
-   - RLS: publiek leesbaar, alleen admins kunnen beheren
-   - `search_faqs()` database functie voor gerankte FTS-queries
+1. **Dunne antwoorden** — items 5, 6, 7, 8 bevatten alleen "Vervolgvragen" zonder inhoudelijk antwoord
+2. **Gemixte antwoorden** — item 1 en 2 bevatten antwoorden die niet bij de vraag passen (salaris-info bij "intensiteit", buitenland-info bij "wat is zij-instroom")
 
-2. **`ingest-faqs` edge function** — bulk import
-   - POST JSON array van FAQ's
-   - Modes: `upsert` (toevoegen) of `replace` (alles vervangen + opnieuw laden)
-   - Batched inserts (50 per batch)
+Ik ga:
 
-3. **Hybride retrieval in `doorai-chat`**
-   - Bij question/followup/exploration: zoek top-10 FAQ's via FTS
-   - LLM-selector (gemini-2.5-flash-lite) kiest de 3 meest relevante
-   - Geïnjecteerd in de `### Achtergrondinformatie` context
+### Stap 1: FAQ-data opschonen en verrijken
 
-### Wat jij moet aanleveren
+Een verbeterde versie van het JSON-bestand aanmaken als `src/data/faq-seed.json` met:
 
-Een JSON-bestand met per FAQ:
-```json
-{
-  "question": "Wat verdien ik als leraar PO?",
-  "answer": "Volgens CAO PO 2024, LB-schaal...",
-  "category": "salaris",
-  "tags": ["PO", "salaris", "CAO"],
-  "peildatum": "2024-09",
-  "source_url": "https://cao-po.nl/salaristabellen"
-}
-```
+- **17 bestaande items opschonen**: antwoorden koppelen aan de juiste vraag, dunne items aanvullen met kennis uit `KNOWLEDGE_BLOCKS` en `ROUTE_SUMMARIES`
+- **~15 nieuwe items toevoegen** op basis van de hardcoded `KNOWLEDGE_BLOCKS` die nu in `doorai-chat` staan (salaris, kosten, bevoegdheden, PDG, verwantschap, SOOL-subsidie, etc.)
+- **Categorieën standaardiseren**: `route`, `salaris`, `toelating`, `bevoegdheid`, `subsidie`, `algemeen`, `duur`, `vacature`
+- **Alias-tags behouden** — deze zijn waardevol voor full-text search
 
-### Hoe te importeren
+### Stap 2: Importeren via `ingest-faqs`
 
-Stuur de FAQ's als JSON array naar de `ingest-faqs` edge function:
-```
-POST /functions/v1/ingest-faqs
-Body: { "faqs": [...], "mode": "replace" }
-```
+De opgeschoonde dataset importeren met `mode: "replace"` zodat de 3 test-items worden vervangen.
+
+### Concreet resultaat
+
+~32 FAQ-items in de database die dekken:
+
+| Bron | Items |
+|------|-------|
+| Geüploade ZIB-data (opgeschoond) | 17 |
+| KNOWLEDGE_BLOCKS → FAQ conversie | ~15 |
+
+### Wat NIET verandert
+
+- De `KNOWLEDGE_BLOCKS` in `doorai-chat` blijven als fallback
+- De `ingest-faqs` edge function blijft ongewijzigd
+- De hybride retrieval-logica blijft ongewijzigd
+
