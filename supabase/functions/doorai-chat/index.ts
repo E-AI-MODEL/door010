@@ -641,9 +641,9 @@ function computeLinks(
     }
   }
 
-  // Kennisbank-fallback: als weinig links matchen
+  // Fallback: als weinig links matchen, voeg events toe
   if (links.length <= 1) {
-    links.push({ label: "Kennisbank", href: "/kennisbank" });
+    links.push({ label: "Events en meelopen", href: "/events" });
   }
 
   const uniq = new Map<string, UiLink>();
@@ -867,13 +867,16 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - Je bent een informatieve wegwijzer, geen coach of persoonlijk assistent.
 
 ## Bronvermelding
-- Als de gebruiker vraagt om een officiële bron, regeling, CAO, voorwaarden of link: antwoord is alleen geldig als er een bronlink in je achtergrondinformatie staat. Anders: "Ik heb dit niet met een officiële bron in mijn kennisbank. Check het bij het regioloket of op onderwijsloket.com/kennisbank."
-- Noem nooit regels of eisen als feit zonder bron. Formuleer als: "Volgens de informatie die ik heb..."
+- Als je achtergrondinformatie een bronlink bevat: verwijs daar direct naar met een klikbare markdown-link, bijv. [lees meer op DUO](https://duo.nl/...). Gebruik ALTIJD de volledige URL uit je context.
+- Als er geen bronlink beschikbaar is: zeg "Neem contact op met het regioloket voor actuele informatie."
+- Noem NOOIT het woord "kennisbank" in je antwoord. Dat is een intern label, niet relevant voor de gebruiker.
+- Formuleer feiten als: "Volgens de informatie die ik heb..."
 
 ## Tijdsgevoeligheid
-- Noem nooit een datum, bedrag, deadline of openstelling zonder peildatum. Gebruik: "Volgens [bron] (peildatum najaar 2024)..."
+- Noem NOOIT "peildatum" in je antwoord. Dat is interne metadata.
+- Bij bedragen, CAO-schalen of subsidies: verwijs naar de officiële bron met een klikbare link.
 - Gebruik nooit "gemiddelde" tenzij je de bron en berekeningswijze kent.
-- Onderwerpen die per definitie verouderen (subsidies, CAO-schalen, openstellingen, vacatures, contactpersonen): ALTIJD naar een bronpagina verwijzen, nooit zelf de actuele stand noemen.
+- Onderwerpen die per definitie verouderen (subsidies, CAO-schalen, openstellingen, vacatures): verwijs naar de bronpagina met een klikbare link.
 
 ## Live onderwerpen
 - Bij vragen over vacatures of actuele openstellingen: zeg "Actuele vacatures kan ik niet live inzien" en verwijs naar de vacaturepagina.
@@ -885,6 +888,7 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 
 ## Achtergrondinformatie
 - Je krijgt achtergrondinformatie over routes, loketten en opleidingen in de context.
+- Als er een [Officiële bron: URL] in de context staat, gebruik die URL als klikbare markdown-link in je antwoord, bijv: [meer info](https://...). Dit is essentieel!
 - Gebruik deze info inhoudelijk in je antwoord, maar noem NOOIT labels als "[Landelijk]" of "[Regionaal]".
 - Verwerk de feiten natuurlijk in je tekst. Noem geen metadata of sectienames uit de context.
 
@@ -894,7 +898,7 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - Geen emojis.
 - Gebruik geen emdash. Gebruik hooguit een streep of splits zinnen.
 - Geen containerzinnen ("het hangt ervan af") zonder direct te concretiseren.
-- Voeg een peildatum toe bij antwoorden over salaris, kosten, subsidies of toelatingseisen. Bijv: "Volgens onze info (peildatum najaar 2024)..."
+- Bij salaris, kosten of subsidies: verwijs naar de officiële bron met een klikbare markdown-link. Noem NIET "peildatum".
 - Gebruik voor regelingen altijd de officiële naam en de juiste uitvoerder.
 - Wees action-first: concrete stappen, showstoppers, wat meenemen. Minder coach-talk, meer beslisinfo.
 
@@ -1145,18 +1149,26 @@ async function selectBestFaqs(
   }
 }
 
-async function retrieveFaqKnowledge(userMessage: string, apiKey: string): Promise<string[]> {
+async function retrieveFaqKnowledge(userMessage: string, apiKey: string): Promise<{ fragments: string[]; sourceLinks: UiLink[] }> {
   const candidates = await searchFaqsByFts(userMessage);
-  if (candidates.length === 0) return [];
+  if (candidates.length === 0) return { fragments: [], sourceLinks: [] };
 
   const best = await selectBestFaqs(userMessage, candidates, apiKey);
 
-  return best.map(faq => {
+  const fragments = best.map(faq => {
     let entry = `${faq.question} - ${faq.answer}`;
-    if (faq.peildatum) entry += ` (peildatum: ${faq.peildatum})`;
-    if (faq.source_url) entry += ` Bron: ${faq.source_url}`;
+    if (faq.source_url) entry += ` [Officiële bron: ${faq.source_url}]`;
     return entry;
   });
+
+  const sourceLinks: UiLink[] = best
+    .filter(faq => faq.source_url)
+    .map(faq => ({
+      label: faq.question.length > 40 ? faq.question.slice(0, 37) + "..." : faq.question,
+      href: faq.source_url!,
+    }));
+
+  return { fragments, sourceLinks };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1187,12 +1199,27 @@ Deno.serve(async (req) => {
       ? actionsForNextSlot(detector.next_slot_key, detector?.known_slots)
       : [];
 
-    const uiLinks = computeLinks(phase, slots, lastUserMessage);
+    let uiLinks = computeLinks(phase, slots, lastUserMessage);
 
     // ── Stap 2: FAQ retrieval (parallel met context) ──
     let faqKnowledge: string[] = [];
+    let faqLinks: UiLink[] = [];
     if (intent === "question" || intent === "followup" || intent === "exploration") {
-      faqKnowledge = await retrieveFaqKnowledge(lastUserMessage, LOVABLE_API_KEY);
+      const faqResult = await retrieveFaqKnowledge(lastUserMessage, LOVABLE_API_KEY);
+      faqKnowledge = faqResult.fragments;
+      faqLinks = faqResult.sourceLinks;
+    }
+
+    // Merge FAQ source links into UI links
+    if (faqLinks.length > 0) {
+      const existingHrefs = new Set(uiLinks.map(l => l.href));
+      for (const fl of faqLinks) {
+        if (!existingHrefs.has(fl.href)) {
+          uiLinks.push(fl);
+          existingHrefs.add(fl.href);
+        }
+      }
+      uiLinks = uiLinks.slice(0, 6);
     }
 
     // ── Stap 3: Context samenstellen op basis van intent + FAQ's ──
