@@ -1,3 +1,5 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -706,6 +708,7 @@ function assembleContext(
   userSector: string | undefined,
   phaseTransition: PhaseTransition | undefined,
   intent: IntentType,
+  faqKnowledge?: string[],
 ): string {
   const slots = detector?.known_slots || {};
   const slotsFilledCount = Object.values(slots).filter(Boolean).length;
@@ -729,18 +732,27 @@ function assembleContext(
   const situation = humanizeSituation(phase, slots, userSector);
   parts.push(`\n### Situatie\n${situation}`);
 
-  // Kennis: afhankelijk van intent
+  // Kennis: afhankelijk van intent + FAQ retrieval
+  const hasFaqKnowledge = faqKnowledge && faqKnowledge.length > 0;
+
   if (intent === "question") {
     const knowledge = resolveKnowledge(slots, phase);
-    if (knowledge.length > 0) {
-      parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${knowledge.map(k => `- ${k}`).join("\n")}`);
+    const allKnowledge = [...knowledge];
+    if (hasFaqKnowledge) allKnowledge.push(...faqKnowledge);
+
+    if (allKnowledge.length > 0) {
+      parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${allKnowledge.map(k => `- ${k}`).join("\n")}`);
     } else {
       parts.push(`\n### Achtergrondinformatie\n${BASELINE_KNOWLEDGE}\n- ${KNOWLEDGE_BLOCKS.externe_bronnen}`);
     }
   } else if (intent === "exploration") {
     parts.push(`\n### Achtergrondinformatie\n${BASELINE_KNOWLEDGE}`);
+    if (hasFaqKnowledge) {
+      parts.push(`\n### Aanvullende FAQ-kennis\n${faqKnowledge.map(k => `- ${k}`).join("\n")}`);
+    }
   } else if (intent === "followup") {
     const knowledge = resolveKnowledge(slots, phase);
+    if (hasFaqKnowledge) knowledge.push(...faqKnowledge);
     if (knowledge.length > 0) {
       parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${knowledge.map(k => `- ${k}`).join("\n")}`);
     }
@@ -1038,6 +1050,116 @@ function streamReplaceDashes(input: ReadableStream<Uint8Array>) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// G. FAQ Retrieval — Hybride: FTS + LLM selector
+// ─────────────────────────────────────────────────────────────────────
+
+interface FaqResult {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  tags: string[];
+  peildatum: string | null;
+  source_url: string | null;
+  rank: number;
+}
+
+async function searchFaqsByFts(userMessage: string): Promise<FaqResult[]> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data, error } = await supabase.rpc("search_faqs", {
+      search_query: userMessage,
+      max_results: 10,
+    });
+
+    if (error) {
+      console.warn("FAQ FTS search error:", error.message);
+      return [];
+    }
+    return (data as FaqResult[]) || [];
+  } catch (e) {
+    console.warn("FAQ search failed:", e);
+    return [];
+  }
+}
+
+async function selectBestFaqs(
+  userMessage: string,
+  candidates: FaqResult[],
+  apiKey: string,
+): Promise<FaqResult[]> {
+  if (candidates.length <= 3) return candidates;
+
+  try {
+    const candidateList = candidates.map((c, i) => 
+      `[${i}] Q: ${c.question}\nA: ${c.answer.slice(0, 150)}...`
+    ).join("\n\n");
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [
+          {
+            role: "system",
+            content: `Je krijgt een gebruikersvraag en een lijst FAQ-kandidaten. Selecteer de 3 meest relevante FAQ's. Antwoord ALLEEN met een JSON array van indices, bijv: [0, 3, 7]`,
+          },
+          {
+            role: "user",
+            content: `Gebruikersvraag: "${userMessage}"\n\nKandidaten:\n${candidateList}`,
+          },
+        ],
+        stream: false,
+        temperature: 0,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("FAQ selector LLM failed, returning top 3 by rank");
+      return candidates.slice(0, 3);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+    const match = content.match(/\[[\d,\s]+\]/);
+    if (match) {
+      const indices: number[] = JSON.parse(match[0]);
+      const selected = indices
+        .filter(i => i >= 0 && i < candidates.length)
+        .slice(0, 5)
+        .map(i => candidates[i]);
+      return selected.length > 0 ? selected : candidates.slice(0, 3);
+    }
+
+    return candidates.slice(0, 3);
+  } catch (e) {
+    console.warn("FAQ selector error:", e);
+    return candidates.slice(0, 3);
+  }
+}
+
+async function retrieveFaqKnowledge(userMessage: string, apiKey: string): Promise<string[]> {
+  const candidates = await searchFaqsByFts(userMessage);
+  if (candidates.length === 0) return [];
+
+  const best = await selectBestFaqs(userMessage, candidates, apiKey);
+
+  return best.map(faq => {
+    let entry = `${faq.question} - ${faq.answer}`;
+    if (faq.peildatum) entry += ` (peildatum: ${faq.peildatum})`;
+    if (faq.source_url) entry += ` Bron: ${faq.source_url}`;
+    return entry;
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Handler — 2-staps orchestratie
 // ─────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
@@ -1067,8 +1189,14 @@ Deno.serve(async (req) => {
 
     const uiLinks = computeLinks(phase, slots, lastUserMessage);
 
-    // ── Stap 2: Context samenstellen op basis van intent ──
-    const dynamicContext = assembleContext(phase, detector, profileMeta, userSector, phase_transition, intent);
+    // ── Stap 2: FAQ retrieval (parallel met context) ──
+    let faqKnowledge: string[] = [];
+    if (intent === "question" || intent === "followup" || intent === "exploration") {
+      faqKnowledge = await retrieveFaqKnowledge(lastUserMessage, LOVABLE_API_KEY);
+    }
+
+    // ── Stap 3: Context samenstellen op basis van intent + FAQ's ──
+    const dynamicContext = assembleContext(phase, detector, profileMeta, userSector, phase_transition, intent, faqKnowledge);
     const systemPrompt = DOORAI_CORE + INTENT_APPENDIX[intent] + `\n\n${dynamicContext}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
