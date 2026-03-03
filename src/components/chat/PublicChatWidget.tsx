@@ -208,6 +208,8 @@ export function PublicChatWidget() {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showActions, setShowActions] = useState(true);
 
@@ -256,6 +258,24 @@ export function PublicChatWidget() {
     window.addEventListener("openDOORaiChat", handleOpenChat);
     return () => window.removeEventListener("openDOORaiChat", handleOpenChat);
   }, []);
+
+  // Focus input when opening, Escape to close
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } else {
+      openButtonRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isOpen]);
 
   const handleActionClick = (action: QuickAction) => {
     if (action.kind === "ask" && action.text) {
@@ -400,6 +420,7 @@ export function PublicChatWidget() {
       <AnimatePresence>
         {!isOpen && (
           <motion.button
+            ref={openButtonRef}
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
@@ -466,7 +487,7 @@ export function PublicChatWidget() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5" aria-live="polite">
               {messages.map((message, index) => (
                 <div key={index}>
                   <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -600,17 +621,20 @@ export function PublicChatWidget() {
               <form onSubmit={sendMessage} className="px-4 pb-3 pt-2">
                 <div className="flex gap-2 items-center">
                   <Input
+                    ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Stel je vraag…"
                     disabled={isLoading}
                     className="flex-1 h-9 text-sm rounded-xl"
+                    aria-label="Stel je vraag"
                   />
                   <Button
                     type="submit"
                     size="sm"
                     disabled={isLoading || !input.trim()}
                     className="h-9 w-9 p-0 rounded-xl bg-primary hover:bg-primary/90"
+                    aria-label="Verstuur bericht"
                   >
                     <Send className="h-3.5 w-3.5" />
                   </Button>

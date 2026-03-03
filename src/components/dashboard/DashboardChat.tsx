@@ -287,7 +287,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       </div>
 
       {/* Messages */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" aria-live="polite">
         {visibleMessages.map((message, index) => (
           <div
             key={index}
@@ -381,6 +381,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
               size="icon"
               className="shrink-0 h-7 w-7 text-muted-foreground hover:text-destructive"
               onClick={handleClearConversation}
+              aria-label="Gesprek wissen"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -391,8 +392,9 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
             placeholder="Stel je vraag..."
             disabled={isLoading}
             className="flex-1 h-9 text-sm rounded-xl"
+            aria-label="Stel je vraag"
           />
-          <Button type="submit" size="sm" disabled={isLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl">
+          <Button type="submit" size="sm" disabled={isLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
             <Send className="h-3.5 w-3.5" />
           </Button>
         </form>

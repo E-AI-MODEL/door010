@@ -104,7 +104,7 @@ const ROUTE_SUMMARIES: Record<string, { title: string; summary: string; hasFaqs:
   "mbo4-b": { title: "Mbo-4 (doorstroom)", summary: "Mbo 4-opleiding als middenkaderopleiding (3-4 jaar). Na afronding kun je doorstromen naar een AD of hbo-bachelor.", hasFaqs: true },
   "vavo-b": { title: "Vavo", summary: "Via volwassenenonderwijs je havodiploma halen. Voor 18+ zonder juist middelbareschooldiploma. Regulier havo-eindexamen.", hasFaqs: true },
   "pdg-a": { title: "PDG-traject", summary: "Met een PDG mag je lesgeven in het mbo. Leer-werktraject via zij-instroom. Hbo/wo-diploma of 3 jaar werkervaring + hbo-denkniveau vereist.", hasFaqs: true },
-  "sl-a": { title: "Schoolleiding PO", summary: "Schoolleiders PO moeten geregistreerd staan in het Schoolleidersregister PO. Kwalificatie via schoolleidersopleiding, master, assessment of EVC.", hasFaqs: false },
+  "sl-a": { title: "Schoolleiding PO", summary: "Schoolleiders PO moeten geregistreerd staan in het Schoolleidersregister PO. Een zij-instromende schoolleideropleiding voor het register is voldoende - een lesbevoegdheid is niet verplicht. De specifieke zij-instroomsubsidie voor schoolleiders bestaat niet meer.", hasFaqs: false },
   "mbo3-a": { title: "Mbo-3", summary: "Vakopleiding van 2-3 jaar. Na afronding doorstroom naar mbo-4 mogelijk.", hasFaqs: false },
   "hbo-f": { title: "Hbo-bachelor (ongegradeerde bevoegdheid)", summary: "Ongegradeerde bevoegdheid voor lichamelijke opvoeding, muziek en andere kunstvakken. Bevoegd in alle onderwijssectoren.", hasFaqs: false },
   "mm-b": { title: "Middenmanagement VO", summary: "Teamleiders en afdelingsleiders in het voortgezet onderwijs. Vaak nog deels voor de klas, met lesbevoegdheid.", hasFaqs: false },
@@ -354,27 +354,46 @@ function findRouteStep(slug: string): string | null {
   return truncate(result, 80);
 }
 
-function findRegionalDesk(regionOrCity: string): string | null {
+// Multi-match: retourneer ALLE matches (max 3)
+function findRegionalDesks(regionOrCity: string): string[] {
   const key = regionOrCity.toLowerCase().trim();
+  const results: string[] = [];
   for (const desk of REGIONAL_DESKS_LIST) {
     const match = desk.cities.some(c => key.includes(c) || c.includes(key));
     if (match) {
       let info = `${desk.title}: gratis en onafhankelijk advies.`;
       if (desk.website) info += ` Website: ${desk.website}`;
       if (desk.hasConsultation) info += ` - je kunt een persoonlijk consult aanvragen.`;
-      return truncate(info, 80);
+      results.push(truncate(info, 80));
+      if (results.length >= 3) break;
     }
   }
-  return null;
+  return results;
 }
 
-// Helper: find desk object for links
-function findDeskObject(regionOrCity: string): DeskInfo | null {
+// Backwards compat single-match wrapper
+function findRegionalDesk(regionOrCity: string): string | null {
+  const results = findRegionalDesks(regionOrCity);
+  return results.length > 0 ? results[0] : null;
+}
+
+// Multi-match: retourneer ALLE desk objects (max 3)
+function findDeskObjects(regionOrCity: string): DeskInfo[] {
   const key = regionOrCity.toLowerCase().trim();
+  const results: DeskInfo[] = [];
   for (const desk of REGIONAL_DESKS_LIST) {
-    if (desk.cities.some(c => key.includes(c) || c.includes(key))) return desk;
+    if (desk.cities.some(c => key.includes(c) || c.includes(key))) {
+      results.push(desk);
+      if (results.length >= 3) break;
+    }
   }
-  return null;
+  return results;
+}
+
+// Backwards compat single-match wrapper
+function findDeskObject(regionOrCity: string): DeskInfo | null {
+  const results = findDeskObjects(regionOrCity);
+  return results.length > 0 ? results[0] : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -383,7 +402,7 @@ function findDeskObject(regionOrCity: string): DeskInfo | null {
 const KNOWLEDGE_BLOCKS: Record<string, string> = {
   lesgeven_po: "Leraar PO: je draagt verantwoordelijkheid voor een klas op de basisschool (groep 1-8). Je geeft alle vakken. Pabo-diploma of zij-instroom PO-traject vereist.",
   lesgeven_vo: "Leraar VO: je geeft les in een specifiek vak op de middelbare school. Tweedegraads (4 jr hbo) voor onderbouw/vmbo, eerstegraads (master) voor bovenbouw havo/vwo.",
-  lesgeven_mbo: "Docent MBO: je geeft theorie/praktijklessen in beroepsopleidingen. PDG (1-2 jr) vereist. Vakkennis uit de praktijk is een groot pluspunt.",
+  lesgeven_mbo: "Docent MBO: je geeft theorie/praktijklessen in beroepsopleidingen. PDG (1-2 jr) vereist, of een eerste/tweedegraads bevoegdheid. Vakkennis aantoonbaar via diploma of minimaal 3 jaar relevante werkervaring. In het MBO is 'bevoegd' geen wettelijke term.",
   vakexpertise_po: "Vakspecialist PO: je zet expertise in op basisscholen (muziek, techniek, beweging). Hbo-diploma in je vakgebied is vaak voldoende.",
   vakexpertise_vo: "Vakleerkracht VO: je geeft les in je eigen vak. Tweedegraads of eerstegraads bevoegdheid nodig.",
   vakexpertise_mbo: "Instructeur MBO: je geeft praktijklessen vanuit vakkennis. Geen formele bevoegdheid nodig, PDG aanbevolen.",
@@ -392,14 +411,18 @@ const KNOWLEDGE_BLOCKS: Record<string, string> = {
   route_tweedegraads: "Tweedegraads lerarenopleiding: 4 jaar hbo. Bevoegd voor vmbo en onderbouw havo/vwo. Zij-instroom VO is versneld (2 jaar).",
   route_eerstegraads: "Eerstegraads: universitaire master (1-2 jaar) na vakinhoudelijke bachelor. Bevoegd voor alle VO-niveaus.",
   route_pdg: "PDG: 1-2 jaar, bedoeld voor vakmensen die in MBO willen lesgeven. Didactiek en pedagogiek terwijl je al voor de klas staat.",
-  route_zij_instroom: "Zij-instroom: versneld 2-jarig traject, leren en werken tegelijk. Voor PO en VO. Voorwaarden: relevant hbo/wo-diploma, geschiktheidsonderzoek, werkplek.",
-  salaris: "Salaris volgt de CAO. Starters ca. 2.900-3.500 bruto/maand. Ervaren leraren tot ca. 5.800. Exacte inschaling hangt af van opleiding, ervaring en sector.",
-  kosten: "Kosten verschillen per route. Regulier: wettelijk collegegeld (ca. 2.500/jr). Zij-instroom: vaak deels door school bekostigd via subsidie. PDG: variëert per aanbieder.",
+  route_zij_instroom: "Zij-instroom: versneld 2-jarig traject, leren en werken tegelijk. Je werkt minimaal 0,4 fte (2 dagen) en volgt 1 dag per week opleiding. Voorwaarden: relevant hbo/wo-diploma, geschiktheidsonderzoek, aanstelling bij een school, VOG. Let op: bij afbreken kan je werkgever NIET opnieuw de zij-instroomsubsidie aanvragen.",
+  salaris: "Salaris (peildatum: CAO PO/VO 2024): PO/VO LB-schaal trede 1 ca. €3.622, trede 12 ca. €5.520 bruto/mnd. MBO LB-schaal trede 1 ca. €3.713, trede 12 ca. €5.495. Inschaling hangt af van werkervaring en schoolbeleid. Bron: salaristabellen via cao-po.nl / vo-raad.nl / mbo-raad.nl.",
+  kosten: "Kosten (peildatum: studiejaar 2024-2025): Zij-instroom is kosteloos - de school vraagt subsidie aan. Regulier: wettelijk collegegeld ca. €2.530/jr. PDG: variëert per aanbieder. Let op: als je het zij-instroomtraject voortijdig stopt, kan je werkgever NIET opnieuw de zij-instroomsubsidie voor jou aanvragen.",
   regio_rotterdam: "Onderwijsloket Rotterdam: gratis en onafhankelijk advies over werken in het onderwijs in de regio Rotterdam-Rijnmond. Website: onderwijsloketrotterdam.nl",
+  verwantschap_zij_instroom: "Bij zij-instroom tweedegraads VO moet je hbo/wo-diploma vakinhoudelijk verwant zijn aan het schoolvak. Bij eerstegraads: wo-bachelor + master met minimaal 120 ECTS verwant aan het vak. De verwantschapstabel geeft slechts een indicatie - de lerarenopleiding beslist zelf over toelating. Check altijd bij de beoogde opleiding.",
+  sool_subsidie: "De SOOL-subsidie (Subsidieregeling Opleiding Leraren) kan beschikbaar zijn voor scholen die medewerkers laten opleiden tot leraar. Dit is ook relevant als je start als onderwijsondersteuner. Check bij het regioloket of je werkgever hiervoor in aanmerking komt.",
+  bevoegdheden_mbo: "In het MBO is 'bevoegd' geen wettelijke term. Je kunt lesgeven met een eerste- of tweedegraads bevoegdheid, of met een geschiktheidsverklaring plus PDG.",
+  externe_bronnen: "Nuttige bronnen: Routetool (onderwijsloket.com/routes), Onderwijsnavigator (onderwijsloket.com/onderwijsnavigator), Kennisbank (onderwijsloket.com/kennisbank), werkeninhetonderwijs.nl, CAO-tabellen (cao-po.nl / vo-raad.nl / mbo-raad.nl).",
 };
 
 // Basiskennis: altijd beschikbaar, ongeacht gevulde slots
-const BASELINE_KNOWLEDGE = `Het Onderwijsloket Rotterdam helpt je gratis en onafhankelijk bij het verkennen van werken in het onderwijs. Er zijn verschillende richtingen: lesgeven (voor de klas), begeleiden (leerlingen ondersteunen), ondersteunende functies, of je vakexpertise inzetten als instructeur of specialist. Routes lopen via reguliere opleidingen of via zij-instroom als je al werkervaring hebt.`;
+const BASELINE_KNOWLEDGE = `Het landelijke Onderwijsloket (onderwijsloket.com) biedt algemene informatie over routes en bevoegdheden. Regionale onderwijsloketten bieden persoonlijke begeleiding. Het Onderwijsloket Rotterdam (onderwijsloketrotterdam.nl) helpt gratis in de regio Rotterdam-Rijnmond. Er zijn verschillende richtingen: lesgeven, begeleiden, ondersteunende functies, of vakexpertise inzetten. Routes lopen via reguliere opleidingen of via zij-instroom. Handige tools: Routetool (onderwijsloket.com/routes), Onderwijsnavigator (onderwijsloket.com/onderwijsnavigator).`;
 
 // ─────────────────────────────────────────────────────────────────────
 // A. Tone Selector — vereenvoudigd: 1 sfeerinstructie per fase-moment
@@ -519,6 +542,17 @@ function resolveKnowledge(
       } else {
         landelijk.push(KNOWLEDGE_BLOCKS.route_zij_instroom);
       }
+
+      // VO zij-instroom: verwantschapsblok injecteren
+      if (sector === "VO" && slots.credential_goal?.toLowerCase().includes("zij")) {
+        landelijk.push(KNOWLEDGE_BLOCKS.verwantschap_zij_instroom);
+      }
+    }
+
+    // MBO: altijd PDG-info injecteren
+    if (sector === "MBO" && !landelijk.some(l => l.includes("PDG"))) {
+      landelijk.push(KNOWLEDGE_BLOCKS.route_pdg);
+      landelijk.push(KNOWLEDGE_BLOCKS.bevoegdheden_mbo);
     }
   }
 
@@ -531,9 +565,9 @@ function resolveKnowledge(
   // Matchen/Voorbereiden: regionaal loket
   if (p === "matchen" || p === "voorbereiden") {
     if (slots.region_preference) {
-      const deskInfo = findRegionalDesk(slots.region_preference);
-      if (deskInfo) {
-        regionaal.push(deskInfo);
+      const deskInfos = findRegionalDesks(slots.region_preference);
+      if (deskInfos.length > 0) {
+        for (const d of deskInfos) regionaal.push(d);
       } else {
         regionaal.push("Zoek een onderwijsloket in je regio via onderwijsloketten.nl voor gratis advies over routes en vacatures.");
       }
@@ -545,30 +579,37 @@ function resolveKnowledge(
 
   // Altijd: als region_preference gezet maar buiten matchen/voorbereiden, toch regionale info geven
   if (slots.region_preference && p !== "matchen" && p !== "voorbereiden") {
-    const deskInfo = findRegionalDesk(slots.region_preference);
-    if (deskInfo) regionaal.push(deskInfo);
+    const deskInfos = findRegionalDesks(slots.region_preference);
+    for (const d of deskInfos) regionaal.push(d);
   }
 
   // Assemble
-  for (const l of landelijk.slice(0, 2)) fragments.push(l);
+  for (const l of landelijk.slice(0, 3)) fragments.push(l);
   for (const r of regionaal.slice(0, 2)) fragments.push(r);
 
-  return fragments.slice(0, 3);
+  return fragments.slice(0, 4);
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // D. UI Links (server-side, NIET in LLM prompt)
 // ─────────────────────────────────────────────────────────────────────
+
+// Live-topic keywords detectie
+const LIVE_TOPIC_KEYWORDS = /\b(vacature|vacatures|openstelling|openstellingen|deadline|deadlines)\b/i;
+const ROUTE_TOPIC_KEYWORDS = /\b(route|zij-?instroom|traject|opleiding|opleidingen|bevoegdheid)\b/i;
+
 function computeLinks(
   phase: string,
   slots: Partial<Record<SlotKey, string>>,
+  lastUserMessage?: string,
 ): UiLink[] {
   const links: UiLink[] = [];
   const p = (phase || "interesseren").toLowerCase();
+  const msg = (lastUserMessage || "").toLowerCase();
 
   links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
 
-  if (p === "matchen" || slots.next_step === "vacatures") {
+  if (p === "matchen" || slots.next_step === "vacatures" || LIVE_TOPIC_KEYWORDS.test(msg)) {
     links.push({ label: "Vacatures", href: "/vacatures" });
   }
   if (p === "interesseren" || slots.next_step === "event") {
@@ -583,17 +624,29 @@ function computeLinks(
     links.push({ label: "Afspraak aanvragen", href: "/profiel" });
   }
 
-  // Regional desk website link
+  // Routetool-link bij route-gerelateerde vragen
+  if (ROUTE_TOPIC_KEYWORDS.test(msg)) {
+    links.push({ label: "Routetool", href: "https://onderwijsloket.com/routes/" });
+  }
+
+  // Regional desk website links (multi-match)
   if (slots.region_preference) {
-    const desk = findDeskObject(slots.region_preference);
-    if (desk?.website) {
-      links.push({ label: desk.title, href: desk.website });
+    const desks = findDeskObjects(slots.region_preference);
+    for (const desk of desks) {
+      if (desk.website) {
+        links.push({ label: desk.title, href: desk.website });
+      }
     }
+  }
+
+  // Kennisbank-fallback: als weinig links matchen
+  if (links.length <= 1) {
+    links.push({ label: "Kennisbank", href: "/kennisbank" });
   }
 
   const uniq = new Map<string, UiLink>();
   for (const l of links) uniq.set(l.href, l);
-  return [...uniq.values()].slice(0, 3);
+  return [...uniq.values()].slice(0, 5);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -682,7 +735,7 @@ function assembleContext(
     if (knowledge.length > 0) {
       parts.push(`\n### Achtergrondinformatie (gebruik dit inhoudelijk, noem geen labels)\n${knowledge.map(k => `- ${k}`).join("\n")}`);
     } else {
-      parts.push(`\n### Achtergrondinformatie\n${BASELINE_KNOWLEDGE}`);
+      parts.push(`\n### Achtergrondinformatie\n${BASELINE_KNOWLEDGE}\n- ${KNOWLEDGE_BLOCKS.externe_bronnen}`);
     }
   } else if (intent === "exploration") {
     parts.push(`\n### Achtergrondinformatie\n${BASELINE_KNOWLEDGE}`);
@@ -795,6 +848,29 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - Bij salaris/inschaling: alleen globaal, verwijs naar CAO/tabellen.
 - Bij maatwerk: benoem dat het kan verschillen en verwijs naar een passende vervolgstap.
 
+## Rolbegrenzing
+- Schrijf NOOIT e-mails, brieven of gespreksscripts voor de gebruiker.
+- Geef geen managementadvies of loopbaancoaching. Verwijs naar een adviseur.
+- Bij arbeidsconflicten of salarisonvrede: blijf neutraal. Zeg niet "dit voelt oneerlijk". Verwijs naar CAO-informatie en het regioloket.
+- Je bent een informatieve wegwijzer, geen coach of persoonlijk assistent.
+
+## Bronvermelding
+- Als de gebruiker vraagt om een officiële bron, regeling, CAO, voorwaarden of link: antwoord is alleen geldig als er een bronlink in je achtergrondinformatie staat. Anders: "Ik heb dit niet met een officiële bron in mijn kennisbank. Check het bij het regioloket of op onderwijsloket.com/kennisbank."
+- Noem nooit regels of eisen als feit zonder bron. Formuleer als: "Volgens de informatie die ik heb..."
+
+## Tijdsgevoeligheid
+- Noem nooit een datum, bedrag, deadline of openstelling zonder peildatum. Gebruik: "Volgens [bron] (peildatum najaar 2024)..."
+- Gebruik nooit "gemiddelde" tenzij je de bron en berekeningswijze kent.
+- Onderwerpen die per definitie verouderen (subsidies, CAO-schalen, openstellingen, vacatures, contactpersonen): ALTIJD naar een bronpagina verwijzen, nooit zelf de actuele stand noemen.
+
+## Live onderwerpen
+- Bij vragen over vacatures of actuele openstellingen: zeg "Actuele vacatures kan ik niet live inzien" en verwijs naar de vacaturepagina.
+- Als je niet kunt leveren wat gevraagd wordt, geef het best mogelijke alternatief dat de gebruiker vooruithelpt (bijv. de vacaturepagina's van specifieke besturen).
+
+## Verwijzingen
+- Verwijs niet naar "links onder ons gesprek" of "hieronder verschijnen links". Zeg in plaats daarvan: "Klik op de knop hieronder" of verwijs naar de specifieke pagina.
+- Gebruik voor regelingen altijd de officiële naam en de juiste uitvoerder. Mix geen termen (DUO vs DUS-I).
+
 ## Achtergrondinformatie
 - Je krijgt achtergrondinformatie over routes, loketten en opleidingen in de context.
 - Gebruik deze info inhoudelijk in je antwoord, maar noem NOOIT labels als "[Landelijk]" of "[Regionaal]".
@@ -806,6 +882,9 @@ const DOORAI_CORE = `Je bent DoorAI, de oriëntatie-assistent van Onderwijsloket
 - Geen emojis.
 - Gebruik geen emdash. Gebruik hooguit een streep of splits zinnen.
 - Geen containerzinnen ("het hangt ervan af") zonder direct te concretiseren.
+- Voeg een peildatum toe bij antwoorden over salaris, kosten, subsidies of toelatingseisen. Bijv: "Volgens onze info (peildatum najaar 2024)..."
+- Gebruik voor regelingen altijd de officiële naam en de juiste uitvoerder.
+- Wees action-first: concrete stappen, showstoppers, wat meenemen. Minder coach-talk, meer beslisinfo.
 
 ## Verboden zinnen
 - "Goed dat je dit vraagt."
@@ -827,7 +906,7 @@ const INTENT_APPENDIX: Record<IntentType, string> = {
 - De gebruiker groet je. Reageer warm en kort.
 - Stel een open wedervraag om te ontdekken wat hen bezighoudt.
 - Deel geen inhoudelijke info tenzij de gebruiker er specifiek om vraagt.
-- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Links worden door ons apart getoond als knoppen; noem ze niet in je tekst.
 - Maximaal 60 woorden.
 `,
   question: `
@@ -835,7 +914,7 @@ const INTENT_APPENDIX: Record<IntentType, string> = {
 - De gebruiker heeft een specifieke vraag. Beantwoord deze gericht met de achtergrondinformatie.
 - Gebruik de context om inhoudelijk te antwoorden.
 - Als je niet genoeg weet voor een volledig antwoord, geef wat je weet en stel een gerichte wedervraag.
-- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Links worden door ons apart getoond als knoppen; noem ze niet in je tekst.
 - Maximaal 120 woorden.
 `,
   exploration: `
@@ -843,7 +922,7 @@ const INTENT_APPENDIX: Record<IntentType, string> = {
 - De gebruiker verkent, twijfelt of is nieuwsgierig. Geen informatiedump.
 - Stel een korte wedervraag om te begrijpen waar de interesse ligt.
 - Je mag de basisinfo gebruiken als het natuurlijk past, maar hou het kort.
-- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Links worden door ons apart getoond als knoppen; noem ze niet in je tekst.
 - Maximaal 80 woorden.
 `,
   followup: `
@@ -851,7 +930,7 @@ const INTENT_APPENDIX: Record<IntentType, string> = {
 - De gebruiker reageert op een eerder antwoord. Bouw voort op het gesprek.
 - Gebruik de context alleen als het relevant is voor het lopende onderwerp.
 - Houd het conversationeel en beknopt.
-- Links worden door ons apart getoond onder de chat; noem ze niet in je tekst.
+- Links worden door ons apart getoond als knoppen; noem ze niet in je tekst.
 - Maximaal 120 woorden.
 `,
 };
@@ -975,15 +1054,18 @@ Deno.serve(async (req) => {
     // ── Stap 1: Intent classificatie (snel, niet-streaming) ──
     const intent = await classifyIntent(messages, LOVABLE_API_KEY);
 
-    // ── SSOT actions + links (deterministisch, ongewijzigd) ──
+    // ── SSOT actions + links (deterministisch) ──
     const phase = detector?.phase_current || userPhase || "interesseren";
     const slots = detector?.known_slots || {};
+
+    // Live-topic detectie: pak laatste gebruikersbericht
+    const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content ?? "";
 
     const ssotActions: UiAction[] = detector?.next_slot_key
       ? actionsForNextSlot(detector.next_slot_key, detector?.known_slots)
       : [];
 
-    const uiLinks = computeLinks(phase, slots);
+    const uiLinks = computeLinks(phase, slots, lastUserMessage);
 
     // ── Stap 2: Context samenstellen op basis van intent ──
     const dynamicContext = assembleContext(phase, detector, profileMeta, userSector, phase_transition, intent);
