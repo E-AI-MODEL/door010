@@ -212,6 +212,7 @@ export default function Chat() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let currentEventType = ""; // Track SSE event type
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -227,7 +228,18 @@ export default function Chat() {
           buffer = buffer.slice(newlineIndex + 1);
 
           if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
+
+          // Track event type from SSE "event:" lines
+          if (line.startsWith("event: ")) {
+            currentEventType = line.slice(7).trim();
+            continue;
+          }
+
+          if (line.startsWith(":") || line.trim() === "") {
+            // Empty line resets event type after processing
+            if (line.trim() === "") currentEventType = "";
+            continue;
+          }
           if (!line.startsWith("data: ")) continue;
 
           const jsonStr = line.slice(6).trim();
@@ -236,17 +248,24 @@ export default function Chat() {
           try {
             const parsed = JSON.parse(jsonStr);
 
-            // Server-side actions + links event
+            // Handle `event: ui` — separate SSE event type for UI payload
+            if (currentEventType === "ui") {
+              if (parsed.actions && Array.isArray(parsed.actions)) {
+                setLatestActions(parsed.actions);
+              }
+              if (parsed.links && Array.isArray(parsed.links)) {
+                setLatestLinks(parsed.links);
+              }
+              currentEventType = "";
+              continue;
+            }
+
+            // Legacy fallback: actions/links in default event
             if (parsed.actions && Array.isArray(parsed.actions)) {
               setLatestActions(parsed.actions);
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links);
               }
-              continue;
-            }
-
-            if (parsed.links && Array.isArray(parsed.links)) {
-              setLatestLinks(parsed.links);
               continue;
             }
 
