@@ -104,6 +104,45 @@ export type Database = {
         }
         Relationships: []
       }
+      faq_items: {
+        Row: {
+          answer: string
+          category: string
+          created_at: string
+          fts: unknown
+          id: string
+          peildatum: string | null
+          question: string
+          source_url: string | null
+          tags: string[]
+          updated_at: string
+        }
+        Insert: {
+          answer: string
+          category?: string
+          created_at?: string
+          fts?: unknown
+          id?: string
+          peildatum?: string | null
+          question: string
+          source_url?: string | null
+          tags?: string[]
+          updated_at?: string
+        }
+        Update: {
+          answer?: string
+          category?: string
+          created_at?: string
+          fts?: unknown
+          id?: string
+          peildatum?: string | null
+          question?: string
+          source_url?: string | null
+          tags?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string
@@ -352,6 +391,19 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      search_faqs: {
+        Args: { max_results?: number; search_query: string }
+        Returns: {
+          answer: string
+          category: string
+          id: string
+          peildatum: string
+          question: string
+          rank: number
+          source_url: string
+          tags: string[]
+        }[]
       }
     }
     Enums: {

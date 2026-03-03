@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.scrape-events]
 verify_jwt = false
+
+[functions.ingest-faqs]
+verify_jwt = false
