@@ -4,11 +4,15 @@ import { motion } from "framer-motion";
 import { Send, ArrowRight, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import ReactMarkdown from "react-markdown";
 import { useChatConversation } from "@/hooks/useChatConversation";
 import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
 import { supabase } from "@/integrations/supabase/client";
 import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
+import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
+import { ResponseActions } from "@/components/chat/ResponseActions";
+import { IntakeSheet } from "@/components/chat/IntakeSheet";
+import { needsClarification, buildIntakeQuestions, classifyAnswerType, parseStructuredMeta } from "@/utils/responsePipeline";
+import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
 
@@ -35,6 +39,12 @@ interface DashboardChatProps {
   profileMeta?: ProfileMeta;
 }
 
+interface ChatMessageExt {
+  role: "user" | "assistant" | "advisor";
+  content: string;
+  structured?: StructuredResponse | null;
+}
+
 export function DashboardChat({ userId, currentPhase, preferredSector, profileMeta }: DashboardChatProps) {
   const [input, setInput] = useState("");
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
@@ -42,6 +52,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
     const st = sectorToSchoolType(preferredSector);
     return st ? { school_type: st } : {};
   });
+  const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const profile = { current_phase: currentPhase, preferred_sector: preferredSector };
 
@@ -61,6 +72,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
   const handleClearConversation = useCallback(async () => {
     await resetConversation();
     setKnownSlots({});
+    setPendingIntake(null);
     const phase = currentPhase || "interesseren";
     const info: Record<string, string> = {
       interesseren: "Je verkent of het onderwijs iets voor je is.",
@@ -112,10 +124,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       if (Object.keys(updates).length === 0) return;
 
       try {
-        await supabase
-          .from("profiles")
-          .update(updates)
-          .eq("user_id", userId);
+        await supabase.from("profiles").update(updates).eq("user_id", userId);
       } catch (e) {
         console.warn("Profile update skipped:", e);
       }
@@ -134,6 +143,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
     setIsLoading(true);
     setLatestActions([]);
     setLatestLinks([]);
+    setPendingIntake(null);
 
     let assistantContent = "";
 
@@ -155,7 +165,25 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       setKnownSlots(detector.known_slots);
       await maybePersistProfile(detector);
 
-      // Phase transition detection
+      // Check if intake is needed
+      if (needsClarification({
+        userMessage: text,
+        missingSlots: detector.missing_slots || [],
+        mode: "authenticated",
+        turnCount: outgoingMessages.filter(m => m.role === "user").length,
+      })) {
+        const intakeQs = buildIntakeQuestions(detector.missing_slots || []);
+        if (intakeQs.length > 0) {
+          setPendingIntake(intakeQs);
+          setMessages(prev => [
+            ...prev,
+            { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+          ]);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== currentPhase
         ? { from: currentPhase, to: detector.phase_current_ui }
         : undefined;
@@ -189,6 +217,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let currentEventType = "";
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -204,7 +233,17 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
           buffer = buffer.slice(newlineIndex + 1);
 
           if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
+
+          // Track SSE event type
+          if (line.startsWith("event: ")) {
+            currentEventType = line.slice(7).trim();
+            continue;
+          }
+
+          if (line.startsWith(":") || line.trim() === "") {
+            if (line.trim() === "") currentEventType = "";
+            continue;
+          }
           if (!line.startsWith("data: ")) continue;
 
           const jsonStr = line.slice(6).trim();
@@ -213,16 +252,36 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
           try {
             const parsed = JSON.parse(jsonStr);
 
-            if (parsed.actions && Array.isArray(parsed.actions)) {
-              setLatestActions(parsed.actions);
-              if (parsed.links && Array.isArray(parsed.links)) {
-                setLatestLinks(parsed.links);
+            // Handle `event: ui` — structured UI payload
+            if (currentEventType === "ui") {
+              if (parsed.actions && Array.isArray(parsed.actions)) {
+                setLatestActions(parsed.actions.slice(0, 2));
               }
+              if (parsed.links && Array.isArray(parsed.links)) {
+                setLatestLinks(parsed.links.slice(0, 6));
+              }
+              // Check for structured meta
+              const structured = parseStructuredMeta(parsed);
+              if (structured) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last?.role === "assistant") {
+                    (last as ChatMessageExt).structured = structured;
+                  }
+                  return [...updated];
+                });
+              }
+              currentEventType = "";
               continue;
             }
 
-            if (parsed.links && Array.isArray(parsed.links)) {
-              setLatestLinks(parsed.links);
+            // Legacy fallback
+            if (parsed.actions && Array.isArray(parsed.actions)) {
+              setLatestActions(parsed.actions.slice(0, 2));
+              if (parsed.links && Array.isArray(parsed.links)) {
+                setLatestLinks(parsed.links.slice(0, 6));
+              }
               continue;
             }
 
@@ -259,7 +318,12 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
     sendMessage(input);
   };
 
-  // Show only the last 6 messages
+  const handleIntakeSubmit = (answers: Record<string, string>) => {
+    setPendingIntake(null);
+    const summary = Object.entries(answers).map(([, v]) => v).join(", ");
+    sendMessage(`Mijn situatie: ${summary}`);
+  };
+
   const visibleMessages = messages.slice(-6);
 
   return (
@@ -273,14 +337,9 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       <div className="flex items-center justify-between px-5 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
-            DOORai
-          </h2>
+          <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">DOORai</h2>
         </div>
-        <Link
-          to="/chat"
-          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-        >
+        <Link to="/chat" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
           Volledig gesprek
           <ArrowRight className="h-3 w-3" />
         </Link>
@@ -289,10 +348,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       {/* Messages */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" aria-live="polite">
         {visibleMessages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+          <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
               className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
                 message.role === "user"
@@ -308,9 +364,11 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
               {message.role === "user" ? (
                 <p>{message.content}</p>
               ) : (
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:leading-relaxed prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0">
-                  <ReactMarkdown>{normalizeMarkdown(message.content)}</ReactMarkdown>
-                </div>
+                <CollapsibleAnswer
+                  content={message.content}
+                  structured={(message as ChatMessageExt).structured}
+                  compact
+                />
               )}
             </div>
           </div>
@@ -329,45 +387,31 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
         <div />
       </div>
 
-      {/* Suggestions */}
-      {latestActions.length > 0 && (
+      {/* Intake sheet */}
+      {pendingIntake && (
         <div className="px-4 pb-2">
-          <div className="flex flex-wrap gap-1.5">
-            {latestActions.map((action, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setLatestActions([]);
-                  setLatestLinks([]);
-                  sendMessage(action.value);
-                }}
-                disabled={isLoading}
-                className="px-3 py-1.5 text-xs rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
+          <IntakeSheet
+            questions={pendingIntake}
+            onSubmit={handleIntakeSubmit}
+            onDismiss={() => setPendingIntake(null)}
+            compact
+          />
         </div>
       )}
 
-      {/* Link chips (server-side, not in LLM output) */}
-      {latestLinks.length > 0 && (
+      {/* Actions + Links */}
+      {(latestActions.length > 0 || latestLinks.length > 0) && !pendingIntake && (
         <div className="px-4 pb-2">
-          <div className="flex flex-wrap gap-1.5">
-            {latestLinks.map((link, i) => (
-              <Link
-                key={i}
-                to={link.href.startsWith("http") ? link.href : link.href}
-                target={link.href.startsWith("http") ? "_blank" : undefined}
-                rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                className="px-3 py-1.5 text-xs rounded-full border border-muted-foreground/30 text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors inline-flex items-center gap-1"
-              >
-                {link.label}
-                <ArrowRight className="h-3 w-3" />
-              </Link>
-            ))}
-          </div>
+          <ResponseActions
+            actions={latestActions}
+            links={latestLinks}
+            onActionClick={(value) => {
+              setLatestActions([]);
+              setLatestLinks([]);
+              sendMessage(value);
+            }}
+            disabled={isLoading}
+          />
         </div>
       )}
 
@@ -390,11 +434,11 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Stel je vraag..."
-            disabled={isLoading}
+            disabled={isLoading || !!pendingIntake}
             className="flex-1 h-9 text-sm rounded-xl"
             aria-label="Stel je vraag"
           />
-          <Button type="submit" size="sm" disabled={isLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
+          <Button type="submit" size="sm" disabled={isLoading || !input.trim() || !!pendingIntake} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
             <Send className="h-3.5 w-3.5" />
           </Button>
         </form>

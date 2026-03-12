@@ -5,12 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Send, ArrowLeft, Trash2, ArrowRight } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import { Send, ArrowLeft, Trash2 } from "lucide-react";
 import { useChatConversation } from "@/hooks/useChatConversation";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
-import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
+import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
+import { ResponseActions } from "@/components/chat/ResponseActions";
+import { IntakeSheet } from "@/components/chat/IntakeSheet";
+import { needsClarification, buildIntakeQuestions, parseStructuredMeta } from "@/utils/responsePipeline";
+import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
 
 interface Profile {
   current_phase: UiPhaseCode | null;
@@ -19,6 +22,12 @@ interface Profile {
   bio?: string | null;
   test_completed?: boolean | null;
   test_results?: unknown;
+}
+
+interface ChatMessageExt {
+  role: string;
+  content: string;
+  structured?: StructuredResponse | null;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
@@ -40,6 +49,7 @@ export default function Chat() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
+  const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -56,9 +66,7 @@ export default function Chat() {
   } = useChatConversation(user?.id, profile);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-    }
+    if (!authLoading && !user) navigate("/auth");
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
@@ -72,7 +80,6 @@ export default function Chat() {
             .single();
           if (data) {
             setProfile(data);
-            // Seed known slots from profile
             const schoolType = sectorToSchoolType(data.preferred_sector);
             if (schoolType) setKnownSlots((prev) => ({ ...prev, school_type: schoolType }));
           }
@@ -87,9 +94,7 @@ export default function Chat() {
   }, [user]);
 
   useEffect(() => {
-    if (profileLoaded && user) {
-      loadConversation();
-    }
+    if (profileLoaded && user) loadConversation();
   }, [profileLoaded, user, loadConversation]);
 
   const scrollToBottom = useCallback(() => {
@@ -104,36 +109,21 @@ export default function Chat() {
   const maybePersistProfile = useCallback(
     async (detector: ReturnType<typeof runPhaseDetector>) => {
       if (!user) return;
-
       const updates: Record<string, unknown> = {};
-
-      // Update current_phase only when confidence is reasonable
       if (profile?.current_phase && detector.phase_current_ui !== profile.current_phase && detector.phase_confidence >= 0.60) {
         updates.current_phase = detector.phase_current_ui;
       }
-
-      // Update preferred sector when we have a concrete school_type
       const st = detector.known_slots.school_type;
       if (st && typeof st === "string") {
         const sector = st === "PO" ? "po" : st === "VO" ? "vo" : st === "MBO" ? "mbo" : null;
-        if (sector && sector !== profile?.preferred_sector) {
-          updates.preferred_sector = sector;
-        }
+        if (sector && sector !== profile?.preferred_sector) updates.preferred_sector = sector;
       }
-
       if (Object.keys(updates).length === 0) return;
-
       try {
         const { data, error } = await supabase
-          .from("profiles")
-          .update(updates)
-          .eq("user_id", user.id)
-          .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results")
-          .single();
-
-        if (!error && data) {
-          setProfile(data);
-        }
+          .from("profiles").update(updates).eq("user_id", user.id)
+          .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results").single();
+        if (!error && data) setProfile(data);
       } catch (e) {
         console.warn("Profile update skipped:", e);
       }
@@ -152,16 +142,14 @@ export default function Chat() {
     setIsLoading(true);
     setLatestActions([]);
     setLatestLinks([]);
+    setPendingIntake(null);
 
     let assistantContent = "";
 
     try {
       const convId = await ensureConversation();
-      if (convId) {
-        await saveMessage(convId, "user", text);
-      }
+      if (convId) await saveMessage(convId, "user", text);
 
-      // Phase Detector: alleen voor ingelogde chat
       const conversationTurns: ConversationTurn[] = outgoingMessages
         .slice(-30)
         .filter((m) => m.role === "user" || m.role === "assistant")
@@ -174,11 +162,24 @@ export default function Chat() {
       });
 
       setKnownSlots(detector.known_slots);
-
-      // Optioneel profiel bijwerken (alleen bij voldoende confidence)
       await maybePersistProfile(detector);
 
-      // Phase transition detection
+      // Check intake need
+      if (needsClarification({
+        userMessage: text,
+        missingSlots: detector.missing_slots || [],
+        mode: "authenticated",
+        turnCount: outgoingMessages.filter(m => m.role === "user").length,
+      })) {
+        const intakeQs = buildIntakeQuestions(detector.missing_slots || []);
+        if (intakeQs.length > 0) {
+          setPendingIntake(intakeQs);
+          setMessages(prev => [...prev, { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" }]);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== (profile?.current_phase || "interesseren")
         ? { from: profile?.current_phase || "interesseren", to: detector.phase_current_ui }
         : undefined;
@@ -212,7 +213,7 @@ export default function Chat() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let currentEventType = ""; // Track SSE event type
+      let currentEventType = "";
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -229,14 +230,12 @@ export default function Chat() {
 
           if (line.endsWith("\r")) line = line.slice(0, -1);
 
-          // Track event type from SSE "event:" lines
           if (line.startsWith("event: ")) {
             currentEventType = line.slice(7).trim();
             continue;
           }
 
           if (line.startsWith(":") || line.trim() === "") {
-            // Empty line resets event type after processing
             if (line.trim() === "") currentEventType = "";
             continue;
           }
@@ -248,24 +247,32 @@ export default function Chat() {
           try {
             const parsed = JSON.parse(jsonStr);
 
-            // Handle `event: ui` — separate SSE event type for UI payload
             if (currentEventType === "ui") {
               if (parsed.actions && Array.isArray(parsed.actions)) {
-                setLatestActions(parsed.actions);
+                setLatestActions(parsed.actions.slice(0, 2));
               }
               if (parsed.links && Array.isArray(parsed.links)) {
-                setLatestLinks(parsed.links);
+                setLatestLinks(parsed.links.slice(0, 6));
+              }
+              const structured = parseStructuredMeta(parsed);
+              if (structured) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last?.role === "assistant") {
+                    (last as ChatMessageExt).structured = structured;
+                  }
+                  return [...updated];
+                });
               }
               currentEventType = "";
               continue;
             }
 
-            // Legacy fallback: actions/links in default event
+            // Legacy fallback
             if (parsed.actions && Array.isArray(parsed.actions)) {
-              setLatestActions(parsed.actions);
-              if (parsed.links && Array.isArray(parsed.links)) {
-                setLatestLinks(parsed.links);
-              }
+              setLatestActions(parsed.actions.slice(0, 2));
+              if (parsed.links) setLatestLinks((parsed.links as Array<{ label: string; href: string }>).slice(0, 6));
               continue;
             }
 
@@ -274,10 +281,7 @@ export default function Chat() {
               assistantContent += content;
               setMessages((prev) => {
                 const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantContent,
-                };
+                updated[updated.length - 1] = { role: "assistant", content: assistantContent };
                 return updated;
               });
             }
@@ -288,9 +292,7 @@ export default function Chat() {
         }
       }
 
-      if (convId) {
-        await saveMessage(convId, "assistant", assistantContent);
-      }
+      if (convId) await saveMessage(convId, "assistant", assistantContent);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
@@ -313,9 +315,16 @@ export default function Chat() {
     sendMessage(value);
   };
 
+  const handleIntakeSubmit = (answers: Record<string, string>) => {
+    setPendingIntake(null);
+    const summary = Object.entries(answers).map(([, v]) => v).join(", ");
+    sendMessage(`Mijn situatie: ${summary}`);
+  };
+
   const handleClearConversation = useCallback(async () => {
     await resetConversation();
     setKnownSlots({});
+    setPendingIntake(null);
     const phase = profile?.current_phase || "interesseren";
     const info: Record<string, string> = {
       interesseren: "Je verkent of het onderwijs iets voor je is.",
@@ -345,31 +354,19 @@ export default function Chat() {
       <Header />
       <main className="flex-1 flex flex-col items-center py-6 px-4">
         <div className="w-full max-w-3xl flex flex-col rounded-3xl border bg-card shadow-door overflow-hidden" style={{ height: "calc(100vh - 120px)" }}>
-          {/* Compact header */}
+          {/* Header */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
             <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={() => navigate("/dashboard")}
-              >
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => navigate("/dashboard")}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <h1 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
-                  DOORai
-                </h1>
+                <h1 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">DOORai</h1>
               </div>
             </div>
             {messages.length > 1 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={handleClearConversation}
-              >
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={handleClearConversation}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
@@ -378,10 +375,7 @@ export default function Chat() {
           {/* Messages */}
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-              >
+              <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
                     message.role === "user"
@@ -397,9 +391,10 @@ export default function Chat() {
                   {message.role === "user" ? (
                     <p>{message.content}</p>
                   ) : (
-                    <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:leading-relaxed prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0">
-                      <ReactMarkdown>{normalizeMarkdown(message.content)}</ReactMarkdown>
-                    </div>
+                    <CollapsibleAnswer
+                      content={message.content}
+                      structured={(message as ChatMessageExt).structured}
+                    />
                   )}
                 </div>
               </div>
@@ -418,30 +413,26 @@ export default function Chat() {
             <div />
           </div>
 
-          {/* Suggestions */}
-          {latestActions.length > 0 && (
+          {/* Intake */}
+          {pendingIntake && (
             <div className="px-5 pb-2">
-              <ChatSuggestions actions={latestActions} onActionClick={handleActionClick} disabled={isLoading} />
+              <IntakeSheet
+                questions={pendingIntake}
+                onSubmit={handleIntakeSubmit}
+                onDismiss={() => setPendingIntake(null)}
+              />
             </div>
           )}
 
-          {/* Link chips (server-side, not in LLM output) */}
-          {latestLinks.length > 0 && (
+          {/* Actions + Links */}
+          {!pendingIntake && (latestActions.length > 0 || latestLinks.length > 0) && (
             <div className="px-5 pb-2">
-              <div className="flex flex-wrap gap-2">
-                {latestLinks.map((link, i) => (
-                  <Link
-                    key={i}
-                    to={link.href.startsWith("http") ? link.href : link.href}
-                    target={link.href.startsWith("http") ? "_blank" : undefined}
-                    rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                    className="px-3 py-1.5 text-xs rounded-full border border-muted-foreground/30 text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors inline-flex items-center gap-1"
-                  >
-                    {link.label}
-                    <ArrowRight className="h-3 w-3" />
-                  </Link>
-                ))}
-              </div>
+              <ResponseActions
+                actions={latestActions}
+                links={latestLinks}
+                onActionClick={handleActionClick}
+                disabled={isLoading}
+              />
             </div>
           )}
 
@@ -452,10 +443,10 @@ export default function Chat() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Stel je vraag..."
-                disabled={isLoading}
+                disabled={isLoading || !!pendingIntake}
                 className="flex-1 h-9 text-sm rounded-xl"
               />
-              <Button type="submit" size="sm" disabled={isLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl">
+              <Button type="submit" size="sm" disabled={isLoading || !input.trim() || !!pendingIntake} className="h-9 w-9 p-0 rounded-xl">
                 <Send className="h-3.5 w-3.5" />
               </Button>
             </form>
