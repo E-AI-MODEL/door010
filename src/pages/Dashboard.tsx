@@ -23,6 +23,15 @@ interface Profile {
   known_slots: Record<string, string> | null;
 }
 
+function parseKnownSlots(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string") result[k] = v;
+  }
+  return result;
+}
+
 export default function Dashboard() {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
