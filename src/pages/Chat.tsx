@@ -253,6 +253,30 @@ export default function Chat() {
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
+
+              // Handle intake_needed from backend
+              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
+                setPendingIntake([{
+                  id: "slot_0",
+                  question: "Naar welke sector gaat je interesse uit?",
+                  type: "choice",
+                  options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                }]);
+                setMessages(prev => [
+                  ...prev.slice(0, -1),
+                  { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+                ]);
+              }
+
+              // Handle corrected_slots — merge after persist
+              if (parsed.corrected_slots && typeof parsed.corrected_slots === "object") {
+                setKnownSlots(prev => {
+                  const merged = { ...prev, ...parsed.corrected_slots };
+                  supabase.from("profiles").update({ known_slots: merged }).eq("user_id", user!.id).then(() => {});
+                  return merged;
+                });
+              }
+
               const structured = parseStructuredMeta(parsed);
               if (structured) {
                 setMessages((prev) => {
