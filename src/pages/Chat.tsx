@@ -76,13 +76,20 @@ export default function Chat() {
         try {
           const { data } = await supabase
             .from("profiles")
-            .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results")
+            .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results, known_slots")
             .eq("user_id", user.id)
             .single();
           if (data) {
             setProfile(data);
+            // Initialize knownSlots from persisted DB data + sector fallback
+            const dbSlots: Record<string, string> = {};
+            if (data.known_slots && typeof data.known_slots === "object" && !Array.isArray(data.known_slots)) {
+              for (const [k, v] of Object.entries(data.known_slots as Record<string, unknown>)) {
+                if (typeof v === "string") dbSlots[k] = v;
+              }
+            }
             const schoolType = sectorToSchoolType(data.preferred_sector);
-            if (schoolType) setKnownSlots((prev) => ({ ...prev, school_type: schoolType }));
+            setKnownSlots(prev => ({ ...(schoolType ? { school_type: schoolType } : {}), ...dbSlots, ...prev }));
           }
         } catch (error) {
           console.error("Error fetching profile:", error);
