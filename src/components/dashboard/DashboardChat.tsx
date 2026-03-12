@@ -46,12 +46,14 @@ interface ChatMessageExt {
   structured?: StructuredResponse | null;
 }
 
-export function DashboardChat({ userId, currentPhase, preferredSector, profileMeta }: DashboardChatProps) {
+export function DashboardChat({ userId, currentPhase, preferredSector, knownSlotsFromDb, profileMeta }: DashboardChatProps) {
   const [input, setInput] = useState("");
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>(() => {
+    // Initialize from DB persisted slots, falling back to sector mapping
+    const fromDb = knownSlotsFromDb || {};
     const st = sectorToSchoolType(preferredSector);
-    return st ? { school_type: st } : {};
+    return { ...(st ? { school_type: st } : {}), ...fromDb };
   });
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
