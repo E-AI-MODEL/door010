@@ -108,7 +108,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
   }, [messages]);
 
   const maybePersistProfile = useCallback(
-    async (detector: ReturnType<typeof runPhaseDetector>) => {
+    async (detector: ReturnType<typeof runPhaseDetector>, slotsToSave?: KnownSlots) => {
       const updates: Record<string, unknown> = {};
       const oldPhase = currentPhase;
 
@@ -122,6 +122,12 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
         if (sector && sector !== preferredSector) {
           updates.preferred_sector = sector;
         }
+      }
+
+      // Persist full known_slots to DB
+      const finalSlots = slotsToSave || detector.known_slots;
+      if (Object.keys(finalSlots).length > 0) {
+        updates.known_slots = finalSlots;
       }
 
       if (Object.keys(updates).length === 0) return;
