@@ -252,6 +252,40 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
+
+              // Handle intake_needed from backend
+              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
+                const intakeQs: IntakeQuestion[] = parsed.slot_chips.map((chip: { label: string; value: string }, i: number) => ({
+                  id: `slot_${i}`,
+                  question: i === 0 ? "Naar welke sector gaat je interesse uit?" : "Wat is je vooropleiding?",
+                  type: "choice" as const,
+                  options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                }));
+                // Deduplicate to single question with all options
+                if (intakeQs.length > 0) {
+                  setPendingIntake([{
+                    id: "slot_0",
+                    question: "Naar welke sector gaat je interesse uit?",
+                    type: "choice",
+                    options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                  }]);
+                  setMessages(prev => [
+                    ...prev.slice(0, -1), // Remove empty assistant message
+                    { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+                  ]);
+                }
+              }
+
+              // Handle corrected_slots from backend — merge AFTER persist
+              if (parsed.corrected_slots && typeof parsed.corrected_slots === "object") {
+                setKnownSlots(prev => {
+                  const merged = { ...prev, ...parsed.corrected_slots };
+                  // Persist merged slots
+                  supabase.from("profiles").update({ known_slots: merged }).eq("user_id", userId).then(() => {});
+                  return merged;
+                });
+              }
+
               // Check for structured meta
               const structured = parseStructuredMeta(parsed);
               if (structured) {

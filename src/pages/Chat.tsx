@@ -22,6 +22,7 @@ interface Profile {
   bio?: string | null;
   test_completed?: boolean | null;
   test_results?: unknown;
+  known_slots?: unknown;
 }
 
 interface ChatMessageExt {
