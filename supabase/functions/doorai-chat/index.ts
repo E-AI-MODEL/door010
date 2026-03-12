@@ -865,8 +865,9 @@ Deno.serve(async (req) => {
           await writer.write(enc.encode(buffer + "\n"));
         }
 
-        // Send UI payload as a separate SSE event type
-        const uiPayload = JSON.stringify({ actions: ssotActions, links: uiLinks });
+        // Send UI payload as a separate SSE event type — max 2 actions, max 6 links
+        const cappedActions = ssotActions.slice(0, 2);
+        const uiPayload = JSON.stringify({ actions: cappedActions, links: uiLinks });
         await writer.write(enc.encode(`event: ui\ndata: ${uiPayload}\n\n`));
       } catch (e) {
         console.error("Stream error:", e);
