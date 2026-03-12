@@ -402,17 +402,18 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
         </div>
       )}
 
-      {/* Actions + Links */}
-      {(latestActions.length > 0 || latestLinks.length > 0) && !pendingIntake && (
+      {/* Actions */}
+      {(latestActions.length > 0) && !pendingIntake && (
         <div className="px-4 pb-2">
           <ResponseActions
-            actions={latestActions}
-            links={latestLinks}
-            onActionClick={(value) => {
+            primaryFollowup={latestActions[0] ? { label: latestActions[0].label, value: latestActions[0].value } : null}
+            secondaryAction={latestActions[1] ? { label: latestActions[1].label, value: latestActions[1].value } : null}
+            onAskClick={(value) => {
               setLatestActions([]);
               setLatestLinks([]);
               sendMessage(value);
             }}
+            compact
             disabled={isLoading}
           />
         </div>

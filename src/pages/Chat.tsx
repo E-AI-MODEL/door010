@@ -427,13 +427,13 @@ export default function Chat() {
             </div>
           )}
 
-          {/* Actions + Links */}
-          {!pendingIntake && (latestActions.length > 0 || latestLinks.length > 0) && (
+          {/* Actions */}
+          {!pendingIntake && latestActions.length > 0 && (
             <div className="px-5 pb-2">
               <ResponseActions
-                actions={latestActions}
-                links={latestLinks}
-                onActionClick={handleActionClick}
+                primaryFollowup={latestActions[0] ? { label: latestActions[0].label, value: latestActions[0].value } : null}
+                secondaryAction={latestActions[1] ? { label: latestActions[1].label, value: latestActions[1].value } : null}
+                onAskClick={handleActionClick}
                 disabled={isLoading}
               />
             </div>
