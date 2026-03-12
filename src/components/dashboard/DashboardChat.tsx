@@ -36,6 +36,7 @@ interface DashboardChatProps {
   userId: string;
   currentPhase: UiPhaseCode;
   preferredSector: string | null;
+  knownSlotsFromDb?: Record<string, string>;
   profileMeta?: ProfileMeta;
 }
 
