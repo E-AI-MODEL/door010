@@ -3,7 +3,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Site navigation assistant - different role from DOORai chat
+// ── Answer type classification (server-side, not LLM) ──────────
+type AnswerType = "reproductie" | "wegwijs" | "verkenning" | "begroeting";
+
+const GREETING_RE = /^(hoi|hey|hallo|hi|goedemorgen|goedemiddag|goedenavond|welkom|dag)\b/i;
+const FACT_RE = /\b(salaris|verdien|loon|kosten|collegegeld|duur|hoe lang|jaar)\b/i;
+const NAV_RE = /\b(waar vind|pagina|bekijk|link|website|url)\b/i;
+
+function classifyAnswerType(msg: string): AnswerType {
+  const trimmed = msg.trim();
+  if (trimmed.length < 15 && GREETING_RE.test(trimmed)) return "begroeting";
+  if (NAV_RE.test(trimmed)) return "wegwijs";
+  if (FACT_RE.test(trimmed)) return "reproductie";
+  return "verkenning";
+}
+
+// ── System prompt ──────────────────────────────────────────────
 const SITE_GUIDE_PROMPT = `Je bent DoorAI, de site-gids van Onderwijsloket Rotterdam. Je helpt bezoekers de juiste pagina te vinden.
 
 ## IDENTITEIT
@@ -18,8 +33,8 @@ Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk. Je helpt 
 ## STIJL
 - Korte zinnen. Concreet. Geen vakjargon tenzij de gebruiker erom vraagt.
 - Vermijd containerzinnen zoals "het hangt ervan af" zonder meteen te concretiseren.
-- Geen emojis.
-- Gebruik geen emdash. Gebruik hooguit een normale streep of splits zinnen.
+- Geen emojis. Geen emdash of endash (gebruik "-" of splits zinnen).
+- Noem NOOIT "kennisbank" of "peildatum" - dat zijn interne labels.
 
 ## VERBODEN ZINNEN
 - "Goed dat je dit vraagt."
@@ -34,6 +49,10 @@ Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk. Je helpt 
 - "Even scherp zetten."
 - "Dit verschilt per sector of school. Dit is de vaste plek om te checken: ..."
 - "Als dit maatwerk wordt, is een consult het handigst. Zal ik je daarheen wijzen?"
+
+## LINKS
+- Gebruik klikbare markdown-links waar relevant, bijv: [Routes bekijken](/opleidingen)
+- Max 2-4 links per antwoord, beschrijvend. Nooit "klik hier".
 
 ## OUTPUT REGELS
 1. **Maximaal 2 zinnen** per antwoord
@@ -63,7 +82,6 @@ Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk. Je helpt 
 | Opleidingen | [/opleidingen](/opleidingen) | Alle routes naar het leraarschap |
 | Vacatures | [/vacatures](/vacatures) | Actuele banen bij scholen |
 | Evenementen | [/events](/events) | Open dagen, webinars, infosessies |
-| Kennisbank | [/kennisbank](/kennisbank) | Artikelen, FAQ's, achtergrondinfo |
 | Account | [/auth](/auth) | Inloggen of registreren |
 | Dashboard | [/dashboard](/dashboard) | Persoonlijke voortgang (na inloggen) |
 
@@ -90,6 +108,10 @@ interface RequestBody {
   messages: ChatMessage[];
 }
 
+function replaceDashes(text: string): string {
+  return text.replace(/[\u2014\u2013]/g, "-");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -102,6 +124,34 @@ Deno.serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+
+    // Server-side classify before streaming
+    const lastUserMsg = [...messages].reverse().find(m => m.role === "user")?.content?.trim() ?? "";
+    const answerType = classifyAnswerType(lastUserMsg);
+    const mode = "public";
+
+    // Build meta payload (server-side, not LLM)
+    const meta = {
+      mode,
+      answer_type: answerType,
+      // direct_answer and supporting_detail are empty for streaming — client uses fallback
+      direct_answer: null,
+      supporting_detail: null,
+      verified_links: answerType === "wegwijs"
+        ? [
+            { label: "Routes en opleidingen", href: "/opleidingen" },
+            { label: "Vacatures bekijken", href: "/vacatures" },
+            { label: "Events en meelopen", href: "/events" },
+          ]
+        : answerType === "reproductie"
+        ? [
+            { label: "Routes en opleidingen", href: "/opleidingen" },
+            { label: "CAO-salaristabellen", href: "https://www.voraad.nl/cao" },
+          ]
+        : [
+            { label: "Routes en opleidingen", href: "/opleidingen" },
+          ],
+    };
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -140,8 +190,70 @@ Deno.serve(async (req) => {
       );
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    // Stream: send meta first, then proxy upstream with dash filter, then close
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const enc = new TextEncoder();
+
+    (async () => {
+      try {
+        // Send server-side meta as first data event
+        await writer.write(enc.encode(`data: ${JSON.stringify({ meta })}\n\n`));
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let nlIdx: number;
+          while ((nlIdx = buffer.indexOf("\n")) !== -1) {
+            const line = buffer.slice(0, nlIdx);
+            buffer = buffer.slice(nlIdx + 1);
+
+            if (line.startsWith("data: ")) {
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr === "[DONE]") {
+                await writer.write(enc.encode("data: [DONE]\n\n"));
+                continue;
+              }
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const content = parsed.choices?.[0]?.delta?.content;
+                if (typeof content === "string") {
+                  parsed.choices[0].delta.content = replaceDashes(content);
+                }
+                await writer.write(enc.encode(`data: ${JSON.stringify(parsed)}\n\n`));
+              } catch {
+                await writer.write(enc.encode(line + "\n"));
+              }
+            } else {
+              await writer.write(enc.encode(line + "\n"));
+            }
+          }
+        }
+
+        if (buffer.trim()) {
+          await writer.write(enc.encode(buffer + "\n"));
+        }
+      } catch (e) {
+        console.error("Stream error:", e);
+      } finally {
+        await writer.close();
+      }
+    })();
+
+    return new Response(readable, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
     });
   } catch (error) {
     console.error("Homepage coach error:", error);
