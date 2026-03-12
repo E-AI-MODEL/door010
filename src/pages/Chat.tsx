@@ -13,7 +13,7 @@ import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
 import { needsClarification, buildIntakeQuestions, parseStructuredMeta } from "@/utils/responsePipeline";
-import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
+import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
 interface Profile {
   current_phase: UiPhaseCode | null;
@@ -165,13 +165,16 @@ export default function Chat() {
       await maybePersistProfile(detector);
 
       // Check intake need
-      if (needsClarification({
-        userMessage: text,
-        missingSlots: detector.missing_slots || [],
-        mode: "authenticated",
-        turnCount: outgoingMessages.filter(m => m.role === "user").length,
+      const missingSlots = detector.missing_slots || [];
+      if (needsClarification(text, {
+        missingSector: missingSlots.includes("school_type"),
+        missingLevel: missingSlots.includes("admission_requirements"),
+        backendMode: "direct",
       })) {
-        const intakeQs = buildIntakeQuestions(detector.missing_slots || []);
+        const intakeQs = buildIntakeQuestions({
+          missingSector: missingSlots.includes("school_type"),
+          missingLevel: missingSlots.includes("admission_requirements"),
+        });
         if (intakeQs.length > 0) {
           setPendingIntake(intakeQs);
           setMessages(prev => [...prev, { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" }]);
@@ -424,13 +427,13 @@ export default function Chat() {
             </div>
           )}
 
-          {/* Actions + Links */}
-          {!pendingIntake && (latestActions.length > 0 || latestLinks.length > 0) && (
+          {/* Actions */}
+          {!pendingIntake && latestActions.length > 0 && (
             <div className="px-5 pb-2">
               <ResponseActions
-                actions={latestActions}
-                links={latestLinks}
-                onActionClick={handleActionClick}
+                primaryFollowup={latestActions[0] ? { label: latestActions[0].label, value: latestActions[0].value } : null}
+                secondaryAction={latestActions[1] ? { label: latestActions[1].label, value: latestActions[1].value } : null}
+                onAskClick={handleActionClick}
                 disabled={isLoading}
               />
             </div>

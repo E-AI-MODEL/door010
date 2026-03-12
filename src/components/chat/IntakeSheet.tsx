@@ -7,7 +7,7 @@ import type { IntakeQuestion } from "@/utils/responsePipeline";
 interface IntakeSheetProps {
   questions: IntakeQuestion[];
   onSubmit: (answers: Record<string, string>) => void;
-  onDismiss: () => void;
+  onDismiss?: () => void;
   compact?: boolean;
 }
 
@@ -20,7 +20,6 @@ export function IntakeSheet({ questions, onSubmit, onDismiss, compact }: IntakeS
   };
 
   const handleSubmit = () => {
-    // Merge open inputs where no chip was selected
     const merged = { ...answers };
     for (const q of questions) {
       if (!merged[q.id] && openInputs[q.id]?.trim()) {
@@ -47,24 +46,35 @@ export function IntakeSheet({ questions, onSubmit, onDismiss, compact }: IntakeS
 
       {questions.map((q) => (
         <div key={q.id} className="space-y-1.5">
-          <p className={`font-medium text-foreground ${compact ? "text-xs" : "text-sm"}`}>{q.label}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {q.options.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => handleChipClick(q.id, opt)}
-                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
-                  answers[q.id] === opt
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border text-foreground hover:border-primary/50"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-          {q.allowOpen && !answers[q.id] && (
+          <p className={`font-medium text-foreground ${compact ? "text-xs" : "text-sm"}`}>{q.question}</p>
+          {q.type === "choice" && q.options && (
+            <div className="flex flex-wrap gap-1.5">
+              {q.options.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => handleChipClick(q.id, opt)}
+                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                    answers[q.id] === opt
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border text-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+          {q.type === "open" && (
+            <Input
+              value={openInputs[q.id] || ""}
+              onChange={(e) => setOpenInputs((prev) => ({ ...prev, [q.id]: e.target.value }))}
+              placeholder="Typ je antwoord..."
+              className="h-7 text-xs rounded-lg"
+            />
+          )}
+          {/* For choice questions, also allow open input if no chip selected */}
+          {q.type === "choice" && !answers[q.id] && (
             <Input
               value={openInputs[q.id] || ""}
               onChange={(e) => setOpenInputs((prev) => ({ ...prev, [q.id]: e.target.value }))}
@@ -84,14 +94,16 @@ export function IntakeSheet({ questions, onSubmit, onDismiss, compact }: IntakeS
         >
           Verstuur
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          className="h-7 text-xs rounded-lg text-muted-foreground"
-        >
-          Overslaan
-        </Button>
+        {onDismiss && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDismiss}
+            className="h-7 text-xs rounded-lg text-muted-foreground"
+          >
+            Overslaan
+          </Button>
+        )}
       </div>
     </motion.div>
   );

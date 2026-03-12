@@ -12,7 +12,7 @@ import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
 import { needsClarification, buildIntakeQuestions, classifyAnswerType, parseStructuredMeta } from "@/utils/responsePipeline";
-import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
+import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
 
@@ -166,13 +166,16 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       await maybePersistProfile(detector);
 
       // Check if intake is needed
-      if (needsClarification({
-        userMessage: text,
-        missingSlots: detector.missing_slots || [],
-        mode: "authenticated",
-        turnCount: outgoingMessages.filter(m => m.role === "user").length,
+      const missingSlots = detector.missing_slots || [];
+      if (needsClarification(text, {
+        missingSector: missingSlots.includes("school_type"),
+        missingLevel: missingSlots.includes("admission_requirements"),
+        backendMode: "direct",
       })) {
-        const intakeQs = buildIntakeQuestions(detector.missing_slots || []);
+        const intakeQs = buildIntakeQuestions({
+          missingSector: missingSlots.includes("school_type"),
+          missingLevel: missingSlots.includes("admission_requirements"),
+        });
         if (intakeQs.length > 0) {
           setPendingIntake(intakeQs);
           setMessages(prev => [
@@ -399,17 +402,18 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
         </div>
       )}
 
-      {/* Actions + Links */}
-      {(latestActions.length > 0 || latestLinks.length > 0) && !pendingIntake && (
+      {/* Actions */}
+      {(latestActions.length > 0) && !pendingIntake && (
         <div className="px-4 pb-2">
           <ResponseActions
-            actions={latestActions}
-            links={latestLinks}
-            onActionClick={(value) => {
+            primaryFollowup={latestActions[0] ? { label: latestActions[0].label, value: latestActions[0].value } : null}
+            secondaryAction={latestActions[1] ? { label: latestActions[1].label, value: latestActions[1].value } : null}
+            onAskClick={(value) => {
               setLatestActions([]);
               setLatestLinks([]);
               sendMessage(value);
             }}
+            compact
             disabled={isLoading}
           />
         </div>
