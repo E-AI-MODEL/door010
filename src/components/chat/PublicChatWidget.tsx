@@ -1,205 +1,54 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { MessageCircle, X, Send, ArrowRight, ExternalLink, Bot, Mail, Phone } from "lucide-react";
+import { MessageCircle, X, Send, Bot, Mail, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
-import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/contexts/AuthContext";
-import { normalizeMarkdown } from "@/utils/normalizeMarkdown";
+import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
+import { ResponseActions } from "@/components/chat/ResponseActions";
+import { IntakeSheet } from "@/components/chat/IntakeSheet";
+import {
+  needsClarification,
+  buildIntakeQuestions,
+  classifyAnswerType,
+  parseStructuredMeta,
+} from "@/utils/responsePipeline";
+import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
 // ===== Types =====
 
-type Role = "user" | "assistant";
-type ActionKind = "ask" | "nav" | "cta";
-type Intent = "route" | "toelating" | "vacatures" | "events" | "account" | "general";
-type Sector = "PO" | "VO" | "MBO" | "UNK";
-type StudyLevel = "MBO" | "HBO" | "WO" | "UNK";
-type Region = "ROTTERDAM" | "OVERIG" | "UNK";
-
-interface QuickAction {
-  kind: ActionKind;
-  label: string;
-  text?: string;
-  href?: string;
-  closeOnClick?: boolean;
-}
-
 interface Message {
-  role: Role;
+  role: "user" | "assistant";
   content: string;
-  actions?: QuickAction[];
+  structured?: StructuredResponse | null;
+  primaryFollowup?: FollowUpAction | null;
+  secondaryAction?: FollowUpAction | null;
 }
 
 interface ConversationSignals {
-  intent: Intent;
-  sector: Sector;
-  studyLevel: StudyLevel;
-  region: Region;
-  hasEnoughContext: boolean;
-}
-
-interface AssistantMeta {
-  intent?: Intent;
-  followUps?: Array<{ kind?: ActionKind; label: string; text?: string; href?: string }>;
-  cta?: { label: string; href: string };
-  signals?: Partial<ConversationSignals>;
+  sector: "PO" | "VO" | "MBO" | "UNK";
+  studyLevel: "MBO" | "HBO" | "WO" | "UNK";
 }
 
 // ===== Constants =====
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/homepage-coach`;
 
-const ROUTES = {
-  auth: "/auth",
-  opleidingen: "/opleidingen",
-  vacatures: "/vacatures",
-  events: "/events",
-  kennisbank: "/kennisbank",
-} as const;
-
-const MAX_LABEL_LEN = 48;
-
 // ===== Helpers =====
 
-function shortLabel(label: string): string {
-  const trimmed = label.trim().replace(/\s+/g, " ");
-  return trimmed.length <= MAX_LABEL_LEN ? trimmed : trimmed.slice(0, MAX_LABEL_LEN - 1) + "…";
-}
-
-function isInternalHref(href?: string): boolean {
-  return !!href && href.startsWith("/");
-}
-
-function isValidHref(href?: string): boolean {
-  if (!href) return false;
-  const h = href.trim();
-  return h.startsWith("/") || h.startsWith("http://") || h.startsWith("https://");
-}
-
-function uniqByLabel(actions: QuickAction[]): QuickAction[] {
-  const seen = new Set<string>();
-  return actions.filter((a) => {
-    const key = a.label.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function capActions(actions: QuickAction[], max = 3): QuickAction[] {
-  return actions.slice(0, max);
-}
-
-function isActionValid(a: QuickAction): boolean {
-  return a.kind === "ask" ? !!a.text?.trim() : isValidHref(a.href);
-}
-
-// ===== Funnel / State Machine =====
-
-function inferSignalsFromUserText(prev: ConversationSignals, text: string): ConversationSignals {
-  let intent: Intent = prev.intent;
-  if (/(route|zij-?instroom|traject|leraar.in.opleiding|lio)/i.test(text)) intent = "route";
-  else if (/(diploma|bevoegd|bevoegdheid|toelating|vereist|eisen)/i.test(text)) intent = "toelating";
-  else if (/(vacatur|banen|werk|sollicit|wijken|school zoeken)/i.test(text)) intent = "vacatures";
-  else if (/(open dag|webinar|event|bijeenkomst|infoavond)/i.test(text)) intent = "events";
-  else if (/(account|profiel|inlog|login)/i.test(text)) intent = "account";
-
-  let sector: Sector = prev.sector;
+function inferSignals(prev: ConversationSignals, text: string): ConversationSignals {
+  let sector = prev.sector;
   if (/\bpo\b|basisonderwijs|primair/i.test(text)) sector = "PO";
   else if (/\bvo\b|voortgezet|middelbare/i.test(text)) sector = "VO";
   else if (/\bmbo\b|beroepsonderwijs/i.test(text)) sector = "MBO";
 
-  let studyLevel: StudyLevel = prev.studyLevel;
+  let studyLevel = prev.studyLevel;
   if (/\bmbo\b/i.test(text)) studyLevel = "MBO";
   else if (/\bhbo\b/i.test(text)) studyLevel = "HBO";
   else if (/\bwo\b|univers/i.test(text)) studyLevel = "WO";
 
-  let region: Region = prev.region;
-  if (/rotterdam|rdam|010/i.test(text)) region = "ROTTERDAM";
-  else if (/anders|andere regio|buiten rotterdam|niet rotterdam/i.test(text)) region = "OVERIG";
-
-  const hasEnoughContext = sector !== "UNK" && studyLevel !== "UNK";
-  return { intent, sector, studyLevel, region, hasEnoughContext };
-}
-
-function computeNextActions(signals: ConversationSignals): QuickAction[] {
-  const actions: QuickAction[] = [];
-
-  // 1) Best next question based on missing info
-  if (signals.sector === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Help me kiezen tussen PO, VO en MBO"), text: "Ik twijfel tussen PO/VO/MBO — kun je me helpen kiezen?" });
-  } else if (signals.studyLevel === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Wat betekent mijn opleidingsniveau?"), text: "Mijn hoogste opleiding is: (MBO/HBO/WO). Wat betekent dat voor mijn route?" });
-  } else {
-    const intentQuestions: Record<string, QuickAction> = {
-      route: { kind: "ask", label: shortLabel("Hoe werkt zij-instroom precies?"), text: "Hoe werkt zij-instroom voor mij, stap voor stap?" },
-      toelating: { kind: "ask", label: shortLabel("Welke diploma's heb ik nodig?"), text: "Welke diploma's of bevoegdheid heb ik nodig in mijn situatie?" },
-      vacatures: { kind: "ask", label: shortLabel("Vacatures bij mij in de buurt"), text: "Welke vacatures passen bij mij (en waar)?" },
-      events: { kind: "ask", label: shortLabel("Wanneer zijn er open dagen?"), text: "Wanneer zijn er open dagen of webinars?" },
-    };
-    actions.push(intentQuestions[signals.intent] ?? { kind: "ask", label: shortLabel("Welke route past het best bij mij?"), text: "Welke route past het beste bij mij?" });
-  }
-
-  // 2) Relevant internal nav
-  const navMap: Record<string, QuickAction> = {
-    vacatures: { kind: "nav", label: shortLabel("Bekijk alle vacatures"), href: ROUTES.vacatures },
-    events: { kind: "nav", label: shortLabel("Bekijk aankomende events"), href: ROUTES.events },
-    toelating: { kind: "nav", label: shortLabel("Bekijk opleidingsroutes"), href: ROUTES.opleidingen },
-    route: { kind: "nav", label: shortLabel("Bekijk opleidingsroutes"), href: ROUTES.opleidingen },
-  };
-  actions.push(navMap[signals.intent] ?? { kind: "nav", label: shortLabel("Bekijk de kennisbank"), href: ROUTES.kennisbank });
-
-  // 3) CTA or fallback question
-  if (signals.hasEnoughContext) {
-    actions.push({ kind: "cta", label: shortLabel("Maak een gratis profiel aan"), href: ROUTES.auth });
-  } else if (signals.sector === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Ik wil naar het basisonderwijs (PO)"), text: "Ik wil richting basisonderwijs (PO)." });
-  } else if (signals.studyLevel === "UNK") {
-    actions.push({ kind: "ask", label: shortLabel("Ik heb een HBO-diploma"), text: "Ik heb een HBO-diploma. Wat zijn mijn opties?" });
-  } else {
-    actions.push({ kind: "ask", label: shortLabel("Vat mijn opties samen"), text: "Kun je mijn opties samenvatten?" });
-  }
-
-  return capActions(uniqByLabel(actions.filter(isActionValid)), 3);
-}
-
-// ===== Backend Meta (optional) =====
-
-function parseBackendMeta(json: any): AssistantMeta | null {
-  try {
-    const meta = json?.meta ?? json?.assistant_meta ?? null;
-    if (!meta || typeof meta !== "object") return null;
-    return {
-      intent: meta.intent,
-      followUps: Array.isArray(meta.followUps) ? meta.followUps : Array.isArray(meta.follow_ups) ? meta.follow_ups : undefined,
-      cta: meta.cta && typeof meta.cta === "object" ? meta.cta : undefined,
-      signals: meta.signals && typeof meta.signals === "object" ? meta.signals : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function actionsFromMeta(meta: AssistantMeta | null): QuickAction[] | null {
-  if (!meta) return null;
-  const actions: QuickAction[] = [];
-
-  if (meta.followUps?.length) {
-    for (const f of meta.followUps) {
-      const kind = (f.kind ?? (f.href ? "nav" : "ask")) as ActionKind;
-      const label = shortLabel(f.label);
-      if (kind === "ask" && f.text?.trim()) actions.push({ kind, label, text: f.text });
-      if ((kind === "nav" || kind === "cta") && isValidHref(f.href)) actions.push({ kind, label, href: f.href });
-    }
-  }
-
-  if (meta.cta?.label && isValidHref(meta.cta.href)) {
-    actions.push({ kind: "cta", label: shortLabel(meta.cta.label), href: meta.cta.href });
-  }
-
-  const cleaned = capActions(uniqByLabel(actions.filter(isActionValid)), 3);
-  return cleaned.length ? cleaned : null;
+  return { sector, studyLevel };
 }
 
 // ===== Component =====
@@ -211,40 +60,35 @@ export function PublicChatWidget() {
   const inputRef = useRef<HTMLInputElement>(null);
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showActions, setShowActions] = useState(true);
+  const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
 
   const [signals, setSignals] = useState<ConversationSignals>({
-    intent: "general",
     sector: "UNK",
     studyLevel: "UNK",
-    region: "UNK",
-    hasEnoughContext: false,
   });
 
-  const initialActions = useMemo<QuickAction[]>(
-    () => [
-      { kind: "ask", label: shortLabel("Welke route past bij mij?"), text: "Welke route past bij mij om leraar te worden?" },
-      { kind: "ask", label: shortLabel("Help me kiezen: PO, VO of MBO"), text: "Welke sector past bij mij (PO/VO/MBO)?" },
-      { kind: "ask", label: shortLabel("Ik werk al en wil overstappen"), text: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
-    ],
-    []
-  );
+  const initialFollowups: Pick<Message, "primaryFollowup" | "secondaryAction"> = {
+    primaryFollowup: { label: "Welke route past bij mij?", value: "Welke route past bij mij om leraar te worden?" },
+    secondaryAction: { label: "Ik werk al en wil overstappen", value: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
+  };
 
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
       content: "Welkom bij het Onderwijsloket Rotterdam. Heb je een vraag over werken in het onderwijs? Ik help je graag verder.",
-      actions: initialActions,
+      ...initialFollowups,
     },
   ]);
 
-  const latestActions = useMemo(() => {
+  // Get latest followups from last assistant message
+  const latestFollowups = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "assistant" && messages[i].actions?.length) {
-        return messages[i].actions!;
+      const m = messages[i];
+      if (m.role === "assistant" && (m.primaryFollowup || m.secondaryAction)) {
+        return { primaryFollowup: m.primaryFollowup, secondaryAction: m.secondaryAction };
       }
     }
-    return [];
+    return { primaryFollowup: null, secondaryAction: null };
   }, [messages]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -259,7 +103,6 @@ export function PublicChatWidget() {
     return () => window.removeEventListener("openDOORaiChat", handleOpenChat);
   }, []);
 
-  // Focus input when opening, Escape to close
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -277,29 +120,35 @@ export function PublicChatWidget() {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen]);
 
-  const handleActionClick = (action: QuickAction) => {
-    if (action.kind === "ask" && action.text) {
-      setInput("");
-      sendMessageWithText(action.text);
-      return;
-    }
-    // nav/cta close handled by Link onClick
-  };
-
   const sendMessageWithText = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
-    const nextSignals = inferSignalsFromUserText(signals, text);
+    const nextSignals = inferSignals(signals, text);
     setSignals(nextSignals);
 
     const userMessage: Message = { role: "user", content: text };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
-    setShowActions(false);
+    setPendingIntake(null);
+
+    // Check if intake is needed
+    const missingSector = nextSignals.sector === "UNK";
+    const missingLevel = nextSignals.studyLevel === "UNK";
+    if (needsClarification(text, { missingSector, missingLevel, backendMode: "direct" })) {
+      const intakeQs = buildIntakeQuestions({ missingSector, missingLevel });
+      if (intakeQs.length > 0) {
+        setPendingIntake(intakeQs);
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+        ]);
+        setIsLoading(false);
+        return;
+      }
+    }
 
     let assistantContent = "";
-    let backendMeta: AssistantMeta | null = null;
 
     try {
       const response = await fetch(CHAT_URL, {
@@ -322,6 +171,8 @@ export function PublicChatWidget() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let currentEventType = "";
+      let parsedMeta: StructuredResponse | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -335,7 +186,16 @@ export function PublicChatWidget() {
           buffer = buffer.slice(newlineIndex + 1);
 
           if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
+
+          if (line.startsWith("event: ")) {
+            currentEventType = line.slice(7).trim();
+            continue;
+          }
+
+          if (line.startsWith(":") || line.trim() === "") {
+            if (line.trim() === "") currentEventType = "";
+            continue;
+          }
           if (!line.startsWith("data: ")) continue;
 
           const jsonStr = line.slice(6).trim();
@@ -343,16 +203,63 @@ export function PublicChatWidget() {
 
           try {
             const parsed = JSON.parse(jsonStr);
-            if (!backendMeta) {
-              const m = parseBackendMeta(parsed);
-              if (m) backendMeta = m;
+
+            // Handle event: ui
+            if (currentEventType === "ui") {
+              parsedMeta = parseStructuredMeta(parsed);
+
+              // Extract actions from payload
+              let pf: FollowUpAction | null = null;
+              let sa: FollowUpAction | null = null;
+
+              if (parsedMeta?.primary_followup) pf = parsedMeta.primary_followup;
+              if (parsedMeta?.secondary_action) sa = parsedMeta.secondary_action;
+
+              // Fallback: parse actions array from payload
+              if (!pf && parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
+                pf = { label: parsed.actions[0].label, value: parsed.actions[0].value };
+                if (parsed.actions.length > 1) {
+                  sa = { label: parsed.actions[1].label, value: parsed.actions[1].value };
+                }
+              }
+
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === "assistant") {
+                  last.structured = parsedMeta;
+                  last.primaryFollowup = pf;
+                  last.secondaryAction = sa;
+                }
+                return [...updated];
+              });
+
+              currentEventType = "";
+              continue;
             }
+
+            // Legacy actions fallback
+            if (parsed.actions && Array.isArray(parsed.actions)) {
+              const pf = parsed.actions[0] ? { label: parsed.actions[0].label, value: parsed.actions[0].value } : null;
+              const sa = parsed.actions[1] ? { label: parsed.actions[1].label, value: parsed.actions[1].value } : null;
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === "assistant") {
+                  last.primaryFollowup = pf;
+                  last.secondaryAction = sa;
+                }
+                return [...updated];
+              });
+              continue;
+            }
+
             const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (delta) {
               assistantContent += delta;
               setMessages((prev) => {
                 const updated = [...prev];
-                updated[updated.length - 1] = { role: "assistant", content: assistantContent };
+                updated[updated.length - 1] = { ...updated[updated.length - 1], role: "assistant", content: assistantContent };
                 return updated;
               });
             }
@@ -363,30 +270,16 @@ export function PublicChatWidget() {
         }
       }
 
-      // Merge backend meta into signals if available
-      setSignals((prev) => {
-        const merged = { ...prev };
-        if (backendMeta?.intent) merged.intent = backendMeta.intent;
-        if (backendMeta?.signals) {
-          if (backendMeta.signals.intent) merged.intent = backendMeta.signals.intent;
-          if (backendMeta.signals.sector) merged.sector = backendMeta.signals.sector;
-          if (backendMeta.signals.studyLevel) merged.studyLevel = backendMeta.signals.studyLevel;
-          if (backendMeta.signals.region) merged.region = backendMeta.signals.region;
-        }
-        merged.hasEnoughContext = merged.sector !== "UNK" && merged.studyLevel !== "UNK";
-        return merged;
-      });
-
-      const metaActions = actionsFromMeta(backendMeta);
-      const computedActions = computeNextActions(nextSignals);
-      const finalActions = metaActions ?? computedActions;
-
+      // If no actions came from backend, generate defaults based on answer type
       setMessages((prev) => {
         const updated = [...prev];
-        updated[updated.length - 1] = { ...updated[updated.length - 1], actions: finalActions };
-        return updated;
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant" && !last.primaryFollowup) {
+          last.primaryFollowup = { label: "Vertel me meer", value: "Kun je daar meer over vertellen?" };
+          last.secondaryAction = { label: "Bekijk opleidingen", value: "Welke opleidingsroutes zijn er?" };
+        }
+        return [...updated];
       });
-      setShowActions(true);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
@@ -394,17 +287,19 @@ export function PublicChatWidget() {
         {
           role: "assistant",
           content: "Sorry, er ging iets mis. Probeer het zo nog eens.",
-          actions: [
-            { kind: "ask", label: shortLabel("Kun je dat nog eens proberen?"), text: "Kun je dat nog eens uitleggen?" },
-            { kind: "nav", label: shortLabel("Bekijk de kennisbank"), href: ROUTES.kennisbank },
-            { kind: "cta", label: shortLabel("Maak een gratis profiel aan"), href: ROUTES.auth },
-          ],
+          primaryFollowup: { label: "Probeer opnieuw", value: "Kun je dat nog eens uitleggen?" },
+          secondaryAction: null,
         },
       ]);
-      setShowActions(true);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleIntakeSubmit = (answers: Record<string, string>) => {
+    setPendingIntake(null);
+    const summary = Object.entries(answers).map(([, v]) => v).join(", ");
+    sendMessageWithText(`Mijn situatie: ${summary}`);
   };
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -499,41 +394,11 @@ export function PublicChatWidget() {
                       }`}
                     >
                       {message.role === "assistant" ? (
-                        <div className="max-w-none text-[13px] leading-relaxed [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_a]:text-primary [&_a]:underline">
-                          <ReactMarkdown
-                            components={{
-                              a: ({ href, children }) => {
-                                if (!isValidHref(href)) return <span>{children}</span>;
-                                if (isInternalHref(href)) {
-                                  return (
-                                    <Link
-                                      to={href!}
-                                      className="text-primary hover:underline inline-flex items-center gap-1"
-                                      onClick={() => setIsOpen(false)}
-                                    >
-                                      {children}
-                                      <ExternalLink className="h-3 w-3" />
-                                    </Link>
-                                  );
-                                }
-                                return (
-                                  <a
-                                    href={href}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-primary hover:underline inline-flex items-center gap-1"
-                                    onClick={() => setIsOpen(false)}
-                                  >
-                                    {children}
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                );
-                              },
-                            }}
-                          >
-                            {normalizeMarkdown(message.content)}
-                          </ReactMarkdown>
-                        </div>
+                        <CollapsibleAnswer
+                          content={message.content}
+                          structured={message.structured}
+                          compact
+                        />
                       ) : (
                         <p className="text-[13px]">{message.content}</p>
                       )}
@@ -558,62 +423,33 @@ export function PublicChatWidget() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Bottom area: actions + tip + input — anchored */}
+            {/* Bottom area: intake + actions + input */}
             <div className="shrink-0 border-t border-border bg-card">
+              {/* Intake sheet */}
+              {pendingIntake && (
+                <div className="px-4 pt-2.5 pb-1">
+                  <IntakeSheet
+                    questions={pendingIntake}
+                    onSubmit={handleIntakeSubmit}
+                    onDismiss={() => setPendingIntake(null)}
+                    compact
+                  />
+                </div>
+              )}
+
               {/* Action buttons */}
-              {latestActions.length > 0 && showActions && !isLoading && (
+              {!pendingIntake && !isLoading && (latestFollowups.primaryFollowup || latestFollowups.secondaryAction) && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="px-4 pt-2.5 pb-1"
                 >
-                  <div className="flex flex-wrap gap-1.5">
-                  {latestActions.filter(isActionValid).map((action, i) => {
-                    const baseClass = "px-2.5 py-1 text-[11px] rounded-full transition-colors border inline-flex items-center justify-center";
-                    const ctaClass = "bg-primary text-primary-foreground border-primary hover:bg-primary/90";
-                    const outlineClass = "bg-background border-primary/30 text-primary hover:bg-primary/10";
-
-                    if (action.kind === "ask") {
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => handleActionClick(action)}
-                          className={`${baseClass} ${outlineClass}`}
-                        >
-                          <span className="max-w-[200px] truncate">{action.label}</span>
-                        </button>
-                      );
-                    }
-
-                    const className = `${baseClass} ${action.kind === "cta" ? ctaClass : outlineClass}`;
-
-                    if (isInternalHref(action.href)) {
-                      return (
-                        <Link
-                          key={i}
-                          to={action.href!}
-                          className={className}
-                          onClick={() => setIsOpen(false)}
-                        >
-                          <span className="max-w-[200px] truncate">{action.label}</span>
-                        </Link>
-                      );
-                    }
-
-                    return (
-                      <a
-                        key={i}
-                        href={action.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={className}
-                        onClick={() => setIsOpen(false)}
-                      >
-                        <span className="max-w-[200px] truncate">{action.label}</span>
-                      </a>
-                    );
-                  })}
-                  </div>
+                  <ResponseActions
+                    primaryFollowup={latestFollowups.primaryFollowup}
+                    secondaryAction={latestFollowups.secondaryAction}
+                    onAskClick={(value) => sendMessageWithText(value)}
+                    compact
+                  />
                 </motion.div>
               )}
 
@@ -625,14 +461,14 @@ export function PublicChatWidget() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Stel je vraag…"
-                    disabled={isLoading}
+                    disabled={isLoading || !!pendingIntake}
                     className="flex-1 h-9 text-sm rounded-xl"
                     aria-label="Stel je vraag"
                   />
                   <Button
                     type="submit"
                     size="sm"
-                    disabled={isLoading || !input.trim()}
+                    disabled={isLoading || !input.trim() || !!pendingIntake}
                     className="h-9 w-9 p-0 rounded-xl bg-primary hover:bg-primary/90"
                     aria-label="Verstuur bericht"
                   >
