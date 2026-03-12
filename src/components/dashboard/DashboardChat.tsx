@@ -11,7 +11,7 @@ import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/u
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
-import { needsClarification, buildIntakeQuestions, classifyAnswerType, parseStructuredMeta } from "@/utils/responsePipeline";
+import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
