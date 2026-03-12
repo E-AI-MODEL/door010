@@ -11,7 +11,7 @@ import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/u
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
-import { needsClarification, buildIntakeQuestions, classifyAnswerType, parseStructuredMeta } from "@/utils/responsePipeline";
+import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
@@ -36,6 +36,7 @@ interface DashboardChatProps {
   userId: string;
   currentPhase: UiPhaseCode;
   preferredSector: string | null;
+  knownSlotsFromDb?: Record<string, string>;
   profileMeta?: ProfileMeta;
 }
 
@@ -45,12 +46,14 @@ interface ChatMessageExt {
   structured?: StructuredResponse | null;
 }
 
-export function DashboardChat({ userId, currentPhase, preferredSector, profileMeta }: DashboardChatProps) {
+export function DashboardChat({ userId, currentPhase, preferredSector, knownSlotsFromDb, profileMeta }: DashboardChatProps) {
   const [input, setInput] = useState("");
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>(() => {
+    // Initialize from DB persisted slots, falling back to sector mapping
+    const fromDb = knownSlotsFromDb || {};
     const st = sectorToSchoolType(preferredSector);
-    return st ? { school_type: st } : {};
+    return { ...(st ? { school_type: st } : {}), ...fromDb };
   });
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -105,7 +108,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
   }, [messages]);
 
   const maybePersistProfile = useCallback(
-    async (detector: ReturnType<typeof runPhaseDetector>) => {
+    async (detector: ReturnType<typeof runPhaseDetector>, slotsToSave?: KnownSlots) => {
       const updates: Record<string, unknown> = {};
       const oldPhase = currentPhase;
 
@@ -119,6 +122,12 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
         if (sector && sector !== preferredSector) {
           updates.preferred_sector = sector;
         }
+      }
+
+      // Persist full known_slots to DB
+      const finalSlots = slotsToSave || detector.known_slots;
+      if (Object.keys(finalSlots).length > 0) {
+        updates.known_slots = finalSlots;
       }
 
       if (Object.keys(updates).length === 0) return;
@@ -165,27 +174,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       setKnownSlots(detector.known_slots);
       await maybePersistProfile(detector);
 
-      // Check if intake is needed
-      const missingSlots = detector.missing_slots || [];
-      if (needsClarification(text, {
-        missingSector: missingSlots.includes("school_type"),
-        missingLevel: missingSlots.includes("admission_requirements"),
-        backendMode: "direct",
-      })) {
-        const intakeQs = buildIntakeQuestions({
-          missingSector: missingSlots.includes("school_type"),
-          missingLevel: missingSlots.includes("admission_requirements"),
-        });
-        if (intakeQs.length > 0) {
-          setPendingIntake(intakeQs);
-          setMessages(prev => [
-            ...prev,
-            { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
-          ]);
-          setIsLoading(false);
-          return;
-        }
-      }
+      // No more client-side needsClarification pre-flight — backend decides via intake_needed
 
       const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== currentPhase
         ? { from: currentPhase, to: detector.phase_current_ui }
@@ -263,6 +252,40 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
+
+              // Handle intake_needed from backend
+              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
+                const intakeQs: IntakeQuestion[] = parsed.slot_chips.map((chip: { label: string; value: string }, i: number) => ({
+                  id: `slot_${i}`,
+                  question: i === 0 ? "Naar welke sector gaat je interesse uit?" : "Wat is je vooropleiding?",
+                  type: "choice" as const,
+                  options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                }));
+                // Deduplicate to single question with all options
+                if (intakeQs.length > 0) {
+                  setPendingIntake([{
+                    id: "slot_0",
+                    question: "Naar welke sector gaat je interesse uit?",
+                    type: "choice",
+                    options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                  }]);
+                  setMessages(prev => [
+                    ...prev.slice(0, -1), // Remove empty assistant message
+                    { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+                  ]);
+                }
+              }
+
+              // Handle corrected_slots from backend — merge AFTER persist
+              if (parsed.corrected_slots && typeof parsed.corrected_slots === "object") {
+                setKnownSlots(prev => {
+                  const merged = { ...prev, ...parsed.corrected_slots };
+                  // Persist merged slots
+                  supabase.from("profiles").update({ known_slots: merged }).eq("user_id", userId).then(() => {});
+                  return merged;
+                });
+              }
+
               // Check for structured meta
               const structured = parseStructuredMeta(parsed);
               if (structured) {

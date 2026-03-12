@@ -187,6 +187,7 @@ export type Database = {
           cv_url: string | null
           first_name: string | null
           id: string
+          known_slots: Json | null
           last_name: string | null
           phone: string | null
           preferred_sector: string | null
@@ -206,6 +207,7 @@ export type Database = {
           cv_url?: string | null
           first_name?: string | null
           id?: string
+          known_slots?: Json | null
           last_name?: string | null
           phone?: string | null
           preferred_sector?: string | null
@@ -225,6 +227,7 @@ export type Database = {
           cv_url?: string | null
           first_name?: string | null
           id?: string
+          known_slots?: Json | null
           last_name?: string | null
           phone?: string | null
           preferred_sector?: string | null

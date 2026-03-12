@@ -20,6 +20,16 @@ interface Profile {
   test_results: unknown;
   bio: string | null;
   phone: string | null;
+  known_slots: Record<string, string> | null;
+}
+
+function parseKnownSlots(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string") result[k] = v;
+  }
+  return result;
 }
 
 export default function Dashboard() {
@@ -51,8 +61,7 @@ export default function Dashboard() {
       if (error) {
         console.error("Error fetching profile:", error);
       }
-      
-      setProfile(data);
+      setProfile(data ? { ...data, known_slots: parseKnownSlots(data.known_slots) } : null);
     } catch (error) {
       console.error("Error fetching profile:", error);
     } finally {
@@ -107,6 +116,7 @@ export default function Dashboard() {
                   userId={user.id}
                   currentPhase={currentPhase}
                   preferredSector={profile?.preferred_sector || null}
+                  knownSlotsFromDb={profile?.known_slots || {}}
                   profileMeta={{
                     first_name: profile?.first_name,
                     bio: profile?.bio,

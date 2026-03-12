@@ -12,7 +12,7 @@ import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/u
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
-import { needsClarification, buildIntakeQuestions, parseStructuredMeta } from "@/utils/responsePipeline";
+import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
 interface Profile {
@@ -22,6 +22,7 @@ interface Profile {
   bio?: string | null;
   test_completed?: boolean | null;
   test_results?: unknown;
+  known_slots?: unknown;
 }
 
 interface ChatMessageExt {
@@ -75,13 +76,20 @@ export default function Chat() {
         try {
           const { data } = await supabase
             .from("profiles")
-            .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results")
+            .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results, known_slots")
             .eq("user_id", user.id)
             .single();
           if (data) {
             setProfile(data);
+            // Initialize knownSlots from persisted DB data + sector fallback
+            const dbSlots: Record<string, string> = {};
+            if (data.known_slots && typeof data.known_slots === "object" && !Array.isArray(data.known_slots)) {
+              for (const [k, v] of Object.entries(data.known_slots as Record<string, unknown>)) {
+                if (typeof v === "string") dbSlots[k] = v;
+              }
+            }
             const schoolType = sectorToSchoolType(data.preferred_sector);
-            if (schoolType) setKnownSlots((prev) => ({ ...prev, school_type: schoolType }));
+            setKnownSlots(prev => ({ ...(schoolType ? { school_type: schoolType } : {}), ...dbSlots, ...prev }));
           }
         } catch (error) {
           console.error("Error fetching profile:", error);
@@ -107,7 +115,7 @@ export default function Chat() {
   }, [messages, scrollToBottom]);
 
   const maybePersistProfile = useCallback(
-    async (detector: ReturnType<typeof runPhaseDetector>) => {
+    async (detector: ReturnType<typeof runPhaseDetector>, slotsToSave?: KnownSlots) => {
       if (!user) return;
       const updates: Record<string, unknown> = {};
       if (profile?.current_phase && detector.phase_current_ui !== profile.current_phase && detector.phase_confidence >= 0.60) {
@@ -118,11 +126,16 @@ export default function Chat() {
         const sector = st === "PO" ? "po" : st === "VO" ? "vo" : st === "MBO" ? "mbo" : null;
         if (sector && sector !== profile?.preferred_sector) updates.preferred_sector = sector;
       }
+      // Persist full known_slots
+      const finalSlots = slotsToSave || detector.known_slots;
+      if (Object.keys(finalSlots).length > 0) {
+        updates.known_slots = finalSlots;
+      }
       if (Object.keys(updates).length === 0) return;
       try {
         const { data, error } = await supabase
           .from("profiles").update(updates).eq("user_id", user.id)
-          .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results").single();
+          .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results, known_slots").single();
         if (!error && data) setProfile(data);
       } catch (e) {
         console.warn("Profile update skipped:", e);
@@ -164,24 +177,7 @@ export default function Chat() {
       setKnownSlots(detector.known_slots);
       await maybePersistProfile(detector);
 
-      // Check intake need
-      const missingSlots = detector.missing_slots || [];
-      if (needsClarification(text, {
-        missingSector: missingSlots.includes("school_type"),
-        missingLevel: missingSlots.includes("admission_requirements"),
-        backendMode: "direct",
-      })) {
-        const intakeQs = buildIntakeQuestions({
-          missingSector: missingSlots.includes("school_type"),
-          missingLevel: missingSlots.includes("admission_requirements"),
-        });
-        if (intakeQs.length > 0) {
-          setPendingIntake(intakeQs);
-          setMessages(prev => [...prev, { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" }]);
-          setIsLoading(false);
-          return;
-        }
-      }
+      // No more client-side needsClarification pre-flight — backend decides via intake_needed
 
       const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== (profile?.current_phase || "interesseren")
         ? { from: profile?.current_phase || "interesseren", to: detector.phase_current_ui }
@@ -257,6 +253,30 @@ export default function Chat() {
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
+
+              // Handle intake_needed from backend
+              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
+                setPendingIntake([{
+                  id: "slot_0",
+                  question: "Naar welke sector gaat je interesse uit?",
+                  type: "choice",
+                  options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                }]);
+                setMessages(prev => [
+                  ...prev.slice(0, -1),
+                  { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+                ]);
+              }
+
+              // Handle corrected_slots — merge after persist
+              if (parsed.corrected_slots && typeof parsed.corrected_slots === "object") {
+                setKnownSlots(prev => {
+                  const merged = { ...prev, ...parsed.corrected_slots };
+                  supabase.from("profiles").update({ known_slots: merged }).eq("user_id", user!.id).then(() => {});
+                  return merged;
+                });
+              }
+
               const structured = parseStructuredMeta(parsed);
               if (structured) {
                 setMessages((prev) => {
