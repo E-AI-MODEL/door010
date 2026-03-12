@@ -1,22 +1,37 @@
 // ═══════════════════════════════════════════════════════════════════
 // Response Pipeline — shared types & logic for chat consumers
+// Aligned with PDF spec v2
 // ═══════════════════════════════════════════════════════════════════
 
 // ── Types ────────────────────────────────────────────────────────
 
-export type ResponseMode = "public" | "authenticated";
+export type ResponseMode = "direct" | "clarify_batch" | "source_check" | "handoff";
 
 export type AnswerType =
-  | "reproductie"   // factual recall (salary, duration, costs)
-  | "wegwijs"       // navigation / link-heavy
-  | "verkenning"    // exploration, options side-by-side
-  | "intake"        // needs clarification first
-  | "begroeting";   // greeting
+  | "reproductie"          // factual recall (salary, duration, costs)
+  | "wegwijs"              // navigation / link-heavy
+  | "verkenning"           // exploration, options side-by-side
+  | "intake"               // needs clarification first
+  | "begroeting"           // greeting
+  | "empathisch_steunend"  // emotional support
+  | "bronplichtig"         // requires verified source
+  | "handoff_mens";        // hand off to human advisor
+
+export interface FollowUpAction {
+  label: string;
+  value: string;
+}
 
 export interface StructuredResponse {
-  directAnswer?: string;        // 1-2 sentences, always visible
-  supportingDetail?: string;    // collapsible "Meer achtergrond"
+  mode?: ResponseMode;
+  answer_type?: AnswerType;
+  directAnswer?: string;
+  supportingDetail?: string;
   verifiedLinks?: VerifiedLink[];
+  collapse_recommended?: boolean;
+  verification_required?: boolean;
+  primary_followup?: FollowUpAction | null;
+  secondary_action?: FollowUpAction | null;
 }
 
 export interface VerifiedLink {
@@ -27,24 +42,33 @@ export interface VerifiedLink {
 
 export interface IntakeQuestion {
   id: string;
-  label: string;
-  options: string[];
-  allowOpen?: boolean;
+  question: string;
+  type: "choice" | "open";
+  options?: string[];
 }
 
 export interface IntakeBatch {
   questions: IntakeQuestion[];
   context: string;
+  summary_template?: string;
 }
 
 // ── Answer Type Rules ────────────────────────────────────────────
 
-export const ANSWER_TYPE_RULES: Record<AnswerType, { maxWords: number; maxLinks: number; maxActions: number }> = {
-  reproductie:  { maxWords: 120, maxLinks: 4, maxActions: 2 },
-  wegwijs:      { maxWords: 80,  maxLinks: 4, maxActions: 2 },
-  verkenning:   { maxWords: 100, maxLinks: 3, maxActions: 2 },
-  intake:       { maxWords: 60,  maxLinks: 1, maxActions: 2 },
-  begroeting:   { maxWords: 60,  maxLinks: 1, maxActions: 2 },
+export const ANSWER_TYPE_RULES: Record<AnswerType, {
+  maxSentences: number;
+  requiresLink: boolean;
+  allowsIntake: boolean;
+  requiresVerifiedSource: boolean;
+}> = {
+  reproductie:         { maxSentences: 4, requiresLink: true,  allowsIntake: false, requiresVerifiedSource: true },
+  wegwijs:             { maxSentences: 2, requiresLink: true,  allowsIntake: false, requiresVerifiedSource: false },
+  verkenning:          { maxSentences: 5, requiresLink: true,  allowsIntake: true,  requiresVerifiedSource: false },
+  intake:              { maxSentences: 2, requiresLink: false, allowsIntake: true,  requiresVerifiedSource: false },
+  begroeting:          { maxSentences: 2, requiresLink: false, allowsIntake: false, requiresVerifiedSource: false },
+  empathisch_steunend: { maxSentences: 3, requiresLink: false, allowsIntake: false, requiresVerifiedSource: false },
+  bronplichtig:        { maxSentences: 4, requiresLink: true,  allowsIntake: false, requiresVerifiedSource: true },
+  handoff_mens:        { maxSentences: 2, requiresLink: false, allowsIntake: false, requiresVerifiedSource: false },
 };
 
 // ── Internal URL Mapping ─────────────────────────────────────────
@@ -59,6 +83,13 @@ export const INTERNAL_URLS: Record<string, string> = {
   dashboard: "/dashboard",
   account: "/auth",
   inloggen: "/auth",
+  registreren: "/auth",
+  kennisbank: "/kennisbank",
+  pabo: "/opleidingen",
+  "zij-instroom": "/opleidingen",
+  zijinstroom: "/opleidingen",
+  pdg: "/opleidingen",
+  lerarenopleiding: "/opleidingen",
 };
 
 export function resolveInternalUrl(text: string): string | null {
@@ -74,10 +105,16 @@ export function resolveInternalUrl(text: string): string | null {
 const GREETING_RE = /^(hoi|hey|hallo|hi|goedemorgen|goedemiddag|goedenavond|welkom|dag)\b/i;
 const FACT_RE = /\b(salaris|verdien|loon|kosten|collegegeld|duur|hoe lang|jaar)\b/i;
 const NAV_RE = /\b(waar vind|pagina|bekijk|link|website|url)\b/i;
+const HANDOFF_RE = /\b(adviseur|persoonlijk|gesprek|bellen|afspraak|klacht)\b/i;
+const EMPATHY_RE = /\b(bang|stress|moeilijk|twijfel|onzeker|verdrietig|frustrer|lastig)\b/i;
+const SOURCE_RE = /\b(bron|bewijs|officieel|wet|regeling|cao|ministerie)\b/i;
 
 export function classifyAnswerType(userMessage: string, hasSlotGaps: boolean): AnswerType {
   const trimmed = userMessage.trim();
   if (trimmed.length < 15 && GREETING_RE.test(trimmed)) return "begroeting";
+  if (HANDOFF_RE.test(trimmed)) return "handoff_mens";
+  if (EMPATHY_RE.test(trimmed)) return "empathisch_steunend";
+  if (SOURCE_RE.test(trimmed)) return "bronplichtig";
   if (hasSlotGaps && trimmed.length < 40) return "intake";
   if (NAV_RE.test(trimmed)) return "wegwijs";
   if (FACT_RE.test(trimmed)) return "reproductie";
@@ -87,51 +124,41 @@ export function classifyAnswerType(userMessage: string, hasSlotGaps: boolean): A
 // ── Needs Clarification ──────────────────────────────────────────
 
 interface ClarificationSignals {
-  userMessage: string;
-  missingSlots: string[];
-  mode: ResponseMode;
-  turnCount: number;
+  missingSector: boolean;
+  missingLevel: boolean;
+  backendMode: ResponseMode;
 }
 
-export function needsClarification(signals: ClarificationSignals): boolean {
-  // Don't trigger intake on first message or in public mode frequently
-  if (signals.turnCount < 2) return false;
-  // Broad question with many missing slots
-  if (signals.missingSlots.length >= 3 && signals.userMessage.length < 50) return true;
-  // Authenticated mode with key slots missing
-  if (signals.mode === "authenticated" && signals.missingSlots.length >= 2) return true;
+export function needsClarification(text: string, signals: ClarificationSignals): boolean {
+  // Don't trigger in handoff mode
+  if (signals.backendMode === "handoff") return false;
+  // Broad question with both sector and level missing
+  if (signals.missingSector && signals.missingLevel && text.length < 50) return true;
+  // Direct or source_check mode with missing info
+  if ((signals.backendMode === "direct" || signals.backendMode === "source_check") && signals.missingSector && signals.missingLevel) return true;
   return false;
 }
 
 // ── Build Intake Questions ───────────────────────────────────────
 
-export function buildIntakeQuestions(missingSlots: string[]): IntakeQuestion[] {
+export function buildIntakeQuestions(signals: { missingSector: boolean; missingLevel: boolean }): IntakeQuestion[] {
   const questions: IntakeQuestion[] = [];
 
-  if (missingSlots.includes("school_type")) {
+  if (signals.missingSector) {
     questions.push({
       id: "school_type",
-      label: "Naar welke sector gaat je interesse uit?",
+      question: "Naar welke sector gaat je interesse uit?",
+      type: "choice",
       options: ["Basisonderwijs (PO)", "Voortgezet onderwijs (VO)", "MBO"],
-      allowOpen: true,
     });
   }
 
-  if (missingSlots.includes("role_interest")) {
-    questions.push({
-      id: "role_interest",
-      label: "Wat voor rol spreekt je aan?",
-      options: ["Lesgeven", "Begeleiden", "Vakexpertise / instructeur"],
-      allowOpen: true,
-    });
-  }
-
-  if (missingSlots.includes("admission_requirements")) {
+  if (signals.missingLevel) {
     questions.push({
       id: "admission_requirements",
-      label: "Wat is je hoogste opleiding?",
+      question: "Wat is je hoogste opleiding?",
+      type: "choice",
       options: ["MBO", "HBO", "WO"],
-      allowOpen: true,
     });
   }
 
@@ -157,9 +184,14 @@ export interface ReflectionResult {
   issues: string[];
 }
 
-export function reflectOnDraft(text: string, answerType: AnswerType): ReflectionResult {
+export function reflectOnDraft(
+  draft: string,
+  question: string,
+  answerType: AnswerType,
+  verifiedLinks: VerifiedLink[],
+): ReflectionResult {
   const issues: string[] = [];
-  const lower = text.toLowerCase();
+  const lower = draft.toLowerCase();
   const rules = ANSWER_TYPE_RULES[answerType];
 
   // Check forbidden phrases
@@ -169,27 +201,26 @@ export function reflectOnDraft(text: string, answerType: AnswerType): Reflection
     }
   }
 
-  // Check word count
-  const wordCount = text.split(/\s+/).length;
-  if (wordCount > rules.maxWords * 1.5) {
-    issues.push(`Te lang: ${wordCount} woorden (max ~${rules.maxWords})`);
+  // Check sentence count
+  const sentences = draft.split(/[.!?]+/).filter((s) => s.trim().length > 5);
+  if (sentences.length > rules.maxSentences * 1.5) {
+    issues.push(`Te lang: ${sentences.length} zinnen (max ~${rules.maxSentences})`);
   }
 
   // Check em/en dashes
-  if (/[\u2014\u2013]/.test(text)) {
+  if (/[\u2014\u2013]/.test(draft)) {
     issues.push("Bevat em-dash of en-dash");
   }
 
-  // Check link count
-  const linkCount = (text.match(/\[.*?\]\(.*?\)/g) || []).length;
-  if (linkCount > rules.maxLinks) {
-    issues.push(`Te veel links: ${linkCount} (max ${rules.maxLinks})`);
+  // Check verified source requirement
+  if (rules.requiresVerifiedSource && verifiedLinks.length === 0) {
+    issues.push("Bronplichtig antwoord zonder geverifieerde link");
   }
 
   // Check question count (max 1)
-  const questions = text.split(/[.!]\s/).filter(s => s.trim().endsWith("?"));
-  if (questions.length > 1) {
-    issues.push(`Meer dan 1 vervolgvraag (${questions.length})`);
+  const questionMarks = draft.split(/[.!]\s/).filter((s) => s.trim().endsWith("?"));
+  if (questionMarks.length > 1) {
+    issues.push(`Meer dan 1 vervolgvraag (${questionMarks.length})`);
   }
 
   return { pass: issues.length === 0, issues };
@@ -202,8 +233,25 @@ export function parseStructuredMeta(data: Record<string, unknown>): StructuredRe
   if (!meta || typeof meta !== "object") return null;
 
   const result: StructuredResponse = {};
+  if (typeof meta.mode === "string") result.mode = meta.mode as ResponseMode;
+  if (typeof meta.answer_type === "string") result.answer_type = meta.answer_type as AnswerType;
   if (typeof meta.direct_answer === "string") result.directAnswer = meta.direct_answer;
   if (typeof meta.supporting_detail === "string") result.supportingDetail = meta.supporting_detail;
+  if (typeof meta.collapse_recommended === "boolean") result.collapse_recommended = meta.collapse_recommended;
+  if (typeof meta.verification_required === "boolean") result.verification_required = meta.verification_required;
+
+  // Parse primary_followup
+  if (meta.primary_followup && typeof meta.primary_followup === "object") {
+    const pf = meta.primary_followup as Record<string, string>;
+    if (pf.label && pf.value) result.primary_followup = { label: pf.label, value: pf.value };
+  }
+
+  // Parse secondary_action
+  if (meta.secondary_action && typeof meta.secondary_action === "object") {
+    const sa = meta.secondary_action as Record<string, string>;
+    if (sa.label && sa.value) result.secondary_action = { label: sa.label, value: sa.value };
+  }
+
   if (Array.isArray(meta.verified_links)) {
     result.verifiedLinks = meta.verified_links
       .filter((l: unknown): l is Record<string, string> => typeof l === "object" && l !== null && "href" in l)
@@ -214,6 +262,15 @@ export function parseStructuredMeta(data: Record<string, unknown>): StructuredRe
       }));
   }
 
-  if (!result.directAnswer && !result.supportingDetail && !result.verifiedLinks) return null;
+  // Return null if nothing meaningful
+  if (
+    !result.directAnswer &&
+    !result.supportingDetail &&
+    !result.verifiedLinks &&
+    !result.primary_followup &&
+    !result.secondary_action
+  ) {
+    return null;
+  }
   return result;
 }
