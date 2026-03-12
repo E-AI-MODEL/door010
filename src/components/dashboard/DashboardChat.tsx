@@ -166,13 +166,16 @@ export function DashboardChat({ userId, currentPhase, preferredSector, profileMe
       await maybePersistProfile(detector);
 
       // Check if intake is needed
-      if (needsClarification({
-        userMessage: text,
-        missingSlots: detector.missing_slots || [],
-        mode: "authenticated",
-        turnCount: outgoingMessages.filter(m => m.role === "user").length,
+      const missingSlots = detector.missing_slots || [];
+      if (needsClarification(text, {
+        missingSector: missingSlots.includes("school_type"),
+        missingLevel: missingSlots.includes("admission_requirements"),
+        backendMode: "direct",
       })) {
-        const intakeQs = buildIntakeQuestions(detector.missing_slots || []);
+        const intakeQs = buildIntakeQuestions({
+          missingSector: missingSlots.includes("school_type"),
+          missingLevel: missingSlots.includes("admission_requirements"),
+        });
         if (intakeQs.length > 0) {
           setPendingIntake(intakeQs);
           setMessages(prev => [
