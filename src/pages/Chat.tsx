@@ -177,24 +177,7 @@ export default function Chat() {
       setKnownSlots(detector.known_slots);
       await maybePersistProfile(detector);
 
-      // Check intake need
-      const missingSlots = detector.missing_slots || [];
-      if (needsClarification(text, {
-        missingSector: missingSlots.includes("school_type"),
-        missingLevel: missingSlots.includes("admission_requirements"),
-        backendMode: "direct",
-      })) {
-        const intakeQs = buildIntakeQuestions({
-          missingSector: missingSlots.includes("school_type"),
-          missingLevel: missingSlots.includes("admission_requirements"),
-        });
-        if (intakeQs.length > 0) {
-          setPendingIntake(intakeQs);
-          setMessages(prev => [...prev, { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" }]);
-          setIsLoading(false);
-          return;
-        }
-      }
+      // No more client-side needsClarification pre-flight — backend decides via intake_needed
 
       const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== (profile?.current_phase || "interesseren")
         ? { from: profile?.current_phase || "interesseren", to: detector.phase_current_ui }
