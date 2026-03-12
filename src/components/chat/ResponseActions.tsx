@@ -36,7 +36,7 @@ export function ResponseActions({ actions, links, onActionClick, disabled }: Res
               key={i}
               onClick={() => onActionClick(action.value)}
               disabled={disabled}
-              className="px-3 py-1.5 text-xs rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+              className="px-2.5 py-1 text-[11px] rounded-full bg-primary/5 text-primary hover:bg-primary/15 transition-colors disabled:opacity-50"
             >
               {action.label}
             </button>
