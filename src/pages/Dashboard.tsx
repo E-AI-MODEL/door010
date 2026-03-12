@@ -20,6 +20,7 @@ interface Profile {
   test_results: unknown;
   bio: string | null;
   phone: string | null;
+  known_slots: Record<string, string> | null;
 }
 
 export default function Dashboard() {
