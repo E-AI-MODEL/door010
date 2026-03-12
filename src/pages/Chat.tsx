@@ -115,7 +115,7 @@ export default function Chat() {
   }, [messages, scrollToBottom]);
 
   const maybePersistProfile = useCallback(
-    async (detector: ReturnType<typeof runPhaseDetector>) => {
+    async (detector: ReturnType<typeof runPhaseDetector>, slotsToSave?: KnownSlots) => {
       if (!user) return;
       const updates: Record<string, unknown> = {};
       if (profile?.current_phase && detector.phase_current_ui !== profile.current_phase && detector.phase_confidence >= 0.60) {
@@ -126,11 +126,16 @@ export default function Chat() {
         const sector = st === "PO" ? "po" : st === "VO" ? "vo" : st === "MBO" ? "mbo" : null;
         if (sector && sector !== profile?.preferred_sector) updates.preferred_sector = sector;
       }
+      // Persist full known_slots
+      const finalSlots = slotsToSave || detector.known_slots;
+      if (Object.keys(finalSlots).length > 0) {
+        updates.known_slots = finalSlots;
+      }
       if (Object.keys(updates).length === 0) return;
       try {
         const { data, error } = await supabase
           .from("profiles").update(updates).eq("user_id", user.id)
-          .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results").single();
+          .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results, known_slots").single();
         if (!error && data) setProfile(data);
       } catch (e) {
         console.warn("Profile update skipped:", e);
