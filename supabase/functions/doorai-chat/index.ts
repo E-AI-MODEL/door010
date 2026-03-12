@@ -857,9 +857,31 @@ Deno.serve(async (req) => {
           await writer.write(enc.encode(buffer + "\n"));
         }
 
-        // Send UI payload as a separate SSE event type — max 2 actions, max 6 links
-        const cappedActions = ssotActions.slice(0, 2);
-        const uiPayload = JSON.stringify({ actions: cappedActions, links: uiLinks });
+        // Send UI payload — split slot_chips (intake) from actions (conversation followup)
+        // Determine intake_needed: if there's a next_slot_key and the slot is missing
+        const slotChips = detector?.next_slot_key
+          ? actionsForNextSlot(detector.next_slot_key, slots)
+          : [];
+        const intakeNeeded = slotChips.length > 0 && !slots[detector?.next_slot_key as SlotKey];
+
+        // Conversation followup actions (max 2) — only when no intake needed
+        const followupActions = intakeNeeded ? [] : ssotActions.slice(0, 2);
+
+        // Corrected slots: send normalized values back so frontend can sync
+        const correctedSlots: Record<string, string> = {};
+        for (const [k, v] of Object.entries(slots)) {
+          if (v && detector?.known_slots?.[k as SlotKey] !== v) {
+            correctedSlots[k] = v;
+          }
+        }
+
+        const uiPayload = JSON.stringify({
+          actions: followupActions,
+          slot_chips: slotChips,
+          intake_needed: intakeNeeded,
+          corrected_slots: Object.keys(correctedSlots).length > 0 ? correctedSlots : undefined,
+          links: uiLinks,
+        });
         await writer.write(enc.encode(`event: ui\ndata: ${uiPayload}\n\n`));
       } catch (e) {
         console.error("Stream error:", e);

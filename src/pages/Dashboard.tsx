@@ -108,6 +108,7 @@ export default function Dashboard() {
                   userId={user.id}
                   currentPhase={currentPhase}
                   preferredSector={profile?.preferred_sector || null}
+                  knownSlotsFromDb={profile?.known_slots || {}}
                   profileMeta={{
                     first_name: profile?.first_name,
                     bio: profile?.bio,
