@@ -61,8 +61,7 @@ export default function Dashboard() {
       if (error) {
         console.error("Error fetching profile:", error);
       }
-      
-      setProfile(data);
+      setProfile(data ? { ...data, known_slots: parseKnownSlots(data.known_slots) } : null);
     } catch (error) {
       console.error("Error fetching profile:", error);
     } finally {
