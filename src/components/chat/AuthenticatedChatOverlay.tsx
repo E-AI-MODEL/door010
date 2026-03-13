@@ -777,7 +777,6 @@ export function AuthenticatedChatOverlay() {
                 />
               </div>
             )}
-            )}
 
             {/* Actions */}
             {(!isPersonal || !pendingIntake) && currentActions.length > 0 && (
