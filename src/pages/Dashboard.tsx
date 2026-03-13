@@ -5,10 +5,11 @@ import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PhaseProgress } from "@/components/dashboard/PhaseProgress";
-import { WelcomeHeader, ProfileCard } from "@/components/dashboard/DashboardCards";
-import { ProfileTimeline } from "@/components/profile/ProfileTimeline";
+import { ProfileCard } from "@/components/dashboard/DashboardCards";
 import { DashboardChat } from "@/components/dashboard/DashboardChat";
+import { TopicMenu } from "@/components/dashboard/TopicMenu";
 import { phaseData, type OrientationPhase } from "@/data/dashboard-phases";
+import type { KnownSlots } from "@/utils/phaseDetectorEngine";
 
 interface Profile {
   id: string;
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chatMessageTrigger, setChatMessageTrigger] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -69,11 +71,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
-  };
-
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted">
@@ -87,8 +84,13 @@ export default function Dashboard() {
 
   if (!user) return null;
 
-  const currentPhase = profile?.current_phase || 'interesseren';
+  const currentPhase = profile?.current_phase || "interesseren";
   const phaseInfo = phaseData[currentPhase];
+  const knownSlots: KnownSlots = profile?.known_slots || {};
+
+  const handleTopicMessage = (message: string) => {
+    setChatMessageTrigger(message);
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-muted/30">
@@ -96,22 +98,25 @@ export default function Dashboard() {
       <main className="flex-1">
         <PhaseProgress currentPhase={currentPhase} />
 
-        <div className="container py-6 md:py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* Left column - Timeline + Phase + Profile */}
-            <div className="lg:col-span-2 space-y-6">
-              <ProfileTimeline
-                userId={user.id}
+        <div className="container py-4 md:py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+            {/* Sidebar: TopicMenu + ProfileCard */}
+            <div className="lg:col-span-4 xl:col-span-3 space-y-4">
+              <TopicMenu
                 currentPhase={currentPhase}
-                preferredSector={profile?.preferred_sector || null}
-                testCompleted={profile?.test_completed || false}
+                knownSlots={knownSlots}
+                onSendMessage={handleTopicMessage}
+                collapsed
               />
-              <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
+              {/* ProfileCard: hidden on mobile, compact on desktop */}
+              <div className="hidden lg:block">
+                <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
+              </div>
             </div>
 
-            {/* Right column - Inline chat */}
-            <div className="lg:col-span-3">
-              <div className="lg:sticky lg:top-6">
+            {/* Main: Chat */}
+            <div className="lg:col-span-8 xl:col-span-9">
+              <div className="lg:sticky lg:top-4">
                 <DashboardChat
                   userId={user.id}
                   currentPhase={currentPhase}
@@ -123,6 +128,8 @@ export default function Dashboard() {
                     test_completed: profile?.test_completed,
                     test_results: profile?.test_results,
                   }}
+                  externalMessage={chatMessageTrigger}
+                  onExternalMessageSent={() => setChatMessageTrigger(null)}
                 />
               </div>
             </div>
