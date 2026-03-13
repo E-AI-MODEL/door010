@@ -549,6 +549,11 @@ const DOORAI_CORE = `Je bent DoorAI, de orientatie-assistent van Onderwijsloket 
 - Opsommingen, stappen, bullets, genummerde lijsten.
 - Het woord "kennisbank" of "peildatum".
 - Zinnen als "Het traject ziet er globaal zo uit:" gevolgd door stappen.
+
+## Links
+- Linkchips verschijnen automatisch onder je antwoord. Herhaal ze NOOIT in de lopende tekst.
+- Gebruik een link in tekst alleen voor een specifieke externe bron (CAO-tabel, DUO-pagina) die niet als chip beschikbaar is.
+- Schrijf links altijd als beschrijvend anker: [CAO-salaristabellen](https://www.voraad.nl/cao), nooit kale URL's.
 `;
 
 const INTENT_APPENDIX: Record<IntentType, string> = {
