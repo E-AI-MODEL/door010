@@ -238,6 +238,14 @@ function getSSOTTopics(phase: OrientationPhase, slots: KnownSlots): TopicMenuIte
     const phaseQIds = questions.phase_to_questions?.[detectorPhase];
     if (!phaseQIds || !questions.question_catalog) return [];
 
+    // Get theme-driven priorities from shared mapper
+    const themeSignals = deriveThemes({
+      phase,
+      knownSlots: slots as Record<string, string>,
+      maxThemes: 6,
+    });
+    const priorityKeys = new Set(themeSignals.map(t => t.key));
+
     // Collect catalog entries, filter for quality
     const themeMap = new Map<string, SubTopic[]>();
     for (const ref of phaseQIds) {
@@ -245,15 +253,15 @@ function getSSOTTopics(phase: OrientationPhase, slots: KnownSlots): TopicMenuIte
       if (!entry?.question_text) continue;
       const text = entry.question_text;
 
-      // Filter out non-question entries (website names, datasets, meta-entries)
+      // Quality filters
       if (text.length < 15 || text.length > 120) continue;
-      if (!text.includes(" ")) continue; // Single-word entries like "KiesMBO.nl"
+      if (!text.includes(" ")) continue;
       if (/^(CONTEXT|Oriëntatie op|Landelijke|Onderwijsloket|Ministerie|DUO|Scholen op|CAO|HOVI|OCW|Zelftest)/.test(text)) continue;
-      if (/\.(nl|com|org)\b/.test(text)) continue; // URL-like entries
-      if (text.includes("\n")) continue; // Multi-line meta entries
+      if (/\.(nl|com|org)\b/.test(text)) continue;
+      if (text.includes("\n")) continue;
       if (entry.subtheme === "Dataset/API" || entry.subtheme === "Websitecontent" || entry.subtheme === "Interactieve tool" || entry.subtheme === "Externe bron (website)") continue;
 
-      // Prefer entries relevant to known sector
+      // Sector relevance check
       const sector = slots.school_type;
       const fillsSlots = entry.fills_slots || [];
       const isRelevantToSector = !sector || 
@@ -261,45 +269,70 @@ function getSSOTTopics(phase: OrientationPhase, slots: KnownSlots): TopicMenuIte
         (sector === "PO" && /po|basisonderwijs|pabo/i.test(text)) ||
         (sector === "VO" && /vo|voortgezet|tweedegraads|eerstegraads/i.test(text)) ||
         (sector === "MBO" && /mbo|pdg|instructeur/i.test(text)) ||
-        !(/\b(po|vo|mbo)\b/i.test(text)); // Generic questions are always relevant
+        !(/\b(po|vo|mbo)\b/i.test(text));
 
       if (!isRelevantToSector) continue;
 
-      const theme = entry.theme || "Veelgestelde vragen";
+      // Theme relevance boost — prefer entries whose theme/fills_slots match priority themes
+      const entryTheme = (entry.theme || "").toLowerCase();
+      const isThemePriority = priorityKeys.has("route") && /route|opleiding|zij-instroom/i.test(entryTheme) ||
+        priorityKeys.has("kosten") && /kosten|financ/i.test(entryTheme) ||
+        priorityKeys.has("salaris") && /salaris|arbeid/i.test(entryTheme) ||
+        priorityKeys.has("bevoegdheid") && /bevoegdh/i.test(entryTheme) ||
+        priorityKeys.has("vacatures") && /vacature|werk|baan/i.test(entryTheme) ||
+        priorityKeys.has("toelating") && /toelating|eisen/i.test(entryTheme);
 
-      // Clean theme label
+      const theme = entry.theme || "Veelgestelde vragen";
       let cleanTheme = theme.replace(/^\d+\.\s*/, "").trim();
       if (cleanTheme.length > 40) cleanTheme = cleanTheme.slice(0, 37) + "...";
 
       if (!themeMap.has(cleanTheme)) themeMap.set(cleanTheme, []);
       const subs = themeMap.get(cleanTheme)!;
       if (subs.length < 3) {
-        // Clean question label for display
         let displayLabel = text;
         if (displayLabel.length > 55) displayLabel = displayLabel.slice(0, 52) + "...";
-
         subs.push({ label: displayLabel, chatMessage: text });
       }
     }
 
-    // Convert to menu items — max 6 themes, prefer themes with 2+ questions
+    // Convert to menu items — max 6 themes, prefer themes matching priority signals
     const items: TopicMenuItem[] = [];
     const sorted = [...themeMap.entries()]
       .filter(([, subs]) => subs.length >= 1)
-      .sort((a, b) => b[1].length - a[1].length);
+      .sort((a, b) => {
+        // Priority themes first
+        const aTheme = a[0].toLowerCase();
+        const bTheme = b[0].toLowerCase();
+        const aIsPriority = themeSignals.some(t => aTheme.includes(t.label.toLowerCase().split(" ")[0]));
+        const bIsPriority = themeSignals.some(t => bTheme.includes(t.label.toLowerCase().split(" ")[0]));
+        if (aIsPriority && !bIsPriority) return -1;
+        if (!aIsPriority && bIsPriority) return 1;
+        return b[1].length - a[1].length;
+      });
 
     let count = 0;
     for (const [theme, subs] of sorted) {
       if (count >= 6) break;
       if (subs.length === 0) continue;
       if (subs.length === 1) {
-        // Single question: show as direct item
         items.push({ label: subs[0].label, chatMessage: subs[0].chatMessage });
       } else {
         items.push({ label: theme, subTopics: subs });
       }
       count++;
     }
+
+    // Add thematic items from mapper that aren't covered by SSOT catalog
+    if (items.length < 4) {
+      const coveredLabels = new Set(items.map(i => i.label.toLowerCase()));
+      for (const ts of themeSignals) {
+        if (items.length >= 6) break;
+        if (!coveredLabels.has(ts.label.toLowerCase())) {
+          items.push({ label: ts.label, chatMessage: ts.chatPrompt });
+        }
+      }
+    }
+
     return items;
   } catch {
     return [];

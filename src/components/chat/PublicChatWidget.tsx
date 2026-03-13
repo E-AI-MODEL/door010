@@ -295,13 +295,30 @@ export function PublicChatWidget() {
         }
       }
 
-      // If no actions came from backend, generate defaults based on answer type
+      // If no actions came from backend, generate thematic defaults
       setMessages((prev) => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
         if (last?.role === "assistant" && !last.primaryFollowup) {
-          last.primaryFollowup = { label: "Vertel me meer", value: "Kun je daar meer over vertellen?" };
-          last.secondaryAction = { label: "Bekijk opleidingen", value: "Welke opleidingsroutes zijn er?" };
+          // Use conversation context for better defaults
+          const allText = updated.filter(m => m.role === "user").map(m => m.content.toLowerCase()).join(" ");
+          const mentionsRoute = /\b(route|opleiding|zij-instroom|pabo|pdg|lerarenopleiding)\b/i.test(allText);
+          const mentionsSalary = /\b(salaris|verdien|loon|cao)\b/i.test(allText);
+          const mentionsCosts = /\b(kosten|collegegeld|subsidie|financier)\b/i.test(allText);
+
+          if (!mentionsRoute) {
+            last.primaryFollowup = { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" };
+          } else if (!mentionsSalary) {
+            last.primaryFollowup = { label: "Salaris bekijken", value: "Wat verdient een leraar gemiddeld?" };
+          } else {
+            last.primaryFollowup = { label: "Vacatures zoeken", value: "Welke vacatures zijn er in het onderwijs?" };
+          }
+
+          if (!mentionsCosts && mentionsRoute) {
+            last.secondaryAction = { label: "Kosten bekijken", value: "Wat kost een opleiding en welke financiering is er?" };
+          } else {
+            last.secondaryAction = { label: "Meer weten", value: "Kun je daar meer over vertellen?" };
+          }
         }
         return [...updated];
       });
