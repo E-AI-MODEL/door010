@@ -418,6 +418,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
 
   const phaseTopics = getPhaseTopics(currentPhase);
   const slotTopics = getSlotTopics(knownSlots);
+  const ssotTopics = useMemo(() => getSSOTTopics(currentPhase), [currentPhase]);
 
   const groups: TopicGroup[] = [
     {
@@ -432,6 +433,14 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
       title: "Op basis van jouw profiel",
       icon: BookOpen,
       items: slotTopics,
+    });
+  }
+
+  if (ssotTopics.length > 0) {
+    groups.push({
+      title: "Meer onderwerpen",
+      icon: Lightbulb,
+      items: ssotTopics,
     });
   }
 
