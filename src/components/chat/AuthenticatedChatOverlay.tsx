@@ -364,12 +364,25 @@ export function AuthenticatedChatOverlay() {
       }
 
       if (convId) await saveMessage(convId, "assistant", assistantContent);
+
+      // ── Run conversation router to decide what UI to show ──
+      const vis = decideConversationMode({
+        pipeline: "personal",
+        hasActions: latestActions.length > 0 || (assistantContent.length > 0 && latestActions.length > 0),
+        hasLinks: latestLinks.length > 0,
+        hasPhaseSuggestion: !!pendingPhaseSuggestion,
+        hasReflectionWarning: !!reflectionWarning,
+        backendMode: undefined,
+        assistantContentShort: assistantContent.split(/[.!?]+/).filter(s => s.trim().length > 5).length <= 2,
+      });
+      setTurnVisibility(vis);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Sorry, er ging iets mis. Probeer het later opnieuw." },
       ]);
+      setTurnVisibility(null);
     } finally {
       setIsLoading(false);
     }
