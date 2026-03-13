@@ -399,6 +399,7 @@ export function AuthenticatedChatOverlay() {
     setGeneralLoading(true);
     setGeneralActions([]);
     setGeneralLinks([]);
+    setTurnVisibility(null);
 
     let assistantContent = "";
 
