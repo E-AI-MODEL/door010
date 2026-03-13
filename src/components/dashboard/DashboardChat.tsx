@@ -158,6 +158,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
     setLatestActions([]);
     setLatestLinks([]);
     setPendingIntake(null);
+    setReflectionWarning(null);
 
     let assistantContent = "";
 
