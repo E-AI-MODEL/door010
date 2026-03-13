@@ -39,6 +39,8 @@ interface DashboardChatProps {
   preferredSector: string | null;
   knownSlotsFromDb?: Record<string, string>;
   profileMeta?: ProfileMeta;
+  externalMessage?: string | null;
+  onExternalMessageSent?: () => void;
 }
 
 interface ChatMessageExt {
