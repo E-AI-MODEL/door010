@@ -73,10 +73,6 @@ export function AuthenticatedChatOverlay() {
     resetConversation,
   } = useChatConversation(user?.id, profileRef);
 
-  // Hide on backoffice
-  const isBackoffice = location.pathname.startsWith("/backoffice");
-  if (!user || isBackoffice) return null;
-
   // Fetch profile
   useEffect(() => {
     if (!user) return;
