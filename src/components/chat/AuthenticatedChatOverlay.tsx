@@ -453,8 +453,8 @@ export function AuthenticatedChatOverlay() {
 
             // Meta payload from homepage-coach (first event)
             if (parsed.meta) {
-              if (parsed.meta.actions) setGeneralActions(parsed.meta.actions.slice(0, 2));
-              if (parsed.meta.verified_links) setGeneralLinks(parsed.meta.verified_links.slice(0, 4));
+              if (parsed.meta.actions) setGeneralActions(parsed.meta.actions.slice(0, 1));
+              if (parsed.meta.verified_links) setGeneralLinks(parsed.meta.verified_links.slice(0, 1));
               continue;
             }
 
