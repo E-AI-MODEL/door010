@@ -980,7 +980,12 @@ Deno.serve(async (req) => {
         };
         const maxS = intentMaxSentences[intent] ?? 4;
         const sentences = fullResponse.split(/[.!?]+/).filter(s => s.trim().length > 5);
-        if (sentences.length > maxS * 1.5) {
+        if (sentences.length > maxS * 1.2) {
+
+        // Detect bracket-labels like [Landelijk], [Stap 1], etc.
+        if (/\[[A-Z][^\]]{1,30}\]/.test(fullResponse)) {
+          reflectionIssues.push("Bevat bracket-labels zoals [Label]");
+        }
           reflectionIssues.push(`Te lang: ${sentences.length} zinnen (max ~${maxS})`);
         }
 

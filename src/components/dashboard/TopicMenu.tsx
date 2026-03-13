@@ -432,7 +432,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
             onSendMessage={(msg) => {
               onSendMessage(msg);
               // Auto-collapse on mobile after sending
-              if (window.innerWidth < 1024) setMenuOpen(false);
+              if (window.innerWidth < 768) setMenuOpen(false);
             }}
             defaultOpen={i === 0}
           />

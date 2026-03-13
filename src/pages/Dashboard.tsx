@@ -114,7 +114,7 @@ export default function Dashboard() {
             </div>
 
             {/* Main content area — now shows a prompt to use the chat overlay */}
-            <div className="lg:col-span-8 xl:col-span-9">
+            <div className="md:col-span-8 xl:col-span-9">
               <div className="rounded-3xl border bg-card shadow-sm p-8 text-center space-y-4">
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                   <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
