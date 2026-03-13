@@ -60,6 +60,7 @@ export function AuthenticatedChatOverlay() {
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const [dismissedIntakeSlots, setDismissedIntakeSlots] = useState<Set<string>>(new Set());
+  const [lastOfferedSlot, setLastOfferedSlot] = useState<string | undefined>(undefined);
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
   const [showTopicPanel, setShowTopicPanel] = useState(false);
