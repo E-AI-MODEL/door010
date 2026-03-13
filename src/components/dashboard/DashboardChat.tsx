@@ -501,7 +501,42 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
         </div>
       )}
 
-      {/* Input */}
+      {/* Link chips */}
+      {latestLinks.length > 0 && !pendingIntake && !isLoading && (
+        <div className="px-4 pb-2 flex flex-wrap gap-1.5">
+          {latestLinks.map((link, i) => (
+            link.href.startsWith("/") ? (
+              <Link
+                key={i}
+                to={link.href}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={i}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+              >
+                {link.label}
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )
+          ))}
+        </div>
+      )}
+
+      {/* Reflection warning */}
+      {reflectionWarning && !isLoading && (
+        <div className="px-4 pb-2">
+          <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
+            ⚠️ Dit antwoord is mogelijk onvolledig of bevat aandachtspunten.
+          </div>
+        </div>
+      )}
       <div className="px-4 pb-4 pt-2 border-t border-border">
         <form onSubmit={handleSubmit} className="flex gap-2 items-center">
           {messages.length > 1 && (
