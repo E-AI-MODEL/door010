@@ -384,15 +384,112 @@ export function AuthenticatedChatOverlay() {
     }
   };
 
+  // Keep ref in sync for event listener
+  sendMessageRef.current = chatMode === "personal" ? sendMessage : sendGeneralMessage;
+
+  // ── General mode: send to homepage-coach ──
+  const sendGeneralMessage = async (text: string) => {
+    if (!text.trim() || generalLoading) return;
+    const userMsg = { role: "user" as const, content: text };
+    const outgoing = [...generalMessages, userMsg];
+    setGeneralMessages(outgoing);
+    setInput("");
+    setGeneralLoading(true);
+    setGeneralActions([]);
+    setGeneralLinks([]);
+
+    let assistantContent = "";
+
+    try {
+      const response = await fetch(HOMEPAGE_COACH_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: outgoing.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!response.ok || !response.body) throw new Error("Failed");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      setGeneralMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let nlIdx: number;
+        while ((nlIdx = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, nlIdx);
+          buffer = buffer.slice(nlIdx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+
+            // Meta payload from homepage-coach (first event)
+            if (parsed.meta) {
+              if (parsed.meta.actions) setGeneralActions(parsed.meta.actions.slice(0, 2));
+              if (parsed.meta.verified_links) setGeneralLinks(parsed.meta.verified_links.slice(0, 4));
+              continue;
+            }
+
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              assistantContent += content;
+              setGeneralMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: "assistant", content: assistantContent };
+                return updated;
+              });
+            }
+          } catch {
+            buffer = line + "\n" + buffer;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("General chat error:", error);
+      setGeneralMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Sorry, er ging iets mis. Probeer het later opnieuw." },
+      ]);
+    } finally {
+      setGeneralLoading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    sendMessage(input);
+    if (chatMode === "general") {
+      sendGeneralMessage(input);
+    } else {
+      sendMessage(input);
+    }
   };
 
   const handleActionClick = (value: string) => {
-    setLatestActions([]);
-    setLatestLinks([]);
-    sendMessage(value);
+    if (chatMode === "general") {
+      setGeneralActions([]);
+      setGeneralLinks([]);
+      sendGeneralMessage(value);
+    } else {
+      setLatestActions([]);
+      setLatestLinks([]);
+      sendMessage(value);
+    }
   };
 
   const handleIntakeSubmit = (answers: Record<string, string>) => {
@@ -420,6 +517,14 @@ export function AuthenticatedChatOverlay() {
   }, []);
 
   const handleClearConversation = useCallback(async () => {
+    if (chatMode === "general") {
+      setGeneralMessages([
+        { role: "assistant", content: "Hoi! Ik ben DoorAI, de wegwijzer van Onderwijsloket Rotterdam. Hoe kan ik je helpen?" },
+      ]);
+      setGeneralActions([]);
+      setGeneralLinks([]);
+      return;
+    }
     await resetConversation();
     setKnownSlots({});
     setPendingIntake(null);
@@ -438,13 +543,19 @@ export function AuthenticatedChatOverlay() {
       role: "assistant",
       content: `Welkom terug, goed dat je er bent.\n\nJe zit in de **${phase}**-fase. ${info[phase] || info.interesseren}\n\nKies een suggestie hieronder of typ je vraag.`,
     }]);
-  }, [profile, resetConversation, setMessages]);
+  }, [profile, resetConversation, setMessages, chatMode]);
 
   // Hide on backoffice or not logged in
   const isBackoffice = location.pathname.startsWith("/backoffice");
   if (!user || isBackoffice) return null;
 
-  const visibleMessages = messages.slice(-8);
+  // Mode-dependent state
+  const isPersonal = chatMode === "personal";
+  const currentMessages = isPersonal ? messages : generalMessages;
+  const currentActions = isPersonal ? latestActions : generalActions;
+  const currentLinks = isPersonal ? latestLinks : generalLinks;
+  const currentLoading = isPersonal ? isLoading : generalLoading;
+  const visibleMessages = currentMessages.slice(-8);
 
   // Sizes
   const width = isExpanded ? 480 : 380;
