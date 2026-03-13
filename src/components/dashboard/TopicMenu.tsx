@@ -541,14 +541,14 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
   const groups: TopicGroup[] = [
     {
       title: phaseInfo.title,
-      icon: Sparkles,
+      icon: MessageCircle,
       items: phaseTopics,
     },
   ];
 
   if (slotTopics.length > 0) {
     groups.push({
-      title: "Op basis van jouw profiel",
+      title: "Jouw profiel",
       icon: BookOpen,
       items: slotTopics,
     });
