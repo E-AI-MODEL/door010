@@ -912,6 +912,7 @@ Deno.serve(async (req) => {
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let fullResponse = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -933,7 +934,9 @@ Deno.serve(async (req) => {
                 const parsed = JSON.parse(jsonStr);
                 const content = parsed.choices?.[0]?.delta?.content;
                 if (typeof content === "string") {
-                  parsed.choices[0].delta.content = replaceDashes(content);
+                  const cleaned = replaceDashes(content);
+                  parsed.choices[0].delta.content = cleaned;
+                  fullResponse += cleaned;
                 }
                 await writer.write(enc.encode(`data: ${JSON.stringify(parsed)}\n\n`));
               } catch {
@@ -948,6 +951,45 @@ Deno.serve(async (req) => {
         if (buffer.trim()) {
           await writer.write(enc.encode(buffer + "\n"));
         }
+
+        // ── Post-stream reflection ──────────────────────────────
+        const REFLECTION_FORBIDDEN = [
+          "peildatum", "kennisbank", "als ai", "goed dat je dit vraagt",
+          "ik begrijp je helemaal", "je moet", "scenario",
+          "achtergrondinformatie", "dynamische context",
+        ];
+        const reflectionIssues: string[] = [];
+        const lowerFull = fullResponse.toLowerCase();
+
+        for (const phrase of REFLECTION_FORBIDDEN) {
+          if (lowerFull.includes(phrase)) {
+            reflectionIssues.push(`Bevat verboden term: "${phrase}"`);
+          }
+        }
+
+        const intentMaxSentences: Record<string, number> = {
+          greeting: 2, question: 4, exploration: 3, followup: 3,
+        };
+        const maxS = intentMaxSentences[intent] ?? 4;
+        const sentences = fullResponse.split(/[.!?]+/).filter(s => s.trim().length > 5);
+        if (sentences.length > maxS * 1.5) {
+          reflectionIssues.push(`Te lang: ${sentences.length} zinnen (max ~${maxS})`);
+        }
+
+        if (/[\u2014\u2013]/.test(fullResponse)) {
+          reflectionIssues.push("Bevat em-dash of en-dash na filtering");
+        }
+
+        const reflectionPass = reflectionIssues.length === 0;
+        if (!reflectionPass) {
+          console.warn("Reflection issues:", reflectionIssues);
+        }
+
+        const reflectionPayload = JSON.stringify({
+          pass: reflectionPass,
+          issues: reflectionIssues,
+        });
+        await writer.write(enc.encode(`event: reflection\ndata: ${reflectionPayload}\n\n`));
 
         // Build conversation followup actions
         function buildConversationFollowups(
@@ -1011,12 +1053,23 @@ Deno.serve(async (req) => {
         // Phase suggestion from detector
         const phaseSuggestion = detector?.phase_suggestion || undefined;
 
+        // ── 1-op-3 link regel ──────────────────────────────────
+        const assistantCount = messages.filter(m => m.role === "assistant").length;
+        const LINK_REQUEST_RE = /\b(link|bron|website|url|waar vind)\b/i;
+        const BRONPLICHTIG_RE = /\b(salaris|kosten|collegegeld|cao|subsidie|route|bevoegdheid)\b/i;
+        const shouldIncludeLinks =
+          intent !== "greeting" && (
+            assistantCount % 3 === 0 ||
+            LINK_REQUEST_RE.test(lastUserMessage) ||
+            (intent === "question" && BRONPLICHTIG_RE.test(lastUserMessage))
+          );
+
         const uiPayload = JSON.stringify({
           actions: followupActions,
           slot_chips: slotChips,
           intake_needed: intakeNeeded,
           corrected_slots: Object.keys(correctedSlots).length > 0 ? correctedSlots : undefined,
-          links: uiLinks,
+          links: shouldIncludeLinks ? uiLinks : [],
           phase_suggestion: phaseSuggestion,
         });
         await writer.write(enc.encode(`event: ui\ndata: ${uiPayload}\n\n`));

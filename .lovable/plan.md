@@ -1,72 +1,41 @@
 
 
-# Server-side Draft Validatie (Optie A) + Link Rendering + 1-op-3 Regel
+# Plan: FAQ-data verrijken en importeren
 
-## Huidige situatie
+## Wat ik ga doen
 
-1. **`reflectOnDraft()`** bestaat in `responsePipeline.ts` met checks op verboden termen, zinslengte, em-dashes en bronplicht — maar wordt **nergens aangeroepen**.
-2. **Links**: `computeLinks()` berekent links, frontend ontvangt ze in `latestLinks` state, maar **er is geen JSX die ze rendert**.
-3. **1-op-3 regel**: niet geimplementeerd — links worden altijd meegestuurd.
-4. De stream-loop in `doorai-chat/index.ts` verwerkt content-deltas (met `replaceDashes`) maar **accumuleert het volledige antwoord niet** server-side.
+De geüploade `ingest_faqs_payload_DOORTJE_ZIB_MVP_v2_deduped.json` (17 FAQ's) bevat goede vragen maar heeft twee problemen:
 
-## Wijzigingen
+1. **Dunne antwoorden** — items 5, 6, 7, 8 bevatten alleen "Vervolgvragen" zonder inhoudelijk antwoord
+2. **Gemixte antwoorden** — item 1 en 2 bevatten antwoorden die niet bij de vraag passen (salaris-info bij "intensiteit", buitenland-info bij "wat is zij-instroom")
 
-### 1. Backend: buffer + reflectie (doorai-chat/index.ts)
+Ik ga:
 
-In de stream-loop (regel 910-950):
-- Voeg een `fullResponse` accumulator toe die alle content-deltas verzamelt
-- Na de stream (`[DONE]`), voer server-side reflectie uit:
-  - **Verboden termen**: check tegen `FORBIDDEN_PHRASES` lijst (peildatum, kennisbank, als ai, etc.)
-  - **Zinslengte**: tel zinnen, vergelijk met intent-specifieke limieten (greeting: 2, question: 4, exploration: 3)
-  - **Em-dash check**: al afgevangen door `replaceDashes`, maar dubbel-check het resultaat
-- Bij issues: voeg een `event: reflection` SSE-event toe met `{ issues: string[], pass: boolean }`
-- De stream blijft intact (gebruiker ziet het antwoord real-time), reflectie is een post-check
+### Stap 1: FAQ-data opschonen en verrijken
 
-### 2. Backend: 1-op-3 link regel (doorai-chat/index.ts)
+Een verbeterde versie van het JSON-bestand aanmaken als `src/data/faq-seed.json` met:
 
-Voordat `uiLinks` in het `event: ui` payload gaat:
-- Tel assistant-berichten in de `messages` array
-- Stuur `links` alleen mee wanneer:
-  - `assistantCount % 3 === 0` (elk 3e bericht), OF
-  - Gebruiker vraagt expliciet om een link (regex: `/link|bron|website|url|waar vind/i`), OF
-  - Intent is `question` met bronplichtige content (salary/cost/route regex)
-- Bij greetings: nooit links
+- **17 bestaande items opschonen**: antwoorden koppelen aan de juiste vraag, dunne items aanvullen met kennis uit `KNOWLEDGE_BLOCKS` en `ROUTE_SUMMARIES`
+- **~15 nieuwe items toevoegen** op basis van de hardcoded `KNOWLEDGE_BLOCKS` die nu in `doorai-chat` staan (salaris, kosten, bevoegdheden, PDG, verwantschap, SOOL-subsidie, etc.)
+- **Categorieën standaardiseren**: `route`, `salaris`, `toelating`, `bevoegdheid`, `subsidie`, `algemeen`, `duur`, `vacature`
+- **Alias-tags behouden** — deze zijn waardevol voor full-text search
 
-### 3. Frontend: link-chips renderen (DashboardChat.tsx)
+### Stap 2: Importeren via `ingest-faqs`
 
-Onder de `ResponseActions` blok (regel 476-490), voeg een `LinkChips` sectie toe:
-- Render `latestLinks` als klikbare chips
-- Interne links (`/opleidingen`, `/events`) via `<Link>`
-- Externe links via `<a target="_blank">` met ExternalLink icoon
-- Styling: kleine rounded-full chips, consistent met bestaande `VerifiedLinkChips` in `CollapsibleAnswer.tsx`
+De opgeschoonde dataset importeren met `mode: "replace"` zodat de 3 test-items worden vervangen.
 
-### 4. Frontend: reflectie-waarschuwing (DashboardChat.tsx)
+### Concreet resultaat
 
-- Parse het `event: reflection` SSE-event in de stream-loop
-- Als `pass === false`: toon een subtiele gele banner onder het bericht ("Dit antwoord is mogelijk onvolledig")
-- Niet-blokkerend: gebruiker ziet het antwoord gewoon
+~32 FAQ-items in de database die dekken:
 
-## SSOT-gebruik in reflectie
+| Bron | Items |
+|------|-------|
+| Geüploade ZIB-data (opgeschoond) | 17 |
+| KNOWLEDGE_BLOCKS → FAQ conversie | ~15 |
 
-De reflectie-checks gebruiken dezelfde constanten als `responsePipeline.ts`:
-- `FORBIDDEN_PHRASES` array (9 termen)
-- Zinslimiet per intent-type (mapping van intent naar maxSentences)
-- Em-dash/en-dash regex
+### Wat NIET verandert
 
-Deze worden als constanten in de edge function gedupliceerd (edge functions kunnen niet uit `src/` importeren).
-
-## Bestanden
-
-| Bestand | Actie |
-|---------|-------|
-| `supabase/functions/doorai-chat/index.ts` | Buffer stream, post-reflectie, 1-op-3 link regel, `event: reflection` |
-| `src/components/dashboard/DashboardChat.tsx` | Link-chips JSX, reflectie-event parsing + waarschuwing |
-
-## Sequentie
-
-1. Backend: stream-buffer + reflectie-check + reflection event
-2. Backend: 1-op-3 link frequentie
-3. Frontend: link-chips rendering
-4. Frontend: reflectie-waarschuwing
-5. Deploy edge function
+- De `KNOWLEDGE_BLOCKS` in `doorai-chat` blijven als fallback
+- De `ingest-faqs` edge function blijft ongewijzigd
+- De hybride retrieval-logica blijft ongewijzigd
 

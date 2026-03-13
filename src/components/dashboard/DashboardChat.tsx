@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Send, ArrowRight, Trash2 } from "lucide-react";
+import { Send, ArrowRight, Trash2, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useChatConversation } from "@/hooks/useChatConversation";
@@ -60,6 +60,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
   });
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
+  const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const profile = { current_phase: currentPhase, preferred_sector: preferredSector };
 
@@ -157,6 +158,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
     setLatestActions([]);
     setLatestLinks([]);
     setPendingIntake(null);
+    setReflectionWarning(null);
 
     let assistantContent = "";
 
@@ -306,6 +308,16 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
                   }
                   return [...updated];
                 });
+              }
+              currentEventType = "";
+              continue;
+            }
+
+            // Handle `event: reflection` — post-stream quality check
+            if (currentEventType === "reflection") {
+              if (parsed.pass === false && Array.isArray(parsed.issues)) {
+                setReflectionWarning(parsed.issues);
+                console.warn("Reflection issues:", parsed.issues);
               }
               currentEventType = "";
               continue;
@@ -489,7 +501,42 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
         </div>
       )}
 
-      {/* Input */}
+      {/* Link chips */}
+      {latestLinks.length > 0 && !pendingIntake && !isLoading && (
+        <div className="px-4 pb-2 flex flex-wrap gap-1.5">
+          {latestLinks.map((link, i) => (
+            link.href.startsWith("/") ? (
+              <Link
+                key={i}
+                to={link.href}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={i}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+              >
+                {link.label}
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )
+          ))}
+        </div>
+      )}
+
+      {/* Reflection warning */}
+      {reflectionWarning && !isLoading && (
+        <div className="px-4 pb-2">
+          <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
+            ⚠️ Dit antwoord is mogelijk onvolledig of bevat aandachtspunten.
+          </div>
+        </div>
+      )}
       <div className="px-4 pb-4 pt-2 border-t border-border">
         <form onSubmit={handleSubmit} className="flex gap-2 items-center">
           {messages.length > 1 && (
