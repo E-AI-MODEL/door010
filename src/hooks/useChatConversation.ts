@@ -19,30 +19,14 @@ const PHASE_INFO: Record<string, { title: string; context: string }> = {
   voorbereiden: { title: "voorbereiden", context: "Je maakt je klaar voor de start." },
 };
 
+// Welcome actions removed — TopicMenu now handles topic suggestions.
+// Only keep minimal phase-contextual hints if needed.
 const PHASE_WELCOME_ACTIONS: Record<string, Array<{ label: string; value: string }>> = {
-  interesseren: [
-    { label: "Lesgeven", value: "Ik ben geïnteresseerd in lesgeven" },
-    { label: "Begeleiding", value: "Ik ben geïnteresseerd in begeleiding" },
-    { label: "Vakexpertise", value: "Ik ben geïnteresseerd in vakexpertise" },
-  ],
-  orienteren: [
-    { label: "PO (basisonderwijs)", value: "Ik wil me oriënteren op PO" },
-    { label: "VO (voortgezet)", value: "Ik wil me oriënteren op VO" },
-    { label: "MBO (beroepsonderwijs)", value: "Ik wil me oriënteren op MBO" },
-  ],
-  beslissen: [
-    { label: "Kosten bekijken", value: "Ik wil meer weten over de kosten" },
-    { label: "Vacatures", value: "Ik wil vacatures bekijken" },
-    { label: "Gesprek plannen", value: "Ik wil een gesprek plannen" },
-  ],
-  matchen: [
-    { label: "Scholen zoeken", value: "Ik wil scholen zoeken in mijn regio" },
-    { label: "Vacatures", value: "Ik wil vacatures bekijken" },
-  ],
-  voorbereiden: [
-    { label: "Checklist bekijken", value: "Wat moet ik nog regelen?" },
-    { label: "Gesprek plannen", value: "Ik wil een gesprek plannen" },
-  ],
+  interesseren: [],
+  orienteren: [],
+  beslissen: [],
+  matchen: [],
+  voorbereiden: [],
 };
 
 export function parseActions(content: string): {
