@@ -384,8 +384,6 @@ export function AuthenticatedChatOverlay() {
     }
   };
 
-  // Keep ref in sync for event listener
-  sendMessageRef.current = chatMode === "personal" ? sendMessage : sendGeneralMessage;
 
   // ── General mode: send to homepage-coach ──
   const sendGeneralMessage = async (text: string) => {
