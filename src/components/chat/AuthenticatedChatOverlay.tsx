@@ -296,26 +296,6 @@ export function AuthenticatedChatOverlay() {
                 setLatestLinks(parsed.links.slice(0, 1));
               }
 
-              // Handle intake_needed — use slot_key from backend only if present
-              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips) && parsed.slot_key) {
-                setLastOfferedSlot(parsed.slot_key);
-                if (!dismissedIntakeSlots.has(parsed.slot_key)) {
-                  // Use SSOT question text from backend, with simple fallback
-                  const intakeQuestion = parsed.intake_question || "Kun je dit even aangeven?";
-                  setPendingIntake([{
-                    id: parsed.slot_key,
-                    question: intakeQuestion,
-                    type: "choice",
-                    options: parsed.slot_chips.map((c: { label: string }) => c.label),
-                  }]);
-                  // Use the same SSOT question as the assistant message
-                  setMessages(prev => [
-                    ...prev.slice(0, -1),
-                    { role: "assistant" as const, content: intakeQuestion },
-                  ]);
-                }
-              }
-
               // Handle corrected_slots
               if (parsed.corrected_slots && typeof parsed.corrected_slots === "object") {
                 setKnownSlots(prev => {
