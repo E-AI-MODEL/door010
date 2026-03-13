@@ -448,6 +448,19 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
         </div>
       )}
 
+      {/* Phase confirmation */}
+      {pendingPhaseSuggestion && !pendingIntake && (
+        <div className="px-4 pb-2">
+          <PhaseConfirmation
+            from={pendingPhaseSuggestion.from}
+            to={pendingPhaseSuggestion.to}
+            message={pendingPhaseSuggestion.message}
+            onAccept={handlePhaseAccept}
+            onDecline={handlePhaseDecline}
+            compact
+          />
+        </div>
+
       {/* Actions */}
       {(latestActions.length > 0) && !pendingIntake && (
         <div className="px-4 pb-2">
