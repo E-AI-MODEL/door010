@@ -302,10 +302,9 @@ export function AuthenticatedChatOverlay() {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
 
-              // Handle intake_needed — use slot_key from backend, skip if dismissed
-              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
-                const slotKey = parsed.slot_key || "slot_0";
-                setLastOfferedSlot(slotKey);
+              // Handle intake_needed — use slot_key from backend only if present
+              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips) && parsed.slot_key) {
+                setLastOfferedSlot(parsed.slot_key);
                 if (!dismissedIntakeSlots.has(slotKey)) {
                   // Use SSOT question text from backend, with simple fallback
                   const intakeQuestion = parsed.intake_question || "Kun je dit even aangeven?";
