@@ -344,6 +344,7 @@ export function AuthenticatedChatOverlay() {
             if (currentEventType === "reflection") {
               if (parsed.pass === false && Array.isArray(parsed.issues)) {
                 setReflectionWarning(parsed.issues);
+                turnHasReflectionWarning = true;
                 console.warn("Reflection issues:", parsed.issues);
               }
               currentEventType = "";
