@@ -217,7 +217,7 @@ export function AuthenticatedChatOverlay() {
       setKnownSlots(detector.known_slots);
       await maybePersistProfile(detector);
 
-      const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== currentPhase
+      const phaseTransition = detector.phase_confidence >= 0.70 && detector.phase_current_ui !== currentPhase
         ? { from: currentPhase, to: detector.phase_current_ui }
         : undefined;
 
