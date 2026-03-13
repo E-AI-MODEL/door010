@@ -760,8 +760,11 @@ export function AuthenticatedChatOverlay() {
                 <IntakeSheet
                   questions={pendingIntake}
                   onSubmit={handleIntakeSubmit}
-                  onDismiss={() => setPendingIntake(null)}
+                  onDismiss={handleIntakeDismiss}
                   compact
+                />
+              </div>
+            )}
                 />
               </div>
             )}
