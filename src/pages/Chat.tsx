@@ -351,6 +351,24 @@ export default function Chat() {
     sendMessage(`Mijn situatie: ${summary}`);
   };
 
+  const handlePhaseAccept = useCallback(async () => {
+    if (!pendingPhaseSuggestion || !user) return;
+    const newPhase = pendingPhaseSuggestion.to as UiPhaseCode;
+    setPendingPhaseSuggestion(null);
+    try {
+      const { data, error } = await supabase.from("profiles").update({ current_phase: newPhase }).eq("user_id", user.id)
+        .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results, known_slots").single();
+      if (!error && data) setProfile(data);
+    } catch (e) {
+      console.warn("Phase update skipped:", e);
+    }
+    sendMessage(`Ja, ik wil door naar ${newPhase}.`);
+  }, [pendingPhaseSuggestion, user]);
+
+  const handlePhaseDecline = useCallback(() => {
+    setPendingPhaseSuggestion(null);
+  }, []);
+
   const handleClearConversation = useCallback(async () => {
     await resetConversation();
     setKnownSlots({});
