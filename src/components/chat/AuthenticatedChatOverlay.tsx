@@ -426,6 +426,10 @@ export function AuthenticatedChatOverlay() {
     }]);
   }, [profile, resetConversation, setMessages]);
 
+  // Hide on backoffice or not logged in
+  const isBackoffice = location.pathname.startsWith("/backoffice");
+  if (!user || isBackoffice) return null;
+
   const visibleMessages = messages.slice(-8);
 
   // Sizes
