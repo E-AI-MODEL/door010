@@ -12,6 +12,7 @@ import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/u
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
+import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
@@ -51,6 +52,7 @@ export default function Chat() {
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
+  const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -277,6 +279,11 @@ export default function Chat() {
                 });
               }
 
+              // Handle phase_suggestion from backend
+              if (parsed.phase_suggestion && parsed.phase_suggestion.from && parsed.phase_suggestion.to) {
+                setPendingPhaseSuggestion(parsed.phase_suggestion);
+              }
+
               const structured = parseStructuredMeta(parsed);
               if (structured) {
                 setMessages((prev) => {
@@ -343,6 +350,24 @@ export default function Chat() {
     const summary = Object.entries(answers).map(([, v]) => v).join(", ");
     sendMessage(`Mijn situatie: ${summary}`);
   };
+
+  const handlePhaseAccept = useCallback(async () => {
+    if (!pendingPhaseSuggestion || !user) return;
+    const newPhase = pendingPhaseSuggestion.to as UiPhaseCode;
+    setPendingPhaseSuggestion(null);
+    try {
+      const { data, error } = await supabase.from("profiles").update({ current_phase: newPhase }).eq("user_id", user.id)
+        .select("current_phase, preferred_sector, first_name, bio, test_completed, test_results, known_slots").single();
+      if (!error && data) setProfile(data);
+    } catch (e) {
+      console.warn("Phase update skipped:", e);
+    }
+    sendMessage(`Ja, ik wil door naar ${newPhase}.`);
+  }, [pendingPhaseSuggestion, user]);
+
+  const handlePhaseDecline = useCallback(() => {
+    setPendingPhaseSuggestion(null);
+  }, []);
 
   const handleClearConversation = useCallback(async () => {
     await resetConversation();
@@ -443,6 +468,19 @@ export default function Chat() {
                 questions={pendingIntake}
                 onSubmit={handleIntakeSubmit}
                 onDismiss={() => setPendingIntake(null)}
+              />
+            </div>
+          )}
+
+          {/* Phase confirmation */}
+          {pendingPhaseSuggestion && !pendingIntake && (
+            <div className="px-5 pb-2">
+              <PhaseConfirmation
+                from={pendingPhaseSuggestion.from}
+                to={pendingPhaseSuggestion.to}
+                message={pendingPhaseSuggestion.message}
+                onAccept={handlePhaseAccept}
+                onDecline={handlePhaseDecline}
               />
             </div>
           )}
