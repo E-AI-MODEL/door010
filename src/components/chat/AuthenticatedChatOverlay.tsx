@@ -305,11 +305,11 @@ export function AuthenticatedChatOverlay() {
               // Handle intake_needed — use slot_key from backend only if present
               if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips) && parsed.slot_key) {
                 setLastOfferedSlot(parsed.slot_key);
-                if (!dismissedIntakeSlots.has(slotKey)) {
+                if (!dismissedIntakeSlots.has(parsed.slot_key)) {
                   // Use SSOT question text from backend, with simple fallback
                   const intakeQuestion = parsed.intake_question || "Kun je dit even aangeven?";
                   setPendingIntake([{
-                    id: slotKey,
+                    id: parsed.slot_key,
                     question: intakeQuestion,
                     type: "choice",
                     options: parsed.slot_chips.map((c: { label: string }) => c.label),
