@@ -6,7 +6,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PhaseProgress } from "@/components/dashboard/PhaseProgress";
 import { ProfileCard } from "@/components/dashboard/DashboardCards";
-import { DashboardChat } from "@/components/dashboard/DashboardChat";
 import { TopicMenu } from "@/components/dashboard/TopicMenu";
 import { phaseData, type OrientationPhase } from "@/data/dashboard-phases";
 import type { KnownSlots } from "@/utils/phaseDetectorEngine";
@@ -38,7 +37,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [chatMessageTrigger, setChatMessageTrigger] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -88,8 +86,9 @@ export default function Dashboard() {
   const phaseInfo = phaseData[currentPhase];
   const knownSlots: KnownSlots = profile?.known_slots || {};
 
+  // Send message to the global overlay via custom event
   const handleTopicMessage = (message: string) => {
-    setChatMessageTrigger(message);
+    window.dispatchEvent(new CustomEvent("doorai-send-message", { detail: { message } }));
   };
 
   return (
@@ -114,23 +113,16 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Main: Chat */}
+            {/* Main content area — now shows a prompt to use the chat overlay */}
             <div className="lg:col-span-8 xl:col-span-9">
-              <div className="lg:sticky lg:top-4">
-                <DashboardChat
-                  userId={user.id}
-                  currentPhase={currentPhase}
-                  preferredSector={profile?.preferred_sector || null}
-                  knownSlotsFromDb={profile?.known_slots || {}}
-                  profileMeta={{
-                    first_name: profile?.first_name,
-                    bio: profile?.bio,
-                    test_completed: profile?.test_completed,
-                    test_results: profile?.test_results,
-                  }}
-                  externalMessage={chatMessageTrigger}
-                  onExternalMessageSent={() => setChatMessageTrigger(null)}
-                />
+              <div className="rounded-3xl border bg-card shadow-sm p-8 text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                  <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">DOORai staat voor je klaar</h2>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Kies een onderwerp uit het menu of klik op de chatknop rechtsonder om een gesprek te starten.
+                </p>
               </div>
             </div>
           </div>
