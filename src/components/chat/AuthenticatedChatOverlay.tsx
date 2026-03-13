@@ -14,6 +14,8 @@ import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
 import { TopicMenu } from "@/components/dashboard/TopicMenu";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse } from "@/utils/responsePipeline";
+import { decideConversationMode } from "@/utils/conversationRouter";
+import type { TurnVisibility } from "@/utils/conversationRouter";
 import type { OrientationPhase } from "@/data/dashboard-phases";
 
 const DOORAI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
@@ -62,6 +64,7 @@ export function AuthenticatedChatOverlay() {
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
   const [showTopicPanel, setShowTopicPanel] = useState(false);
+  const [turnVisibility, setTurnVisibility] = useState<TurnVisibility | null>(null);
   // Separate message histories per mode
   const [generalMessages, setGeneralMessages] = useState<Array<{ role: string; content: string }>>([
     { role: "assistant", content: "Hoi! Ik ben DoorAI, de wegwijzer van Onderwijsloket Rotterdam. Hoe kan ik je helpen?" },
@@ -197,6 +200,7 @@ export function AuthenticatedChatOverlay() {
     setLatestActions([]);
     setLatestLinks([]);
     setReflectionWarning(null);
+    setTurnVisibility(null);
 
     let assistantContent = "";
 
@@ -254,6 +258,12 @@ export function AuthenticatedChatOverlay() {
       const decoder = new TextDecoder();
       let buffer = "";
       let currentEventType = "";
+      // Track signals locally for the router (avoids stale state)
+      let turnHasActions = false;
+      let turnHasLinks = false;
+      let turnHasPhaseSuggestion = false;
+      let turnHasReflectionWarning = false;
+      let turnBackendMode: string | undefined;
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -291,10 +301,13 @@ export function AuthenticatedChatOverlay() {
             if (currentEventType === "ui") {
               if (parsed.actions && Array.isArray(parsed.actions)) {
                 setLatestActions(parsed.actions.slice(0, 1));
+                turnHasActions = parsed.actions.length > 0;
               }
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 1));
+                turnHasLinks = parsed.links.length > 0;
               }
+              if (parsed.mode) turnBackendMode = parsed.mode;
 
               // Handle corrected_slots
               if (parsed.corrected_slots && typeof parsed.corrected_slots === "object") {
@@ -308,6 +321,7 @@ export function AuthenticatedChatOverlay() {
               // Handle phase_suggestion
               if (parsed.phase_suggestion && parsed.phase_suggestion.from && parsed.phase_suggestion.to) {
                 setPendingPhaseSuggestion(parsed.phase_suggestion);
+                turnHasPhaseSuggestion = true;
               }
 
               // Structured meta
@@ -330,6 +344,7 @@ export function AuthenticatedChatOverlay() {
             if (currentEventType === "reflection") {
               if (parsed.pass === false && Array.isArray(parsed.issues)) {
                 setReflectionWarning(parsed.issues);
+                turnHasReflectionWarning = true;
                 console.warn("Reflection issues:", parsed.issues);
               }
               currentEventType = "";
@@ -360,12 +375,25 @@ export function AuthenticatedChatOverlay() {
       }
 
       if (convId) await saveMessage(convId, "assistant", assistantContent);
+
+      // ── Run conversation router to decide what UI to show ──
+      const vis = decideConversationMode({
+        pipeline: "personal",
+        hasActions: turnHasActions,
+        hasLinks: turnHasLinks,
+        hasPhaseSuggestion: turnHasPhaseSuggestion,
+        hasReflectionWarning: turnHasReflectionWarning,
+        backendMode: turnBackendMode,
+        assistantContentShort: assistantContent.split(/[.!?]+/).filter(s => s.trim().length > 5).length <= 2,
+      });
+      setTurnVisibility(vis);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Sorry, er ging iets mis. Probeer het later opnieuw." },
       ]);
+      setTurnVisibility(null);
     } finally {
       setIsLoading(false);
     }
@@ -382,6 +410,7 @@ export function AuthenticatedChatOverlay() {
     setGeneralLoading(true);
     setGeneralActions([]);
     setGeneralLinks([]);
+    setTurnVisibility(null);
 
     let assistantContent = "";
 
@@ -402,6 +431,8 @@ export function AuthenticatedChatOverlay() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let genHasActions = false;
+      let genHasLinks = false;
 
       setGeneralMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -425,8 +456,14 @@ export function AuthenticatedChatOverlay() {
 
             // Meta payload from homepage-coach (first event)
             if (parsed.meta) {
-              if (parsed.meta.actions) setGeneralActions(parsed.meta.actions.slice(0, 1));
-              if (parsed.meta.verified_links) setGeneralLinks(parsed.meta.verified_links.slice(0, 1));
+              if (parsed.meta.actions) {
+                setGeneralActions(parsed.meta.actions.slice(0, 1));
+                genHasActions = parsed.meta.actions.length > 0;
+              }
+              if (parsed.meta.verified_links) {
+                setGeneralLinks(parsed.meta.verified_links.slice(0, 1));
+                genHasLinks = parsed.meta.verified_links.length > 0;
+              }
               continue;
             }
 
@@ -445,12 +482,24 @@ export function AuthenticatedChatOverlay() {
           }
         }
       }
+
+      // Run router for general pipeline
+      const vis = decideConversationMode({
+        pipeline: "general",
+        hasActions: genHasActions,
+        hasLinks: genHasLinks,
+        hasExternalResults: false,
+        offersExternalSearch: false,
+        assistantContentShort: assistantContent.split(/[.!?]+/).filter(s => s.trim().length > 5).length <= 2,
+      });
+      setTurnVisibility(vis);
     } catch (error) {
       console.error("General chat error:", error);
       setGeneralMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Sorry, er ging iets mis. Probeer het later opnieuw." },
       ]);
+      setTurnVisibility(null);
     } finally {
       setGeneralLoading(false);
     }
@@ -717,8 +766,8 @@ export function AuthenticatedChatOverlay() {
               <div />
             </div>
 
-            {/* Phase confirmation — personal mode only */}
-            {isPersonal && pendingPhaseSuggestion && (
+            {/* Phase confirmation — only when router allows */}
+            {isPersonal && pendingPhaseSuggestion && (turnVisibility?.showPhaseSuggestion !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 <PhaseConfirmation
                   message={pendingPhaseSuggestion.message}
@@ -729,8 +778,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Actions — max 1 doorvraagchip */}
-            {currentActions.length > 0 && (
+            {/* Actions — only when router allows */}
+            {currentActions.length > 0 && (turnVisibility?.showActionChip !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 <ResponseActions
                   primaryFollowup={currentActions[0] ? { label: currentActions[0].label, value: currentActions[0].value } : null}
@@ -741,8 +790,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Link chip — max 1 */}
-            {currentLinks.length > 0 && !currentLoading && (
+            {/* Link chip — only when router allows */}
+            {currentLinks.length > 0 && !currentLoading && (turnVisibility?.showLinkChip !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 {(() => {
                   const link = currentLinks[0];
@@ -768,8 +817,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Reflection warning — personal mode only */}
-            {isPersonal && reflectionWarning && !currentLoading && (
+            {/* Reflection warning — only when router allows */}
+            {isPersonal && reflectionWarning && !currentLoading && (turnVisibility?.showReflectionWarning !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
                   ⚠️ Dit antwoord is mogelijk onvolledig of bevat aandachtspunten.
