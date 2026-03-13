@@ -132,10 +132,11 @@ interface ClarificationSignals {
 export function needsClarification(text: string, signals: ClarificationSignals): boolean {
   // Don't trigger in handoff mode
   if (signals.backendMode === "handoff") return false;
-  // Broad question with both sector and level missing
-  if (signals.missingSector && signals.missingLevel && text.length < 50) return true;
-  // Direct or source_check mode with missing info
-  if ((signals.backendMode === "direct" || signals.backendMode === "source_check") && signals.missingSector && signals.missingLevel) return true;
+  // Don't trigger for greetings or very short messages
+  const isGreeting = /^(hoi|hey|hallo|hi|goedemorgen|goedemiddag|goedenavond|dag)\b/i.test(text.trim());
+  if (isGreeting) return false;
+  // Trigger when EITHER sector or level is missing (not just both)
+  if ((signals.missingSector || signals.missingLevel) && text.length < 80) return true;
   return false;
 }
 

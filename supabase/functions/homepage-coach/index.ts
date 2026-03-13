@@ -130,13 +130,63 @@ Deno.serve(async (req) => {
     const answerType = classifyAnswerType(lastUserMsg);
     const mode = "public";
 
+    // ── Infer conversation signals for dynamic actions ──
+    const allUserMsgs = messages.filter(m => m.role === "user").map(m => m.content.toLowerCase()).join(" ");
+    const mentionsSector = /\b(po|vo|mbo|basisonderwijs|voortgezet|middelbare|beroepsonderwijs)\b/i.test(allUserMsgs);
+    const mentionsLevel = /\b(mbo|hbo|wo|univers)\b/i.test(allUserMsgs);
+    const mentionsRoute = /\b(pabo|zij-instroom|zijinstroom|pdg|lerarenopleiding|onderwijsassistent)\b/i.test(allUserMsgs);
+    const msgCount = messages.filter(m => m.role === "user").length;
+
+    // ── Dynamic actions based on conversation context ──
+    function buildActions(): Array<{ label: string; value: string }> {
+      // Greeting: broad openers
+      if (answerType === "begroeting") {
+        return [
+          { label: "Welke route past bij mij?", value: "Welke route past bij mij om leraar te worden?" },
+          { label: "Ik werk al en wil overstappen", value: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
+        ];
+      }
+
+      // If no sector known yet after first message, nudge
+      if (!mentionsSector && msgCount >= 1) {
+        return [
+          { label: "Basisonderwijs (PO)", value: "Ik ben geïnteresseerd in het basisonderwijs." },
+          { label: "Voortgezet onderwijs (VO)", value: "Ik ben geïnteresseerd in het voortgezet onderwijs." },
+        ];
+      }
+
+      // Sector known but no route discussed yet
+      if (mentionsSector && !mentionsRoute) {
+        return [
+          { label: "Welke routes zijn er?", value: "Welke opleidingsroutes zijn er voor mij?" },
+          { label: "Bekijk vacatures", value: "Zijn er vacatures in het onderwijs?" },
+        ];
+      }
+
+      // Route discussed, deepen
+      if (mentionsRoute) {
+        return [
+          { label: "Bekijk evenementen", value: "Zijn er open dagen of informatie-avonden?" },
+          { label: "Maak een account", value: "Hoe kan ik een account aanmaken voor persoonlijk advies?" },
+        ];
+      }
+
+      // Default: contextual deepeners
+      return [
+        { label: "Vertel me meer", value: "Kun je daar meer over vertellen?" },
+        { label: "Bekijk opleidingen", value: "Welke opleidingsroutes zijn er?" },
+      ];
+    }
+
+    const actions = buildActions();
+
     // Build meta payload (server-side, not LLM)
     const meta = {
       mode,
       answer_type: answerType,
-      // direct_answer and supporting_detail are empty for streaming — client uses fallback
       direct_answer: null,
       supporting_detail: null,
+      actions,
       verified_links: answerType === "wegwijs"
         ? [
             { label: "Routes en opleidingen", href: "/opleidingen" },

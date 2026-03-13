@@ -307,7 +307,10 @@ export function PublicChatWidget() {
     await sendMessageWithText(input);
   };
 
-  if (user) return null;
+  // Widget is always visible on homepage, even after login
+  // On other pages, logged-in users use the dashboard chat instead
+  const isHomepage = window.location.pathname === "/" || window.location.pathname === "/index";
+  if (user && !isHomepage) return null;
 
   return (
     <>
