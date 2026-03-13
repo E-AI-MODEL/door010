@@ -342,7 +342,7 @@ function computeLinks(
     }
   }
 
-  if (links.length <= 1) links.push({ label: "Events en meelopen", href: "/events" });
+  // No forced fallback — only show links when relevant
 
   const uniq = new Map<string, UiLink>();
   for (const l of links) uniq.set(l.href, l);
