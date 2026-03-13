@@ -770,14 +770,13 @@ export function AuthenticatedChatOverlay() {
             {isPersonal && pendingPhaseSuggestion && !pendingIntake && (
               <div className="px-4 pb-2 shrink-0">
                 <PhaseConfirmation
-                  from={pendingPhaseSuggestion.from}
-                  to={pendingPhaseSuggestion.to}
                   message={pendingPhaseSuggestion.message}
                   onAccept={handlePhaseAccept}
                   onDecline={handlePhaseDecline}
                   compact
                 />
               </div>
+            )}
             )}
 
             {/* Actions */}
