@@ -265,77 +265,56 @@ function resolveKnowledge(
     fragments.push(KNOWLEDGE.kosten);
   }
 
-  // Zij-instroom specifics triggered by message
-  if (/(zij-instroom|zijinstroom|zij instroom|versneld|2 jaar)/.test(msg)) {
-    if (!fragments.some(f => f.includes("Zij-instroom"))) fragments.push(KNOWLEDGE.route_zij_instroom);
-    if (/(subsidie|sool|vergoeding)/.test(msg)) fragments.push(KNOWLEDGE.sool_subsidie);
-    if (/(verwant|vakinhoudelijk)/.test(msg) && !fragments.some(f => f.includes("verwant"))) fragments.push(KNOWLEDGE.verwantschap);
-  }
-
-  // Route questions without sector
-  if (!sector && /(route|opleiding|hoe word|bevoegdheid)/.test(msg)) {
-    fragments.push(KNOWLEDGE.route_pabo);
-    fragments.push(KNOWLEDGE.route_tweedegraads);
-    fragments.push(KNOWLEDGE.route_pdg);
-  }
-
-  // Regional desks
+  // Region — desk info
   if (slots.region_preference) {
     const desks = findDeskObjects(slots.region_preference);
-    for (const d of desks) {
-      let info = `${d.title}: gratis en onafhankelijk advies.`;
-      if (d.website) info += ` Website: ${d.website}`;
-      if (d.hasConsultation && d.consultUrl) info += ` Persoonlijk consult: ${d.consultUrl}`;
+    for (const desk of desks) {
+      let info = `Regionaal loket: ${desk.title}`;
+      if (desk.website) info += ` - ${desk.website}`;
+      if (desk.hasConsultation) info += " (persoonlijk gesprek mogelijk)";
       fragments.push(info);
     }
   }
 
-  // Deduplicate and limit
-  const unique = [...new Set(fragments)];
-  return unique.slice(0, 7);
+  return fragments;
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // Link Computation
 // ─────────────────────────────────────────────────────────────────────
-const LIVE_TOPIC_RE = /\b(vacature|vacatures|openstelling|deadline)\b/i;
-const ROUTE_TOPIC_RE = /\b(route|zij-?instroom|traject|opleiding|bevoegdheid)\b/i;
-const SALARY_TOPIC_RE = /\b(salaris|verdien|loon|inkomen|cao)\b/i;
-const COST_TOPIC_RE = /\b(kosten|collegegeld|gratis|subsidie|betalen)\b/i;
-
 function computeLinks(
   phase: string,
   slots: Partial<Record<SlotKey, string>>,
-  lastMsg: string,
+  userMessage: string,
 ): UiLink[] {
   const links: UiLink[] = [];
-  const p = (phase || "interesseren").toLowerCase();
-  const msg = lastMsg.toLowerCase();
+  const msg = userMessage.toLowerCase();
+  const p = phase.toLowerCase();
+  const sector = slots.school_type;
 
-  // Only add routes link when contextually relevant (not always)
-  if (ROUTE_TOPIC_RE.test(msg) || p === "orienteren" || p === "beslissen") {
-    links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
+  // Internal links based on phase
+  if (p === "orienteren" || p === "beslissen" || /(route|opleiding|zij-instroom|bevoegdheid)/.test(msg)) {
+    links.push({ label: "Routes bekijken", href: "/opleidingen" });
+  }
+  if (p === "matchen" || /(vacature|baan|werk|school)/.test(msg)) {
+    links.push({ label: "Vacatures", href: "/vacatures" });
+  }
+  if (/(event|open dag|meeloop|proefles|banenmarkt)/.test(msg)) {
+    links.push({ label: "Events", href: "/events" });
+  }
+  if (/(salaris|cao|loon)/.test(msg)) {
+    links.push({ label: "CAO-tabellen", href: "https://www.voraad.nl/cao" });
+  }
+  if (/(kosten|collegegeld|duo|financiering)/.test(msg)) {
+    links.push({ label: "DUO Studiekosten", href: "https://duo.nl" });
   }
 
-  if (p === "matchen" || LIVE_TOPIC_RE.test(msg)) {
-    links.push({ label: "Vacatures bekijken", href: "/vacatures" });
-  }
-  if (p === "interesseren" || p === "orienteren") {
-    links.push({ label: "Events en meelopen", href: "/events" });
-  }
-  if (ROUTE_TOPIC_RE.test(msg)) {
+  // External: routetool
+  if (/(route|welke route|zij-instroom|hoe word)/.test(msg) || p === "orienteren") {
     links.push({ label: "Routetool", href: "https://onderwijsloket.com/routes/" });
   }
-  if (SALARY_TOPIC_RE.test(msg)) {
-    links.push({ label: "CAO-salaristabellen", href: "https://www.voraad.nl/cao" });
-  }
-  if (COST_TOPIC_RE.test(msg)) {
-    links.push({ label: "Studiekosten op DUO", href: "https://duo.nl" });
-  }
-  if (slots.next_step === "gesprek" || p === "matchen" || p === "voorbereiden") {
-    links.push({ label: "Afspraak aanvragen", href: "/profiel" });
-  }
 
+  // Regional desk links
   if (slots.region_preference) {
     for (const desk of findDeskObjects(slots.region_preference)) {
       if (desk.website) links.push({ label: desk.title, href: desk.website });
@@ -357,13 +336,15 @@ function computeTextLinks(faqSourceLinks: UiLink[]): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Actions
+// Actions — context-aware chip options per slot
 // ─────────────────────────────────────────────────────────────────────
 function actionsForNextSlot(
   slot: SlotKey,
   knownSlots?: Partial<Record<SlotKey, string>>,
+  phase?: string,
 ): UiAction[] {
   if (slot === "school_type") {
+    // Context-aware: if role suggests a sector, reorder
     if (knownSlots?.role_interest === "instructeur") {
       return [
         { label: "MBO (instructeur)", value: "MBO" },
@@ -371,18 +352,29 @@ function actionsForNextSlot(
         { label: "PO (vakspecialist)", value: "PO" },
       ];
     }
-    return [
-      { label: "PO (basisonderwijs)", value: "PO" },
-      { label: "VO (voortgezet)", value: "VO" },
-      { label: "MBO (beroepsonderwijs)", value: "MBO" },
+    // Broader set including less common sectors
+    const base: UiAction[] = [
+      { label: "Basisonderwijs (PO)", value: "PO" },
+      { label: "Voortgezet onderwijs (VO)", value: "VO" },
+      { label: "MBO", value: "MBO" },
     ];
+    // Add SO/VSO for later phases where user might be more specific
+    if (phase === "orienteren" || phase === "beslissen") {
+      base.push({ label: "Speciaal onderwijs", value: "SO_VSO" });
+    }
+    return base;
   }
   if (slot === "role_interest") {
-    return [
+    const base: UiAction[] = [
       { label: "Lesgeven", value: "leraar" },
-      { label: "Begeleiden", value: "leerlingenzorg" },
-      { label: "Vakexpertise", value: "instructeur" },
+      { label: "Leerlingbegeleiding", value: "leerlingenzorg" },
+      { label: "Vakexpertise / instructeur", value: "instructeur" },
     ];
+    // In later phases, show broader role options
+    if (phase === "matchen" || phase === "voorbereiden") {
+      base.push({ label: "Onderwijsondersteuning", value: "onderwijsondersteunend_personeel" });
+    }
+    return base;
   }
   if (slot === "credential_goal") {
     return [
@@ -392,10 +384,10 @@ function actionsForNextSlot(
   }
   if (slot === "admission_requirements") {
     return [
-      { label: "MBO", value: "mbo" },
-      { label: "HBO", value: "hbo" },
-      { label: "WO", value: "wo" },
-      { label: "Anders", value: "anders" },
+      { label: "MBO-diploma", value: "mbo" },
+      { label: "HBO-diploma", value: "hbo" },
+      { label: "WO-diploma", value: "wo" },
+      { label: "Buitenlands diploma", value: "buitenlands" },
     ];
   }
   if (slot === "region_preference") {
@@ -405,11 +397,16 @@ function actionsForNextSlot(
     ];
   }
   if (slot === "next_step") {
-    return [
-      { label: "Vacatures", value: "vacatures" },
+    const base: UiAction[] = [
+      { label: "Vacatures bekijken", value: "vacatures" },
       { label: "Gesprek plannen", value: "gesprek" },
-      { label: "Events bekijken", value: "events" },
     ];
+    if (phase === "interesseren" || phase === "orienteren") {
+      base.push({ label: "Events bekijken", value: "events" });
+    } else {
+      base.push({ label: "Direct aanmelden", value: "aanmelden" });
+    }
+    return base;
   }
   return [];
 }
@@ -588,7 +585,7 @@ function assembleContext(
   if (profile) parts.push(`\nOver de gebruiker: ${profile}`);
 
   if (phaseTransition) {
-    parts.push(`\nFase-verschuiving: van "${phaseTransition.from}" naar "${phaseTransition.to}". Erken dit kort en positief.`);
+    parts.push(`\nDe gebruiker is klaar om verder te gaan: van "${phaseTransition.from}" naar "${phaseTransition.to}". Erken dit kort en positief.`);
   }
 
   if (textLinks && intent !== "greeting") {
@@ -617,11 +614,6 @@ const DOORAI_CORE = `Je bent DoorAI, de orientatie-assistent van Onderwijsloket 
 - GEEN subkopjes, geen structurering, geen "scenario's". Schrijf gewoon lopende tekst.
 - Eén kernpunt per antwoord. Niet alles tegelijk uitleggen.
 - Stel maximaal 1 vervolgvraag per beurt, altijd als laatste zin.
-
-## Fase-bewustzijn
-- Je begeleidt de gebruiker actief door de fasen: interesseren > orienteren > beslissen > matchen > voorbereiden.
-- Als je merkt dat de gebruiker klaar is voor de volgende fase, benoem dit kort en positief.
-- Stel een gerichte vraag die past bij de volgende fase.
 
 ## Links in je antwoord
 - Gebruik max 2 markdown-links per antwoord, beschrijvend. Nooit "klik hier".
@@ -853,7 +845,7 @@ Deno.serve(async (req) => {
 
     // Step 3: Compute UI payload
     const ssotActions: UiAction[] = detector?.next_slot_key
-      ? actionsForNextSlot(detector.next_slot_key, slots)
+      ? actionsForNextSlot(detector.next_slot_key, slots, phase)
       : [];
 
     let uiLinks = computeLinks(phase, slots, lastUserMessage);
@@ -1044,11 +1036,12 @@ Deno.serve(async (req) => {
         // Send reflection event
         await writer.write(enc.encode(`event: reflection\ndata: ${reflectionPayload}\n\n`));
 
-        // Build conversation followup actions
+        // Build conversation followup actions — SSOT-aware
         function buildConversationFollowups(
           phase: string,
           slots: Partial<Record<SlotKey, string>>,
           intent: IntentType,
+          missingSlots: SlotKey[],
         ): UiAction[] {
           if (intent === "greeting") return [];
           const sector = slots.school_type;
@@ -1061,10 +1054,18 @@ Deno.serve(async (req) => {
             { label: `Routes ${sectorLabel}`, value: `Welke routes zijn er voor ${sectorLabel}?` },
             { label: "Kosten en duur", value: "Wat kost een opleiding en hoe lang duurt het?" },
           ];
-          if (phase === "beslissen") return [
-            { label: "Kosten en duur", value: "Wat zijn de kosten en hoe lang duurt het?" },
-            { label: "Twijfels bespreken", value: "Ik twijfel nog, wat zijn mijn opties?" },
-          ];
+          if (phase === "beslissen") {
+            const actions: UiAction[] = [
+              { label: "Kosten en duur", value: "Wat zijn de kosten en hoe lang duurt het?" },
+            ];
+            // Add a relevant missing-slot question as follow-up
+            if (missingSlots.includes("admission_requirements")) {
+              actions.push({ label: "Toelatingseisen bekijken", value: "Wat zijn de toelatingseisen voor mijn route?" });
+            } else {
+              actions.push({ label: "Twijfels bespreken", value: "Ik twijfel nog, wat zijn mijn opties?" });
+            }
+            return actions;
+          }
           if (phase === "matchen") return [
             { label: "Vacatures zoeken", value: "Zijn er vacatures bij mij in de buurt?" },
             { label: "Gesprek plannen", value: "Ik wil een gesprek plannen met een adviseur." },
@@ -1072,16 +1073,29 @@ Deno.serve(async (req) => {
           if (phase === "voorbereiden") return [
             { label: "Wat moet ik regelen?", value: "Wat moet ik praktisch regelen voor de start?" },
           ];
-          // No generic fallback — only phase-specific followups
+          // Interesseren: offer exploration based on missing context
+          if (phase === "interesseren") {
+            if (!sector && !slots.role_interest) {
+              return [
+                { label: "Sectoren vergelijken", value: "Wat zijn de verschillen tussen PO, VO en MBO?" },
+              ];
+            }
+            if (sector && !slots.role_interest) {
+              return [
+                { label: "Welke functies zijn er?", value: `Welke functies zijn er in ${sectorLabel}?` },
+              ];
+            }
+            if (slots.role_interest && !sector) {
+              return [
+                { label: "In welke sector?", value: "In welke onderwijssector kan ik het beste aan de slag?" },
+              ];
+            }
+          }
           return [];
         }
 
-        // Intake trigger — only school_type and admission_requirements (role_interest is organic)
+        // Intake trigger — use SSOT question text from detector
         const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "admission_requirements"];
-        const INTAKE_QUESTIONS: Record<string, string> = {
-          school_type: "Naar welke sector gaat je interesse uit?",
-          admission_requirements: "Wat is je hoogst afgeronde vooropleiding?",
-        };
         const intakeNeeded =
           detector?.next_slot_key !== undefined &&
           INTAKE_TRIGGER_SLOTS.includes(detector.next_slot_key as SlotKey) &&
@@ -1090,12 +1104,12 @@ Deno.serve(async (req) => {
           intent !== "followup";
 
         const slotChips = intakeNeeded && detector?.next_slot_key
-          ? actionsForNextSlot(detector.next_slot_key, slots)
+          ? actionsForNextSlot(detector.next_slot_key, slots, phase)
           : [];
 
         const followupActions = intakeNeeded
           ? []
-          : buildConversationFollowups(phase, slots, intent);
+          : buildConversationFollowups(phase, slots, intent, detector?.missing_slots || []);
 
         // Corrected slots
         const correctedSlots: Record<string, string> = {};
@@ -1117,13 +1131,19 @@ Deno.serve(async (req) => {
           LINK_REQUEST_RE.test(lastUserMessage) ||
           BRONPLICHTIG_RE.test(lastUserMessage);
 
+        // Use SSOT question text from detector as intake question, with fallback
+        const INTAKE_FALLBACK: Record<string, string> = {
+          school_type: "Naar welke sector gaat je interesse uit?",
+          admission_requirements: "Wat is je hoogst afgeronde vooropleiding?",
+        };
         const intakeQuestionText = intakeNeeded && detector?.next_slot_key
-          ? INTAKE_QUESTIONS[detector.next_slot_key as string] || "Kun je even het volgende aangeven?"
+          ? (detector.next_question || INTAKE_FALLBACK[detector.next_slot_key as string] || "Kun je dit even aangeven?")
           : undefined;
 
         const uiPayload = JSON.stringify({
           actions: followupActions,
           slot_chips: slotChips,
+          slot_key: detector?.next_slot_key,
           intake_needed: intakeNeeded,
           intake_question: intakeQuestionText,
           corrected_slots: Object.keys(correctedSlots).length > 0 ? correctedSlots : undefined,

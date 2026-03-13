@@ -213,19 +213,13 @@ export function AuthenticatedChatOverlay() {
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", text: m.content }));
 
-      // Merge dismissed slots as "dismissed" so detector skips them
-      const effectiveSlots: KnownSlots = { ...knownSlots };
-      for (const slot of dismissedIntakeSlots) {
-        if (!effectiveSlots[slot as keyof KnownSlots]) {
-          (effectiveSlots as Record<string, string>)[slot] = "dismissed";
-        }
-      }
-
+      // Pass dismissed slots separately — NOT merged into known_slots
       const detector = runPhaseDetector({
         conversation: conversationTurns,
-        known_slots: effectiveSlots,
+        known_slots: knownSlots,
         current_phase_ui: currentPhase,
         previous_next_slot: lastOfferedSlot as any,
+        dismissed_slots: dismissedIntakeSlots,
       });
 
       setKnownSlots(detector.known_slots);
@@ -308,21 +302,23 @@ export function AuthenticatedChatOverlay() {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
 
-              // Handle intake_needed — use dynamic question from backend, skip if user dismissed this slot
+              // Handle intake_needed — use slot_key from backend, skip if dismissed
               if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
                 const slotKey = parsed.slot_key || "slot_0";
-                setLastOfferedSlot(slotKey); // Track for next detector call
+                setLastOfferedSlot(slotKey);
                 if (!dismissedIntakeSlots.has(slotKey)) {
-                  const intakeQuestion = parsed.intake_question || "Kun je even het volgende aangeven?";
+                  // Use SSOT question text from backend, with simple fallback
+                  const intakeQuestion = parsed.intake_question || "Kun je dit even aangeven?";
                   setPendingIntake([{
                     id: slotKey,
                     question: intakeQuestion,
                     type: "choice",
                     options: parsed.slot_chips.map((c: { label: string }) => c.label),
                   }]);
+                  // Use the same SSOT question as the assistant message
                   setMessages(prev => [
                     ...prev.slice(0, -1),
-                    { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+                    { role: "assistant" as const, content: intakeQuestion },
                   ]);
                 }
               }
@@ -568,17 +564,11 @@ export function AuthenticatedChatOverlay() {
     setPendingPhaseSuggestion(null);
     setLatestLinks([]);
     setReflectionWarning(null);
-    const phase = profile?.current_phase || "interesseren";
-    const info: Record<string, string> = {
-      interesseren: "Je verkent of het onderwijs iets voor je is.",
-      orienteren: "Je bekijkt welke richting het beste bij je past.",
-      beslissen: "Je staat voor een keuze en wilt het helder krijgen.",
-      matchen: "Je zoekt een concrete school of opleiding.",
-      voorbereiden: "Je maakt je klaar voor de start.",
-    };
+    setDismissedIntakeSlots(new Set());
+    setLastOfferedSlot(undefined);
     setMessages([{
       role: "assistant",
-      content: `Welkom terug, goed dat je er bent.\n\nJe zit in de **${phase}**-fase. ${info[phase] || info.interesseren}\n\nKies een suggestie hieronder of typ je vraag.`,
+      content: "Welkom terug! Stel gerust je vraag of kies een onderwerp via het menu.",
     }]);
   }, [profile, resetConversation, setMessages, chatMode]);
 

@@ -130,17 +130,14 @@ interface ClarificationSignals {
 }
 
 export function needsClarification(text: string, signals: ClarificationSignals): boolean {
-  // Don't trigger in handoff mode
   if (signals.backendMode === "handoff") return false;
-  // Don't trigger for greetings or very short messages
   const isGreeting = /^(hoi|hey|hallo|hi|goedemorgen|goedemiddag|goedenavond|dag)\b/i.test(text.trim());
   if (isGreeting) return false;
-  // Trigger when EITHER sector or level is missing (not just both)
   if ((signals.missingSector || signals.missingLevel) && text.length < 80) return true;
   return false;
 }
 
-// ── Build Intake Questions ───────────────────────────────────────
+// ── Build Intake Questions (public widget fallback) ──────────────
 
 export function buildIntakeQuestions(signals: { missingSector: boolean; missingLevel: boolean }): IntakeQuestion[] {
   const questions: IntakeQuestion[] = [];
@@ -148,18 +145,18 @@ export function buildIntakeQuestions(signals: { missingSector: boolean; missingL
   if (signals.missingSector) {
     questions.push({
       id: "school_type",
-      question: "Naar welke sector gaat je interesse uit?",
+      question: "Welke sector spreekt je het meest aan?",
       type: "choice",
-      options: ["Basisonderwijs (PO)", "Voortgezet onderwijs (VO)", "MBO"],
+      options: ["Basisonderwijs (PO)", "Voortgezet onderwijs (VO)", "MBO", "Speciaal onderwijs"],
     });
   }
 
   if (signals.missingLevel) {
     questions.push({
       id: "admission_requirements",
-      question: "Wat is je hoogste opleiding?",
+      question: "Wat is je hoogst afgeronde opleiding?",
       type: "choice",
-      options: ["MBO", "HBO", "WO"],
+      options: ["MBO-diploma", "HBO-diploma", "WO-diploma", "Buitenlands diploma"],
     });
   }
 
@@ -195,30 +192,25 @@ export function reflectOnDraft(
   const lower = draft.toLowerCase();
   const rules = ANSWER_TYPE_RULES[answerType];
 
-  // Check forbidden phrases
   for (const phrase of FORBIDDEN_PHRASES) {
     if (lower.includes(phrase)) {
       issues.push(`Bevat verboden term: "${phrase}"`);
     }
   }
 
-  // Check sentence count
   const sentences = draft.split(/[.!?]+/).filter((s) => s.trim().length > 5);
   if (sentences.length > rules.maxSentences * 1.5) {
     issues.push(`Te lang: ${sentences.length} zinnen (max ~${rules.maxSentences})`);
   }
 
-  // Check em/en dashes
   if (/[\u2014\u2013]/.test(draft)) {
     issues.push("Bevat em-dash of en-dash");
   }
 
-  // Check verified source requirement
   if (rules.requiresVerifiedSource && verifiedLinks.length === 0) {
     issues.push("Bronplichtig antwoord zonder geverifieerde link");
   }
 
-  // Check question count (max 1)
   const questionMarks = draft.split(/[.!]\s/).filter((s) => s.trim().endsWith("?"));
   if (questionMarks.length > 1) {
     issues.push(`Meer dan 1 vervolgvraag (${questionMarks.length})`);
@@ -241,13 +233,11 @@ export function parseStructuredMeta(data: Record<string, unknown>): StructuredRe
   if (typeof meta.collapse_recommended === "boolean") result.collapse_recommended = meta.collapse_recommended;
   if (typeof meta.verification_required === "boolean") result.verification_required = meta.verification_required;
 
-  // Parse primary_followup
   if (meta.primary_followup && typeof meta.primary_followup === "object") {
     const pf = meta.primary_followup as Record<string, string>;
     if (pf.label && pf.value) result.primary_followup = { label: pf.label, value: pf.value };
   }
 
-  // Parse secondary_action
   if (meta.secondary_action && typeof meta.secondary_action === "object") {
     const sa = meta.secondary_action as Record<string, string>;
     if (sa.label && sa.value) result.secondary_action = { label: sa.label, value: sa.value };
@@ -263,7 +253,6 @@ export function parseStructuredMeta(data: Record<string, unknown>): StructuredRe
       }));
   }
 
-  // Return null if nothing meaningful
   if (
     !result.directAnswer &&
     !result.supportingDetail &&

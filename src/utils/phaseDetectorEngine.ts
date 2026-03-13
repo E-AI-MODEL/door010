@@ -245,6 +245,7 @@ function chooseNextSlot(
   phase: DetectorPhaseCode,
   known: KnownSlots,
   previousNextSlot?: SlotKey,
+  dismissedSlots?: Set<string>,
 ): { missing: SlotKey[]; nextSlot: SlotKey } {
   const { rules } = loadPhaseDetectorConfig();
   const phaseRule = rules.phases.find((p) => p.code === phase);
@@ -253,7 +254,8 @@ function chooseNextSlot(
   const optional = (phaseRule?.optional_slots || []) as SlotKey[];
 
   const allSlots = [...required, ...optional];
-  const missing = allSlots.filter((s) => !known[s]);
+  // Filter out both known slots AND dismissed slots
+  const missing = allSlots.filter((s) => !known[s] && !dismissedSlots?.has(s));
 
   if (missing.length > 0) {
     if (previousNextSlot && missing[0] === previousNextSlot && missing.length > 1) {
@@ -284,6 +286,7 @@ export function runPhaseDetector(args: {
   known_slots?: KnownSlots;
   current_phase_ui?: UiPhaseCode;
   previous_next_slot?: SlotKey;
+  dismissed_slots?: Set<string>;
 }): PhaseDetectorOutput {
   const { rules } = loadPhaseDetectorConfig();
 
@@ -298,7 +301,7 @@ export function runPhaseDetector(args: {
   const nextPhaseTarget =
     rules.phases.find((p) => p.code === picked.phase)?.next_phase_default;
 
-  const slotChoice = chooseNextSlot(picked.phase, known, args.previous_next_slot);
+  const slotChoice = chooseNextSlot(picked.phase, known, args.previous_next_slot, args.dismissed_slots);
   const q = pickQuestionForSlot(slotChoice.nextSlot);
 
   // Count user turns — require at least 4 before suggesting phase transition
@@ -313,7 +316,7 @@ export function runPhaseDetector(args: {
       phaseSuggestion = {
         from: currentUi,
         to: nextUi,
-        message: `Je bent klaar met ${PHASE_LABELS[currentUi].toLowerCase()}. Wil je door naar ${PHASE_LABELS[nextUi].toLowerCase()}?`,
+        message: `Je lijkt klaar om een volgende stap te zetten. Wil je verder met ${PHASE_LABELS[nextUi].toLowerCase()}?`,
       };
     }
   }

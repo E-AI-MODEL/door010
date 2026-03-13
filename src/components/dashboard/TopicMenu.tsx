@@ -136,16 +136,18 @@ function getPhaseTopics(phase: OrientationPhase): TopicMenuItem[] {
   return map[phase];
 }
 
+// ── Slot-based personal topics — varied, not just sector ──
 function getSlotTopics(slots: KnownSlots): TopicMenuItem[] {
   const items: TopicMenuItem[] = [];
   const st = slots.school_type;
+
+  // Sector — condensed to one item with relevant subtopics
   if (st === "PO") {
     items.push({
       label: "Basisonderwijs (PO)",
       subTopics: [
         { label: "Pabo-opleiding", chatMessage: "Vertel me meer over de Pabo-opleiding." },
         { label: "Zij-instroom PO", chatMessage: "Hoe werkt zij-instroom in het basisonderwijs?" },
-        { label: "Academische Pabo", chatMessage: "Wat is de Academische Pabo en wat is het verschil met de reguliere Pabo?" },
       ],
     });
   } else if (st === "VO") {
@@ -153,7 +155,6 @@ function getSlotTopics(slots: KnownSlots): TopicMenuItem[] {
       label: "Voortgezet onderwijs (VO)",
       subTopics: [
         { label: "Eerstegraads vs tweedegraads", chatMessage: "Wat is het verschil tussen eerste- en tweedegraads bevoegdheid?" },
-        { label: "Universitaire lerarenopleiding", chatMessage: "Hoe werkt de universitaire lerarenopleiding?" },
         { label: "Vakken en bevoegdheden", chatMessage: "Voor welke vakken kan ik bevoegd worden in het VO?" },
       ],
     });
@@ -163,16 +164,60 @@ function getSlotTopics(slots: KnownSlots): TopicMenuItem[] {
       subTopics: [
         { label: "Lesgeven in het MBO", chatMessage: "Wat heb ik nodig om les te geven in het MBO?" },
         { label: "PDG-traject", chatMessage: "Wat is het PDG-traject en voor wie is het geschikt?" },
-        { label: "Werkervaring als eis", chatMessage: "Welke werkervaring heb ik nodig voor het MBO?" },
       ],
     });
   }
-  if (slots.role_interest) {
+
+  // Role interest — add relevant topic
+  const role = slots.role_interest;
+  if (role) {
+    const roleLabels: Record<string, string> = {
+      leraar: "het leraarschap",
+      lesgeven: "het leraarschap",
+      leerlingenzorg: "leerlingbegeleiding",
+      begeleiding: "leerlingbegeleiding",
+      instructeur: "instructeur worden",
+      vakexpertise: "instructeur worden",
+      schoolleiding: "schoolleiding",
+      middenmanagement: "middenmanagement",
+      onderwijsondersteunend_personeel: "onderwijsondersteuning",
+    };
+    const label = roleLabels[role] || role;
     items.push({
-      label: `Meer over ${slots.role_interest}`,
-      chatMessage: `Vertel me meer over de functie ${slots.role_interest} in het onderwijs.`,
+      label: `Meer over ${label}`,
+      chatMessage: `Vertel me meer over ${label} in het onderwijs.`,
     });
   }
+
+  // Admission requirements — offer relevant follow-up
+  if (slots.admission_requirements && !slots.credential_goal) {
+    items.push({
+      label: "Welke bevoegdheid past bij mij?",
+      chatMessage: `Welke bevoegdheid kan ik halen met een ${slots.admission_requirements}-diploma?`,
+    });
+  }
+
+  // Next step — offer matching follow-up
+  if (slots.next_step === "vacatures") {
+    items.push({
+      label: "Vacatures bekijken",
+      chatMessage: "Welke onderwijsvacatures zijn er in mijn regio?",
+    });
+  } else if (slots.next_step === "gesprek") {
+    items.push({
+      label: "Gesprek plannen",
+      chatMessage: "Ik wil een oriëntatiegesprek plannen.",
+    });
+  }
+
+  // Region — offer regional info
+  if (slots.region_preference) {
+    items.push({
+      label: `Onderwijs in ${slots.region_preference}`,
+      chatMessage: `Welke mogelijkheden zijn er voor het onderwijs in ${slots.region_preference}?`,
+    });
+  }
+
   return items;
 }
 
@@ -184,33 +229,74 @@ const UI_TO_DETECTOR: Record<OrientationPhase, DetectorPhaseCode> = {
   voorbereiden: "voorbereiding",
 };
 
-function getSSOTTopics(phase: OrientationPhase): TopicMenuItem[] {
+// ── SSOT topics: grouped by theme, filtered for quality ──
+function getSSOTTopics(phase: OrientationPhase, slots: KnownSlots): TopicMenuItem[] {
   try {
     const { questions } = loadPhaseDetectorConfig();
     const detectorPhase = UI_TO_DETECTOR[phase];
     const phaseQIds = questions.phase_to_questions?.[detectorPhase];
     if (!phaseQIds || !questions.question_catalog) return [];
 
-    // Group catalog entries by theme
+    // Collect catalog entries, filter for quality
     const themeMap = new Map<string, SubTopic[]>();
     for (const ref of phaseQIds) {
       const entry = questions.question_catalog[ref.question_id];
-      if (!entry?.question_text || entry.question_text.length > 120) continue;
-      const theme = entry.theme || "Overig";
-      if (!themeMap.has(theme)) themeMap.set(theme, []);
-      const subs = themeMap.get(theme)!;
-      if (subs.length < 4) {
-        subs.push({ label: entry.question_text.slice(0, 60), chatMessage: entry.question_text });
+      if (!entry?.question_text) continue;
+      const text = entry.question_text;
+
+      // Filter out non-question entries (website names, datasets, meta-entries)
+      if (text.length < 15 || text.length > 120) continue;
+      if (!text.includes(" ")) continue; // Single-word entries like "KiesMBO.nl"
+      if (/^(CONTEXT|Oriëntatie op|Landelijke|Onderwijsloket|Ministerie|DUO|Scholen op|CAO|HOVI|OCW|Zelftest)/.test(text)) continue;
+      if (/\.(nl|com|org)\b/.test(text)) continue; // URL-like entries
+      if (text.includes("\n")) continue; // Multi-line meta entries
+      if (entry.subtheme === "Dataset/API" || entry.subtheme === "Websitecontent" || entry.subtheme === "Interactieve tool" || entry.subtheme === "Externe bron (website)") continue;
+
+      // Prefer entries relevant to known sector
+      const sector = slots.school_type;
+      const fillsSlots = entry.fills_slots || [];
+      const isRelevantToSector = !sector || 
+        fillsSlots.includes("school_type") || 
+        (sector === "PO" && /po|basisonderwijs|pabo/i.test(text)) ||
+        (sector === "VO" && /vo|voortgezet|tweedegraads|eerstegraads/i.test(text)) ||
+        (sector === "MBO" && /mbo|pdg|instructeur/i.test(text)) ||
+        !(/\b(po|vo|mbo)\b/i.test(text)); // Generic questions are always relevant
+
+      if (!isRelevantToSector) continue;
+
+      const theme = entry.theme || "Veelgestelde vragen";
+
+      // Clean theme label
+      let cleanTheme = theme.replace(/^\d+\.\s*/, "").trim();
+      if (cleanTheme.length > 40) cleanTheme = cleanTheme.slice(0, 37) + "...";
+
+      if (!themeMap.has(cleanTheme)) themeMap.set(cleanTheme, []);
+      const subs = themeMap.get(cleanTheme)!;
+      if (subs.length < 3) {
+        // Clean question label for display
+        let displayLabel = text;
+        if (displayLabel.length > 55) displayLabel = displayLabel.slice(0, 52) + "...";
+
+        subs.push({ label: displayLabel, chatMessage: text });
       }
     }
 
-    // Convert to menu items, max 5 themes
+    // Convert to menu items — max 6 themes, prefer themes with 2+ questions
     const items: TopicMenuItem[] = [];
+    const sorted = [...themeMap.entries()]
+      .filter(([, subs]) => subs.length >= 1)
+      .sort((a, b) => b[1].length - a[1].length);
+
     let count = 0;
-    for (const [theme, subs] of themeMap) {
-      if (count >= 5) break;
+    for (const [theme, subs] of sorted) {
+      if (count >= 6) break;
       if (subs.length === 0) continue;
-      items.push({ label: theme.replace(/^\d+\.\s*/, ""), subTopics: subs });
+      if (subs.length === 1) {
+        // Single question: show as direct item
+        items.push({ label: subs[0].label, chatMessage: subs[0].chatMessage });
+      } else {
+        items.push({ label: theme, subTopics: subs });
+      }
       count++;
     }
     return items;
@@ -418,11 +504,11 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
 
   const phaseTopics = getPhaseTopics(currentPhase);
   const slotTopics = getSlotTopics(knownSlots);
-  const ssotTopics = useMemo(() => getSSOTTopics(currentPhase), [currentPhase]);
+  const ssotTopics = useMemo(() => getSSOTTopics(currentPhase, knownSlots), [currentPhase, knownSlots]);
 
   const groups: TopicGroup[] = [
     {
-      title: `${phaseInfo.title}-fase`,
+      title: phaseInfo.title,
       icon: Sparkles,
       items: phaseTopics,
     },
@@ -451,46 +537,21 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
   });
 
   groups.push({
-    title: "Snelle links",
+    title: "Snel naar",
     icon: ExternalLink,
     items: QUICK_LINKS,
   });
 
   return (
-    <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setMenuOpen(!menuOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 md:hidden"
-      >
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Onderwerpen</span>
-        </div>
-        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${menuOpen ? "rotate-180" : ""}`} />
-      </button>
-
-      {/* Desktop: always visible header */}
-      <div className="hidden md:flex items-center gap-2 px-4 py-3 border-b border-border">
-        <Sparkles className="h-4 w-4 text-primary" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Onderwerpen</span>
-      </div>
-
-      {/* Content */}
-      <div className={`${menuOpen ? "block" : "hidden"} md:block`}>
-        {groups.map((group, i) => (
-          <TopicGroupSection
-            key={i}
-            group={group}
-            onSendMessage={(msg) => {
-              onSendMessage(msg);
-              // Auto-collapse on mobile after sending
-              if (window.innerWidth < 768) setMenuOpen(false);
-            }}
-            defaultOpen={i === 0}
-          />
-        ))}
-      </div>
+    <div className="bg-card">
+      {groups.map((group, i) => (
+        <TopicGroupSection
+          key={i}
+          group={group}
+          onSendMessage={onSendMessage}
+          defaultOpen={i === 0}
+        />
+      ))}
     </div>
   );
 }

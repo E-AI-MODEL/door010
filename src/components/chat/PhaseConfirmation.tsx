@@ -10,12 +10,12 @@ interface PhaseConfirmationProps {
   compact?: boolean;
 }
 
-const PHASE_LABELS: Record<string, string> = {
-  interesseren: "Interesseren",
-  orienteren: "Oriënteren",
-  beslissen: "Beslissen",
-  matchen: "Matchen",
-  voorbereiden: "Voorbereiden",
+const STEP_LABELS: Record<string, string> = {
+  interesseren: "verkennen",
+  orienteren: "routes bekijken",
+  beslissen: "keuze maken",
+  matchen: "vacatures en scholen zoeken",
+  voorbereiden: "praktisch voorbereiden",
 };
 
 export function PhaseConfirmation({ from, to, message, onAccept, onDecline, compact }: PhaseConfirmationProps) {
@@ -29,7 +29,7 @@ export function PhaseConfirmation({ from, to, message, onAccept, onDecline, comp
           className={`${compact ? "h-7 text-xs" : "h-8 text-sm"} gap-1`}
         >
           <ArrowRight className="h-3 w-3" />
-          Ja, door naar {PHASE_LABELS[to] || to}
+          Ja, door naar {STEP_LABELS[to] || to}
         </Button>
         <Button
           size="sm"
@@ -38,7 +38,7 @@ export function PhaseConfirmation({ from, to, message, onAccept, onDecline, comp
           className={`${compact ? "h-7 text-xs" : "h-8 text-sm"} gap-1 text-muted-foreground`}
         >
           <RotateCcw className="h-3 w-3" />
-          Nog even {PHASE_LABELS[from]?.toLowerCase() || from}
+          Nog even verder {STEP_LABELS[from] || from}
         </Button>
       </div>
     </div>
