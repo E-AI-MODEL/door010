@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2, Globe, User } from "lucide-react";
+import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2, Globe, User, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,8 +12,10 @@ import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
 import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
+import { TopicMenu } from "@/components/dashboard/TopicMenu";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
+import type { OrientationPhase } from "@/data/dashboard-phases";
 
 const DOORAI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
 const HOMEPAGE_COACH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/homepage-coach`;
@@ -57,8 +59,10 @@ export function AuthenticatedChatOverlay() {
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
+  const [dismissedIntakeSlots, setDismissedIntakeSlots] = useState<Set<string>>(new Set());
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
+  const [showTopicPanel, setShowTopicPanel] = useState(false);
   // Separate message histories per mode
   const [generalMessages, setGeneralMessages] = useState<Array<{ role: string; content: string }>>([
     { role: "assistant", content: "Hoi! Ik ben DoorAI, de wegwijzer van Onderwijsloket Rotterdam. Hoe kan ik je helpen?" },
@@ -217,7 +221,7 @@ export function AuthenticatedChatOverlay() {
       setKnownSlots(detector.known_slots);
       await maybePersistProfile(detector);
 
-      const phaseTransition = detector.phase_confidence >= 0.60 && detector.phase_current_ui !== currentPhase
+      const phaseTransition = detector.phase_confidence >= 0.70 && detector.phase_current_ui !== currentPhase
         ? { from: currentPhase, to: detector.phase_current_ui }
         : undefined;
 
@@ -294,19 +298,22 @@ export function AuthenticatedChatOverlay() {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
 
-              // Handle intake_needed — use dynamic question from backend
+              // Handle intake_needed — use dynamic question from backend, skip if user dismissed this slot
               if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
-                const intakeQuestion = parsed.intake_question || "Kun je even het volgende aangeven?";
-                setPendingIntake([{
-                  id: "slot_0",
-                  question: intakeQuestion,
-                  type: "choice",
-                  options: parsed.slot_chips.map((c: { label: string }) => c.label),
-                }]);
-                setMessages(prev => [
-                  ...prev.slice(0, -1),
-                  { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
-                ]);
+                const slotKey = parsed.slot_key || "slot_0";
+                if (!dismissedIntakeSlots.has(slotKey)) {
+                  const intakeQuestion = parsed.intake_question || "Kun je even het volgende aangeven?";
+                  setPendingIntake([{
+                    id: slotKey,
+                    question: intakeQuestion,
+                    type: "choice",
+                    options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                  }]);
+                  setMessages(prev => [
+                    ...prev.slice(0, -1),
+                    { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+                  ]);
+                }
               }
 
               // Handle corrected_slots
@@ -499,6 +506,24 @@ export function AuthenticatedChatOverlay() {
     sendMessage(`Mijn situatie: ${summary}`);
   };
 
+  const handleIntakeDismiss = useCallback(() => {
+    if (pendingIntake) {
+      setDismissedIntakeSlots(prev => {
+        const next = new Set(prev);
+        pendingIntake.forEach(q => next.add(q.id));
+        return next;
+      });
+    }
+    setPendingIntake(null);
+  }, [pendingIntake]);
+
+  // Topic menu sends message via overlay — use ref to avoid stale closure
+  const handleTopicSend = useCallback((msg: string) => {
+    setShowTopicPanel(false);
+    setChatMode("personal");
+    setTimeout(() => sendMessageRef.current(msg), 50);
+  }, []);
+
   const handlePhaseAccept = useCallback(async () => {
     if (!pendingPhaseSuggestion || !user) return;
     const newPhase = pendingPhaseSuggestion.to as UiPhaseCode;
@@ -626,8 +651,8 @@ export function AuthenticatedChatOverlay() {
                   </button>
                 </div>
               </div>
-              {/* Mode switch pills */}
-              <div className="flex gap-1 px-4 pb-2">
+              {/* Mode switch pills + topic menu button */}
+              <div className="flex items-center gap-1 px-4 pb-2">
                 <button
                   onClick={() => setChatMode("personal")}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
@@ -650,8 +675,42 @@ export function AuthenticatedChatOverlay() {
                   <Globe className="h-3 w-3" />
                   Algemeen
                 </button>
+                {isPersonal && (
+                  <button
+                    onClick={() => setShowTopicPanel(!showTopicPanel)}
+                    className={`ml-auto p-1.5 rounded-full transition-colors ${
+                      showTopicPanel
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    aria-label="Onderwerpen menu"
+                  >
+                    <Menu className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Topic panel — slides in when toggled, personal mode only */}
+            <AnimatePresence>
+              {isPersonal && showTopicPanel && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden border-b border-border shrink-0"
+                >
+                  <div className="max-h-64 overflow-y-auto">
+                    <TopicMenu
+                      currentPhase={(profile?.current_phase || "interesseren") as OrientationPhase}
+                      knownSlots={knownSlots}
+                      onSendMessage={handleTopicSend}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Messages */}
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5" aria-live="polite">
@@ -701,7 +760,7 @@ export function AuthenticatedChatOverlay() {
                 <IntakeSheet
                   questions={pendingIntake}
                   onSubmit={handleIntakeSubmit}
-                  onDismiss={() => setPendingIntake(null)}
+                  onDismiss={handleIntakeDismiss}
                   compact
                 />
               </div>

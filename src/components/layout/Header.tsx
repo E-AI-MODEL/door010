@@ -320,10 +320,16 @@ export function Header() {
                 {!loading && (
                   user ? (
                     <>
-                      <Button className="w-full" asChild>
-                        <Link to="/dashboard">
+                    <Button className="w-full" asChild>
+                        <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
                           <User className="mr-2 h-4 w-4" />
                           Dashboard
+                        </Link>
+                      </Button>
+                      <Button variant="outline" className="w-full" asChild>
+                        <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>
+                          <User className="mr-2 h-4 w-4" />
+                          Mijn profiel
                         </Link>
                       </Button>
                       <Button
