@@ -125,9 +125,8 @@ export function AuthenticatedChatOverlay() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, pendingIntake, pendingPhaseSuggestion]);
 
-  // Use ref for sendMessage to avoid stale closures in event listeners
-  const sendMessageRef = useRef(sendMessage);
-  sendMessageRef.current = sendMessage;
+  // Ref for sendMessage to avoid stale closures in event listeners
+  const sendMessageRef = useRef<(text: string) => void>(() => {});
 
   // Listen for external messages (from TopicMenu)
   useEffect(() => {
