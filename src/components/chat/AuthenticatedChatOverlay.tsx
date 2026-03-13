@@ -196,7 +196,6 @@ export function AuthenticatedChatOverlay() {
     setIsLoading(true);
     setLatestActions([]);
     setLatestLinks([]);
-    setPendingIntake(null);
     setReflectionWarning(null);
 
     let assistantContent = "";
