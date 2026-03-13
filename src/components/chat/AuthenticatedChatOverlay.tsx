@@ -218,7 +218,7 @@ export function AuthenticatedChatOverlay() {
         ? { from: currentPhase, to: detector.phase_current_ui }
         : undefined;
 
-      const response = await fetch(CHAT_URL, {
+      const response = await fetch(DOORAI_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
