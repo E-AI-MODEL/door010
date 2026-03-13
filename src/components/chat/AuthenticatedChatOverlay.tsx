@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2, Globe, User, Menu } from "lucide-react";
+import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2, Globe, User, Menu, Square } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
