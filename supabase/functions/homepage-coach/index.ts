@@ -179,12 +179,7 @@ Deno.serve(async (req) => {
     const answerType = classifyAnswerType(lastUserMsg);
     const mode = "public";
 
-    // ── Infer conversation signals for dynamic actions ──
     const allUserMsgs = messages.filter(m => m.role === "user").map(m => m.content.toLowerCase()).join(" ");
-    const mentionsSector = /\b(po|vo|mbo|basisonderwijs|voortgezet|middelbare|beroepsonderwijs)\b/i.test(allUserMsgs);
-    const mentionsLevel = /\b(mbo|hbo|wo|univers)\b/i.test(allUserMsgs);
-    const mentionsRoute = /\b(pabo|zij-instroom|zijinstroom|pdg|lerarenopleiding|onderwijsassistent)\b/i.test(allUserMsgs);
-    const msgCount = messages.filter(m => m.role === "user").length;
 
     // ── Dynamic actions based on conversation context ──
     function buildActions(): Array<{ label: string; value: string }> {
