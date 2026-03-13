@@ -317,7 +317,7 @@ export function runPhaseDetector(args: {
       phaseSuggestion = {
         from: currentUi,
         to: nextUi,
-        message: "Wil je meer zien?",
+        message: themeHintForTransition(nextUi, known as Record<string, string>),
       };
     }
   }
