@@ -765,9 +765,6 @@ export function AuthenticatedChatOverlay() {
                 />
               </div>
             )}
-                />
-              </div>
-            )}
 
             {/* Phase confirmation — personal mode only */}
             {isPersonal && pendingPhaseSuggestion && !pendingIntake && (
