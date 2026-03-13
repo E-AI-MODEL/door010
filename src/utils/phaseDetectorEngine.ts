@@ -232,8 +232,8 @@ function pickPhase(
   const diff = top.v - second.v;
   const confidence = clamp01(0.35 + diff / 5);
 
-  // Lower threshold for stability (was 0.45, now 0.40)
-  if (confidence < 0.40) {
+    // Stability threshold — prevent premature phase changes
+  if (confidence < 0.55) {
     evidence.push("Confidence laag, houd huidige fase aan voor stabiliteit.");
     return { phase: currentDetector, confidence, evidence, exitCriteriaMet: exitMet };
   }
