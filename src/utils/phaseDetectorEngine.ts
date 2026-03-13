@@ -5,6 +5,7 @@
  * - deterministisch (geen LLM nodig)
  * - kiest phase_current + next_question (SSOT)
  * - stelt maximaal 1 vervolgvraag per beurt (via SSOT mapping)
+ * - respecteert exit_criteria uit SSOT voor fase-doorstroom
  */
 import { loadPhaseDetectorConfig, DetectorPhaseCode, SlotKey } from "./phaseDetectorParser";
 
@@ -34,6 +35,12 @@ export interface PhaseDetectorOutput {
   next_question_id: string;
   next_question: string;
   next_phase_target?: DetectorPhaseCode;
+  exit_criteria_met?: boolean;
+  phase_suggestion?: {
+    from: UiPhaseCode;
+    to: UiPhaseCode;
+    message: string;
+  };
 }
 
 const UI_TO_DETECTOR: Record<UiPhaseCode, DetectorPhaseCode> = {
@@ -50,6 +57,14 @@ const DETECTOR_TO_UI: Record<DetectorPhaseCode, UiPhaseCode> = {
   beslissing: "beslissen",
   matching: "matchen",
   voorbereiding: "voorbereiden",
+};
+
+const PHASE_LABELS: Record<UiPhaseCode, string> = {
+  interesseren: "Interesseren",
+  orienteren: "Oriënteren",
+  beslissen: "Beslissen",
+  matchen: "Matchen",
+  voorbereiden: "Voorbereiden",
 };
 
 function clamp01(n: number) {
@@ -78,12 +93,12 @@ function extractSlots(text: string, base: KnownSlots): KnownSlots {
     else if (/\bmbo\b|beroepsonderwijs|pdg/.test(t)) next.school_type = "MBO";
   }
 
-  // Regio (heel licht; voorkom privacy, geen adres)
+  // Regio
   if (!next.region_preference) {
     if (/rotterdam|rijnmond|zuid-holland/.test(t)) next.region_preference = "Regio Rotterdam";
   }
 
-  // Thema signalen (geen echte waarden, maar we kunnen wel "gevraagd" herkennen)
+  // Thema signalen
   if (!next.salary_info && /(salaris|verdien|inschaling|cao)/.test(t)) next.salary_info = "asked";
   if (!next.costs_info && /(kosten|studiekosten|financiering|subsidie|vergoeding)/.test(t)) next.costs_info = "asked";
   if (!next.duration_info && /(duur|hoe lang|tijd|looptijd|2 jaar|4 jaar)/.test(t)) next.duration_info = "asked";
@@ -106,9 +121,42 @@ function extractSlots(text: string, base: KnownSlots): KnownSlots {
   return next;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Exit Criteria Evaluator — checks SSOT rules for phase completion
+// ─────────────────────────────────────────────────────────────────────
+function evaluateExitCriteria(
+  phase: DetectorPhaseCode,
+  known: KnownSlots,
+  conversation: ConversationTurn[],
+): boolean {
+  const { rules } = loadPhaseDetectorConfig();
+  const phaseRule = rules.phases.find((p) => p.code === phase);
+  if (!phaseRule?.exit_criteria) return false;
+
+  const lastText = normalize(lastUserText(conversation));
+
+  for (const criterion of phaseRule.exit_criteria) {
+    if (criterion.type === "slots_present") {
+      const requiredSlots = (criterion as { type: string; slots: string[] }).slots || [];
+      const allPresent = requiredSlots.every((s: string) => !!known[s as SlotKey]);
+      if (allPresent) return true;
+    }
+    if (criterion.type === "intent") {
+      const intent = (criterion as { type: string; intent: string }).intent;
+      // Simple intent matching
+      if (intent === "wants_orientation_info" && 
+          /(route|opleiding|hoe word|zij-instroom|bevoegdheid|welke stappen)/.test(lastText)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function scorePhases(
   currentUi: UiPhaseCode,
   conversation: ConversationTurn[],
+  knownSlots: KnownSlots,
 ): { scores: Record<DetectorPhaseCode, number>; evidence: string[] } {
   const text = normalize(lastUserText(conversation));
   const evidence: string[] = [];
@@ -121,11 +169,26 @@ function scorePhases(
     voorbereiding: 1,
   };
 
-  // Kleine bias richting huidige fase, zodat je niet heen en weer springt
-  base[UI_TO_DETECTOR[currentUi]] += 1.5;
+  const currentDetector = UI_TO_DETECTOR[currentUi];
+
+  // Reduced bias: from +1.5 to +0.8 for easier phase transitions
+  base[currentDetector] += 0.8;
   evidence.push(`Startpunt: huidige fase is ${currentUi}.`);
 
-  // Keywords die echt iets zeggen over de stap in de reis
+  // Check exit criteria for current phase
+  const exitMet = evaluateExitCriteria(currentDetector, knownSlots, conversation);
+  if (exitMet) {
+    const { rules } = loadPhaseDetectorConfig();
+    const phaseRule = rules.phases.find((p) => p.code === currentDetector);
+    const nextPhase = phaseRule?.next_phase_default;
+    if (nextPhase) {
+      // Big bonus for next phase when exit criteria are met
+      base[nextPhase] += 2.0;
+      evidence.push(`Exit-criteria voldaan voor ${currentUi}, boost naar ${DETECTOR_TO_UI[nextPhase]}.`);
+    }
+  }
+
+  // Keywords die iets zeggen over de stap in de reis
   if (/(vacature|solliciteren|scholen|werkplek|regio|rotterdam)/.test(text)) {
     base.matching += 2.5;
     evidence.push("Signaal: matchen (vacatures of regio).");
@@ -142,6 +205,11 @@ function scorePhases(
     base.beslissing += 1.8;
     evidence.push("Signaal: beslissen (twijfel of keuze).");
   }
+  // Intent for moving past interesse
+  if (/(hoe word|hoe kan ik|wat moet ik|welke stappen|route|opleiding)/.test(text)) {
+    base.orientatie += 1.5;
+    evidence.push("Signaal: wil oriënteren (hoe/wat vragen).");
+  }
 
   return { scores: base, evidence };
 }
@@ -149,8 +217,12 @@ function scorePhases(
 function pickPhase(
   currentUi: UiPhaseCode,
   conversation: ConversationTurn[],
-): { phase: DetectorPhaseCode; confidence: number; evidence: string[] } {
-  const { scores, evidence } = scorePhases(currentUi, conversation);
+  knownSlots: KnownSlots,
+): { phase: DetectorPhaseCode; confidence: number; evidence: string[]; exitCriteriaMet: boolean } {
+  const { scores, evidence } = scorePhases(currentUi, conversation, knownSlots);
+  const currentDetector = UI_TO_DETECTOR[currentUi];
+  const exitMet = evaluateExitCriteria(currentDetector, knownSlots, conversation);
+
   const ordered = (Object.keys(scores) as DetectorPhaseCode[])
     .map((k) => ({ k, v: scores[k] }))
     .sort((a, b) => b.v - a.v);
@@ -158,17 +230,16 @@ function pickPhase(
   const top = ordered[0];
   const second = ordered[1];
 
-  // Confidence: verschil tussen top en nummer 2, genormaliseerd
   const diff = top.v - second.v;
   const confidence = clamp01(0.35 + diff / 5);
 
-  // Bij lage confidence: houd huidige fase aan (stabieler gedrag)
-  if (confidence < 0.45) {
+  // Lower threshold for stability (was 0.45, now 0.40)
+  if (confidence < 0.40) {
     evidence.push("Confidence laag, houd huidige fase aan voor stabiliteit.");
-    return { phase: UI_TO_DETECTOR[currentUi], confidence, evidence };
+    return { phase: currentDetector, confidence, evidence, exitCriteriaMet: exitMet };
   }
 
-  return { phase: top.k, confidence, evidence };
+  return { phase: top.k, confidence, evidence, exitCriteriaMet: exitMet };
 }
 
 function chooseNextSlot(
@@ -186,15 +257,12 @@ function chooseNextSlot(
   const missing = allSlots.filter((s) => !known[s]);
 
   if (missing.length > 0) {
-    // Loop-prevention: if the same slot was already the previous next,
-    // skip it and pick the next missing one instead
     if (previousNextSlot && missing[0] === previousNextSlot && missing.length > 1) {
       return { missing, nextSlot: missing[1] };
     }
     return { missing, nextSlot: missing[0] };
   }
 
-  // Fallback: altijd een volgende stap slot
   return { missing: [], nextSlot: "next_step" };
 }
 
@@ -206,7 +274,6 @@ function pickQuestionForSlot(slot: SlotKey): { id: string; text: string } {
     return { id: qList[0].question_id, text: qList[0].question_text };
   }
 
-  // Laatste fallback (zou zelden gebeuren)
   return {
     id: "S00000",
     text: "Waar wil je nu mee beginnen: route, eisen, duur, kosten, salaris of vacatures?",
@@ -227,13 +294,26 @@ export function runPhaseDetector(args: {
   const latestText = lastUserText(args.conversation);
   const known = extractSlots(latestText, baseKnown);
 
-  const picked = pickPhase(currentUi, args.conversation);
+  const picked = pickPhase(currentUi, args.conversation, known);
 
   const nextPhaseTarget =
     rules.phases.find((p) => p.code === picked.phase)?.next_phase_default;
 
   const slotChoice = chooseNextSlot(picked.phase, known, args.previous_next_slot);
   const q = pickQuestionForSlot(slotChoice.nextSlot);
+
+  // Build phase suggestion if exit criteria are met and we'd move to a new phase
+  let phaseSuggestion: PhaseDetectorOutput["phase_suggestion"] | undefined;
+  if (picked.exitCriteriaMet && nextPhaseTarget) {
+    const nextUi = DETECTOR_TO_UI[nextPhaseTarget];
+    if (nextUi && nextUi !== currentUi) {
+      phaseSuggestion = {
+        from: currentUi,
+        to: nextUi,
+        message: `Je bent klaar met ${PHASE_LABELS[currentUi].toLowerCase()}. Wil je door naar ${PHASE_LABELS[nextUi].toLowerCase()}?`,
+      };
+    }
+  }
 
   return {
     audience: rules.audience?.label || "Zij-instromer",
@@ -247,5 +327,7 @@ export function runPhaseDetector(args: {
     next_question_id: q.id,
     next_question: q.text,
     next_phase_target: nextPhaseTarget,
+    exit_criteria_met: picked.exitCriteriaMet,
+    phase_suggestion: phaseSuggestion,
   };
 }
