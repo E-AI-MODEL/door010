@@ -1049,40 +1049,20 @@ Deno.serve(async (req) => {
             : sector === "VO" ? "voortgezet onderwijs"
             : sector === "MBO" ? "mbo"
             : "het onderwijs";
+          const p = phase.toLowerCase();
 
-          if (phase === "orienteren" && sector) return [
-            { label: `Routes ${sectorLabel}`, value: `Welke routes zijn er voor ${sectorLabel}?` },
-            { label: "Kosten en duur", value: "Wat kost een opleiding en hoe lang duurt het?" },
-          ];
-          if (phase === "beslissen") {
-            const actions: UiAction[] = [
-              { label: "Kosten en duur", value: "Wat zijn de kosten en hoe lang duurt het?" },
-            ];
-            // Add a relevant missing-slot question as follow-up
-            if (missingSlots.includes("admission_requirements")) {
-              actions.push({ label: "Toelatingseisen bekijken", value: "Wat zijn de toelatingseisen voor mijn route?" });
-            } else {
-              actions.push({ label: "Twijfels bespreken", value: "Ik twijfel nog, wat zijn mijn opties?" });
-            }
-            return actions;
-          }
-          if (phase === "matchen") return [
-            { label: "Vacatures zoeken", value: "Zijn er vacatures bij mij in de buurt?" },
-            { label: "Gesprek plannen", value: "Ik wil een gesprek plannen met een adviseur." },
-          ];
-          if (phase === "voorbereiden") return [
-            { label: "Wat moet ik regelen?", value: "Wat moet ik praktisch regelen voor de start?" },
-          ];
-          // Interesseren: offer exploration based on missing context
-          if (phase === "interesseren") {
+          // Theme-driven: pick actions based on phase + slots + missing context
+          if (p === "interesseren") {
             if (!sector && !slots.role_interest) {
               return [
                 { label: "Sectoren vergelijken", value: "Wat zijn de verschillen tussen PO, VO en MBO?" },
+                { label: "Functies bekijken", value: "Welke functies zijn er in het onderwijs?" },
               ];
             }
             if (sector && !slots.role_interest) {
               return [
-                { label: "Welke functies zijn er?", value: `Welke functies zijn er in ${sectorLabel}?` },
+                { label: `Functies in ${sectorLabel}`, value: `Welke functies zijn er in ${sectorLabel}?` },
+                { label: "Routes bekijken", value: `Welke routes zijn er voor ${sectorLabel}?` },
               ];
             }
             if (slots.role_interest && !sector) {
@@ -1090,7 +1070,47 @@ Deno.serve(async (req) => {
                 { label: "In welke sector?", value: "In welke onderwijssector kan ik het beste aan de slag?" },
               ];
             }
+            return [
+              { label: "Routes bekijken", value: `Welke routes zijn er voor ${sectorLabel}?` },
+            ];
           }
+          if (p === "orienteren") {
+            const actions: UiAction[] = [
+              { label: `Routes ${sectorLabel}`, value: `Welke routes zijn er voor ${sectorLabel}?` },
+            ];
+            if (missingSlots.includes("admission_requirements")) {
+              actions.push({ label: "Toelatingseisen", value: "Wat zijn de toelatingseisen voor mijn route?" });
+            } else if (missingSlots.includes("costs_info") || !slots.costs_info) {
+              actions.push({ label: "Kosten en duur", value: "Wat kost een opleiding en hoe lang duurt het?" });
+            } else {
+              actions.push({ label: "Bevoegdheden", value: "Welke bevoegdheid heb ik nodig?" });
+            }
+            return actions;
+          }
+          if (p === "beslissen") {
+            const actions: UiAction[] = [];
+            if (!slots.costs_info) {
+              actions.push({ label: "Kosten en financiering", value: "Wat zijn de kosten en welke financiering is er?" });
+            }
+            if (!slots.salary_info) {
+              actions.push({ label: "Salaris bekijken", value: "Wat verdient een leraar gemiddeld?" });
+            }
+            if (actions.length === 0) {
+              actions.push({ label: "Subsidies bekijken", value: "Welke subsidies zijn er voor aanstaande leraren?" });
+            }
+            if (actions.length < 2) {
+              actions.push({ label: "Twijfels bespreken", value: "Ik twijfel nog, wat zijn mijn opties?" });
+            }
+            return actions.slice(0, 2);
+          }
+          if (p === "matchen") return [
+            { label: "Vacatures zoeken", value: "Zijn er vacatures bij mij in de buurt?" },
+            { label: "Gesprek plannen", value: "Ik wil een gesprek plannen met een adviseur." },
+          ];
+          if (p === "voorbereiden") return [
+            { label: "Wat moet ik regelen?", value: "Wat moet ik praktisch regelen voor de start?" },
+            { label: "Events bekijken", value: "Zijn er events of open dagen binnenkort?" },
+          ];
           return [];
         }
 

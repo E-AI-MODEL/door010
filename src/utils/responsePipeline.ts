@@ -147,7 +147,7 @@ export function buildIntakeQuestions(signals: { missingSector: boolean; missingL
       id: "school_type",
       question: "Welke sector spreekt je het meest aan?",
       type: "choice",
-      options: ["Basisonderwijs (PO)", "Voortgezet onderwijs (VO)", "MBO", "Speciaal onderwijs"],
+      options: ["Basisonderwijs (PO)", "Voortgezet onderwijs (VO)", "MBO", "Speciaal onderwijs", "Weet ik nog niet"],
     });
   }
 
@@ -156,7 +156,7 @@ export function buildIntakeQuestions(signals: { missingSector: boolean; missingL
       id: "admission_requirements",
       question: "Wat is je hoogst afgeronde opleiding?",
       type: "choice",
-      options: ["MBO-diploma", "HBO-diploma", "WO-diploma", "Buitenlands diploma"],
+      options: ["MBO-diploma", "HBO-diploma", "WO-diploma", "Buitenlands diploma", "Anders"],
     });
   }
 

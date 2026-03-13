@@ -192,27 +192,54 @@ Deno.serve(async (req) => {
           { label: "Ik werk al en wil overstappen", value: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
         ];
       }
+
+      // Theme-driven actions based on conversation content
+      const mentionsSalary = /\b(salaris|verdien|loon|cao|inkomen)\b/i.test(allUserMsgs);
+      const mentionsCosts = /\b(kosten|collegegeld|subsidie|financier|gratis)\b/i.test(allUserMsgs);
+      const mentionsEvents = /\b(event|open dag|meeloop|proefles)\b/i.test(allUserMsgs);
+      const mentionsRegion = /\b(regio|rotterdam|school|vacature|baan)\b/i.test(allUserMsgs);
+
       if (!mentionsSector && msgCount >= 1) {
         return [
-          { label: "Basisonderwijs (PO)", value: "Ik ben geïnteresseerd in het basisonderwijs." },
-          { label: "Voortgezet onderwijs (VO)", value: "Ik ben geïnteresseerd in het voortgezet onderwijs." },
+          { label: "Sectoren vergelijken", value: "Wat zijn de verschillen tussen PO, VO en MBO?" },
+          { label: "Functies bekijken", value: "Welke functies zijn er in het onderwijs?" },
         ];
       }
       if (mentionsSector && !mentionsRoute) {
-        return [
-          { label: "Welke routes zijn er?", value: "Welke opleidingsroutes zijn er voor mij?" },
-          { label: "Bekijk vacatures", value: "Zijn er vacatures in het onderwijs?" },
+        const actions: Array<{ label: string; value: string }> = [
+          { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er voor mij?" },
         ];
+        if (!mentionsCosts) {
+          actions.push({ label: "Kosten en financiering", value: "Wat kost een opleiding en welke financiering is er?" });
+        } else {
+          actions.push({ label: "Vacatures bekijken", value: "Zijn er vacatures in het onderwijs?" });
+        }
+        return actions;
       }
       if (mentionsRoute) {
+        const actions: Array<{ label: string; value: string }> = [];
+        if (!mentionsSalary) actions.push({ label: "Salaris bekijken", value: "Wat verdient een leraar gemiddeld?" });
+        if (!mentionsEvents) actions.push({ label: "Events bekijken", value: "Zijn er open dagen of informatie-avonden?" });
+        if (!mentionsRegion && actions.length < 2) actions.push({ label: "Scholen in de regio", value: "Welke scholen zijn er in mijn regio?" });
+        if (actions.length === 0) actions.push({ label: "Account aanmaken", value: "Hoe kan ik een account aanmaken voor persoonlijk advies?" });
+        return actions.slice(0, 2);
+      }
+      // Contextual fallback based on what's been discussed
+      if (mentionsSalary) {
         return [
-          { label: "Bekijk evenementen", value: "Zijn er open dagen of informatie-avonden?" },
-          { label: "Maak een account", value: "Hoe kan ik een account aanmaken voor persoonlijk advies?" },
+          { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" },
+          { label: "Vacatures bekijken", value: "Zijn er vacatures in het onderwijs?" },
+        ];
+      }
+      if (mentionsCosts) {
+        return [
+          { label: "Subsidies bekijken", value: "Welke subsidies zijn er voor aanstaande leraren?" },
+          { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" },
         ];
       }
       return [
-        { label: "Vertel me meer", value: "Kun je daar meer over vertellen?" },
-        { label: "Bekijk opleidingen", value: "Welke opleidingsroutes zijn er?" },
+        { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" },
+        { label: "Sectoren vergelijken", value: "Wat zijn de verschillen tussen PO, VO en MBO?" },
       ];
     }
 

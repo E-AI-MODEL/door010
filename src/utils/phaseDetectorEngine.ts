@@ -8,6 +8,7 @@
  * - respecteert exit_criteria uit SSOT voor fase-doorstroom
  */
 import { loadPhaseDetectorConfig, DetectorPhaseCode, SlotKey, ExitCriterion } from "./phaseDetectorParser";
+import { themeHintForTransition } from "./themeMapper";
 
 export type UiPhaseCode =
   | "interesseren"
@@ -316,7 +317,7 @@ export function runPhaseDetector(args: {
       phaseSuggestion = {
         from: currentUi,
         to: nextUi,
-        message: "Wil je meer zien?",
+        message: themeHintForTransition(nextUi, known as Record<string, string>),
       };
     }
   }
