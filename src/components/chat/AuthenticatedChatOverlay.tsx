@@ -311,6 +311,7 @@ export function AuthenticatedChatOverlay() {
               // Handle intake_needed — use dynamic question from backend, skip if user dismissed this slot
               if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
                 const slotKey = parsed.slot_key || "slot_0";
+                setLastOfferedSlot(slotKey); // Track for next detector call
                 if (!dismissedIntakeSlots.has(slotKey)) {
                   const intakeQuestion = parsed.intake_question || "Kun je even het volgende aangeven?";
                   setPendingIntake([{
