@@ -10,11 +10,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
-import { IntakeSheet } from "@/components/chat/IntakeSheet";
 import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
 import { TopicMenu } from "@/components/dashboard/TopicMenu";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
-import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
+import type { StructuredResponse } from "@/utils/responsePipeline";
 import type { OrientationPhase } from "@/data/dashboard-phases";
 
 const DOORAI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
@@ -60,9 +59,6 @@ export function AuthenticatedChatOverlay() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
-  const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
-  const [dismissedIntakeSlots, setDismissedIntakeSlots] = useState<Set<string>>(new Set());
-  const [lastOfferedSlot, setLastOfferedSlot] = useState<string | undefined>(undefined);
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
   const [showTopicPanel, setShowTopicPanel] = useState(false);
@@ -130,7 +126,7 @@ export function AuthenticatedChatOverlay() {
   useEffect(() => {
     const el = chatContainerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, pendingIntake, pendingPhaseSuggestion]);
+  }, [messages, pendingPhaseSuggestion]);
 
   // Ref for sendMessage to avoid stale closures in event listeners
   const sendMessageRef = useRef<(text: string) => void>(() => {});
@@ -200,7 +196,6 @@ export function AuthenticatedChatOverlay() {
     setIsLoading(true);
     setLatestActions([]);
     setLatestLinks([]);
-    setPendingIntake(null);
     setReflectionWarning(null);
 
     let assistantContent = "";
@@ -215,13 +210,10 @@ export function AuthenticatedChatOverlay() {
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", text: m.content }));
 
-      // Pass dismissed slots separately — NOT merged into known_slots
       const detector = runPhaseDetector({
         conversation: conversationTurns,
         known_slots: knownSlots,
         current_phase_ui: currentPhase,
-        previous_next_slot: lastOfferedSlot as any,
-        dismissed_slots: dismissedIntakeSlots,
       });
 
       setKnownSlots(detector.known_slots);
@@ -302,26 +294,6 @@ export function AuthenticatedChatOverlay() {
               }
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 1));
-              }
-
-              // Handle intake_needed — use slot_key from backend only if present
-              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips) && parsed.slot_key) {
-                setLastOfferedSlot(parsed.slot_key);
-                if (!dismissedIntakeSlots.has(parsed.slot_key)) {
-                  // Use SSOT question text from backend, with simple fallback
-                  const intakeQuestion = parsed.intake_question || "Kun je dit even aangeven?";
-                  setPendingIntake([{
-                    id: parsed.slot_key,
-                    question: intakeQuestion,
-                    type: "choice",
-                    options: parsed.slot_chips.map((c: { label: string }) => c.label),
-                  }]);
-                  // Use the same SSOT question as the assistant message
-                  setMessages(prev => [
-                    ...prev.slice(0, -1),
-                    { role: "assistant" as const, content: intakeQuestion },
-                  ]);
-                }
               }
 
               // Handle corrected_slots
@@ -508,23 +480,6 @@ export function AuthenticatedChatOverlay() {
     }
   };
 
-  const handleIntakeSubmit = (answers: Record<string, string>) => {
-    setPendingIntake(null);
-    const summary = Object.entries(answers).map(([, v]) => v).join(", ");
-    sendMessage(`Mijn situatie: ${summary}`);
-  };
-
-  const handleIntakeDismiss = useCallback(() => {
-    if (pendingIntake) {
-      setDismissedIntakeSlots(prev => {
-        const next = new Set(prev);
-        pendingIntake.forEach(q => next.add(q.id));
-        return next;
-      });
-    }
-    setPendingIntake(null);
-  }, [pendingIntake]);
-
   // Topic menu sends message via overlay — use ref to avoid stale closure
   const handleTopicSend = useCallback((msg: string) => {
     setShowTopicPanel(false);
@@ -561,12 +516,9 @@ export function AuthenticatedChatOverlay() {
     }
     await resetConversation();
     setKnownSlots({});
-    setPendingIntake(null);
     setPendingPhaseSuggestion(null);
     setLatestLinks([]);
     setReflectionWarning(null);
-    setDismissedIntakeSlots(new Set());
-    setLastOfferedSlot(undefined);
     setMessages([{
       role: "assistant",
       content: "Welkom terug! Stel gerust je vraag of kies een onderwerp via het menu.",
@@ -765,20 +717,8 @@ export function AuthenticatedChatOverlay() {
               <div />
             </div>
 
-            {/* Intake — personal mode only */}
-            {isPersonal && pendingIntake && (
-              <div className="px-4 pb-2 shrink-0">
-                <IntakeSheet
-                  questions={pendingIntake}
-                  onSubmit={handleIntakeSubmit}
-                  onDismiss={handleIntakeDismiss}
-                  compact
-                />
-              </div>
-            )}
-
             {/* Phase confirmation — personal mode only */}
-            {isPersonal && pendingPhaseSuggestion && !pendingIntake && (
+            {isPersonal && pendingPhaseSuggestion && (
               <div className="px-4 pb-2 shrink-0">
                 <PhaseConfirmation
                   message={pendingPhaseSuggestion.message}
@@ -789,8 +729,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Actions — max 1 doorvraagchip, hidden during intake */}
-            {(!isPersonal || !pendingIntake) && currentActions.length > 0 && (
+            {/* Actions — max 1 doorvraagchip */}
+            {currentActions.length > 0 && (
               <div className="px-4 pb-2 shrink-0">
                 <ResponseActions
                   primaryFollowup={currentActions[0] ? { label: currentActions[0].label, value: currentActions[0].value } : null}
@@ -801,8 +741,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Link chip — max 1, hidden during intake */}
-            {currentLinks.length > 0 && (!isPersonal || !pendingIntake) && !currentLoading && (
+            {/* Link chip — max 1 */}
+            {currentLinks.length > 0 && !currentLoading && (
               <div className="px-4 pb-2 shrink-0">
                 {(() => {
                   const link = currentLinks[0];
@@ -845,11 +785,11 @@ export function AuthenticatedChatOverlay() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={isPersonal ? "Stel je vraag..." : "Vraag over onderwijs..."}
-                  disabled={currentLoading || (isPersonal && !!pendingIntake)}
+                  disabled={currentLoading}
                   className="flex-1 h-9 text-sm rounded-xl"
                   aria-label="Stel je vraag"
                 />
-                <Button type="submit" size="sm" disabled={currentLoading || !input.trim() || (isPersonal && !!pendingIntake)} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
+                <Button type="submit" size="sm" disabled={currentLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
                   <Send className="h-3.5 w-3.5" />
                 </Button>
               </form>
