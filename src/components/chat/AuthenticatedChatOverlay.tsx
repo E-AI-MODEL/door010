@@ -585,9 +585,17 @@ export function AuthenticatedChatOverlay() {
   const currentLoading = isPersonal ? isLoading : generalLoading;
   const visibleMessages = currentMessages.slice(-8);
 
-  // Sizes
-  const width = isExpanded ? 480 : 380;
-  const height = isExpanded ? 680 : 500;
+  // Size presets
+  const isFullscreen = widgetSize === "fullscreen";
+  const sizeStyles = isFullscreen
+    ? { width: "100vw", height: "100vh", bottom: 0, right: 0, borderRadius: 0 }
+    : widgetSize === "expanded"
+    ? { width: `min(520px, calc(100vw - 3rem))`, height: `min(720px, calc(100vh - 6rem))` }
+    : { width: `min(380px, calc(100vw - 3rem))`, height: `min(500px, calc(100vh - 6rem))` };
+
+  const cycleSize = () => {
+    setWidgetSize(prev => prev === "compact" ? "expanded" : prev === "expanded" ? "fullscreen" : "compact");
+  };
 
   return (
     <>
@@ -614,10 +622,10 @@ export function AuthenticatedChatOverlay() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 bg-card rounded-3xl shadow-2xl border border-border overflow-hidden flex flex-col"
-            style={{
-              width: `min(${width}px, calc(100vw - 3rem))`,
-              height: `min(${height}px, calc(100vh - 6rem))`,
+            className={`fixed z-50 bg-card border border-border overflow-hidden flex flex-col ${isFullscreen ? "inset-0" : "bottom-6 right-6 rounded-3xl shadow-2xl"}`}
+            style={isFullscreen ? {} : {
+              width: sizeStyles.width as string,
+              height: sizeStyles.height as string,
             }}
           >
             {/* Header */}
