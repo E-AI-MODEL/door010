@@ -19,6 +19,7 @@ import { BackofficeStats } from "@/components/backoffice/BackofficeStats";
 import { BackofficeAlerts, type DashboardAlert } from "@/components/backoffice/BackofficeAlerts";
 import { CandidateDetailPanel } from "@/components/backoffice/CandidateDetailPanel";
 import { AppointmentsTab } from "@/components/backoffice/AppointmentsTab";
+import { TrustedSourcesTab } from "@/components/backoffice/TrustedSourcesTab";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 
