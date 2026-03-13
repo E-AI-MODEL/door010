@@ -10,6 +10,30 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowRight, Mail, Lock, User } from "lucide-react";
 
+const ALLOWED_REDIRECT_TARGETS = new Set([
+  "dashboard",
+  "profile",
+  "vacatures",
+  "events",
+  "opleidingen",
+  "kennisbank",
+]);
+
+const resolveRedirectTarget = (
+  redirectTarget: string | null,
+  fallbackTarget = "dashboard"
+) => {
+  if (!redirectTarget) {
+    return fallbackTarget;
+  }
+
+  const normalizedTarget = redirectTarget.replace(/^\/+|\/+$/g, "");
+
+  return ALLOWED_REDIRECT_TARGETS.has(normalizedTarget)
+    ? normalizedTarget
+    : fallbackTarget;
+};
+
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -20,7 +44,7 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   
-  const redirectTo = searchParams.get("redirect") || "dashboard";
+  const redirectTo = resolveRedirectTarget(searchParams.get("redirect"));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +90,7 @@ export default function Auth() {
           if (isAdvisorOrAdmin) {
             navigate("/backoffice", { replace: true });
           } else {
-            navigate(`/${redirectTo}`, { replace: true });
+            navigate("/" + redirectTo, { replace: true });
           }
         } else {
           // Fallback if user not found immediately
@@ -74,7 +98,7 @@ export default function Auth() {
             title: "Welkom terug!",
             description: "Je bent succesvol ingelogd.",
           });
-          navigate(`/${redirectTo}`, { replace: true });
+          navigate("/" + redirectTo, { replace: true });
         }
       } else {
         const { error } = await signUp(email, password);
