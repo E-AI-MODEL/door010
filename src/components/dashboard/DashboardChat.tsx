@@ -109,7 +109,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
   useEffect(() => {
     const el = chatContainerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, pendingIntake, pendingPhaseSuggestion]);
 
   const maybePersistProfile = useCallback(
     async (detector: ReturnType<typeof runPhaseDetector>, slotsToSave?: KnownSlots) => {
