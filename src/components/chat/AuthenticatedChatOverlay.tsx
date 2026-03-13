@@ -516,12 +516,9 @@ export function AuthenticatedChatOverlay() {
     }
     await resetConversation();
     setKnownSlots({});
-    setPendingIntake(null);
     setPendingPhaseSuggestion(null);
     setLatestLinks([]);
     setReflectionWarning(null);
-    setDismissedIntakeSlots(new Set());
-    setLastOfferedSlot(undefined);
     setMessages([{
       role: "assistant",
       content: "Welkom terug! Stel gerust je vraag of kies een onderwerp via het menu.",
