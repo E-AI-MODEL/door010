@@ -418,7 +418,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
       </button>
 
       {/* Desktop: always visible header */}
-      <div className="hidden lg:flex items-center gap-2 px-4 py-3 border-b border-border">
+      <div className="hidden md:flex items-center gap-2 px-4 py-3 border-b border-border">
         <Sparkles className="h-4 w-4 text-primary" />
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Onderwerpen</span>
       </div>
