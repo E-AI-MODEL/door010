@@ -472,6 +472,19 @@ export default function Chat() {
             </div>
           )}
 
+          {/* Phase confirmation */}
+          {pendingPhaseSuggestion && !pendingIntake && (
+            <div className="px-5 pb-2">
+              <PhaseConfirmation
+                from={pendingPhaseSuggestion.from}
+                to={pendingPhaseSuggestion.to}
+                message={pendingPhaseSuggestion.message}
+                onAccept={handlePhaseAccept}
+                onDecline={handlePhaseDecline}
+              />
+            </div>
+          )}
+
           {/* Actions */}
           {!pendingIntake && latestActions.length > 0 && (
             <div className="px-5 pb-2">
