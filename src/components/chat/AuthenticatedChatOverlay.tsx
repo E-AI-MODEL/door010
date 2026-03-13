@@ -298,10 +298,10 @@ export function AuthenticatedChatOverlay() {
             // Handle event: ui
             if (currentEventType === "ui") {
               if (parsed.actions && Array.isArray(parsed.actions)) {
-                setLatestActions(parsed.actions.slice(0, 2));
+                setLatestActions(parsed.actions.slice(0, 1));
               }
               if (parsed.links && Array.isArray(parsed.links)) {
-                setLatestLinks(parsed.links.slice(0, 6));
+                setLatestLinks(parsed.links.slice(0, 1));
               }
 
               // Handle intake_needed — use slot_key from backend only if present
