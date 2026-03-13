@@ -238,6 +238,31 @@ export function PublicChatWidget() {
               continue;
             }
 
+            // Handle meta event from homepage-coach (sent as data: {meta: {...}})
+            if (parsed.meta) {
+              parsedMeta = parseStructuredMeta(parsed.meta);
+              const metaActions = parsed.meta.actions;
+              let pf: FollowUpAction | null = null;
+              let sa: FollowUpAction | null = null;
+              if (Array.isArray(metaActions) && metaActions.length > 0) {
+                pf = { label: metaActions[0].label, value: metaActions[0].value };
+                if (metaActions.length > 1) {
+                  sa = { label: metaActions[1].label, value: metaActions[1].value };
+                }
+              }
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === "assistant") {
+                  last.structured = parsedMeta;
+                  last.primaryFollowup = pf;
+                  last.secondaryAction = sa;
+                }
+                return [...updated];
+              });
+              continue;
+            }
+
             // Legacy actions fallback
             if (parsed.actions && Array.isArray(parsed.actions)) {
               const pf = parsed.actions[0] ? { label: parsed.actions[0].label, value: parsed.actions[0].value } : null;
@@ -307,7 +332,10 @@ export function PublicChatWidget() {
     await sendMessageWithText(input);
   };
 
-  if (user) return null;
+  // Widget is always visible on homepage, even after login
+  // On other pages, logged-in users use the dashboard chat instead
+  const isHomepage = window.location.pathname === "/" || window.location.pathname === "/index";
+  if (user && !isHomepage) return null;
 
   return (
     <>
