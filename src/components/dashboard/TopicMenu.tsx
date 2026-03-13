@@ -424,7 +424,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
       </div>
 
       {/* Content */}
-      <div className={`${menuOpen ? "block" : "hidden"} lg:block`}>
+      <div className={`${menuOpen ? "block" : "hidden"} md:block`}>
         {groups.map((group, i) => (
           <TopicGroupSection
             key={i}
