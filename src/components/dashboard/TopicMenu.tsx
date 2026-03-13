@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { phaseData, type OrientationPhase } from "@/data/dashboard-phases";
 import type { KnownSlots } from "@/utils/phaseDetectorEngine";
 import { loadPhaseDetectorConfig, type DetectorPhaseCode } from "@/utils/phaseDetectorParser";
+import { deriveThemes } from "@/utils/themeMapper";
 
 interface SubTopic {
   label: string;
