@@ -57,6 +57,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
     return { ...(st ? { school_type: st } : {}), ...fromDb };
   });
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
+  const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const profile = { current_phase: currentPhase, preferred_sector: preferredSector };
 
