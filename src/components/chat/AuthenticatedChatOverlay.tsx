@@ -789,12 +789,11 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Actions */}
+            {/* Actions — max 1 doorvraagchip, hidden during intake */}
             {(!isPersonal || !pendingIntake) && currentActions.length > 0 && (
               <div className="px-4 pb-2 shrink-0">
                 <ResponseActions
                   primaryFollowup={currentActions[0] ? { label: currentActions[0].label, value: currentActions[0].value } : null}
-                  secondaryAction={currentActions[1] ? { label: currentActions[1].label, value: currentActions[1].value } : null}
                   onAskClick={handleActionClick}
                   compact
                   disabled={currentLoading}
@@ -802,13 +801,13 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Link chips */}
+            {/* Link chip — max 1, hidden during intake */}
             {currentLinks.length > 0 && (!isPersonal || !pendingIntake) && !currentLoading && (
-              <div className="px-4 pb-2 flex flex-wrap gap-1.5 shrink-0">
-                {currentLinks.map((link, i) =>
-                  link.href.startsWith("/") ? (
+              <div className="px-4 pb-2 shrink-0">
+                {(() => {
+                  const link = currentLinks[0];
+                  return link.href.startsWith("/") ? (
                     <Link
-                      key={i}
                       to={link.href}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
                     >
@@ -816,7 +815,6 @@ export function AuthenticatedChatOverlay() {
                     </Link>
                   ) : (
                     <a
-                      key={i}
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -825,8 +823,8 @@ export function AuthenticatedChatOverlay() {
                       {link.label}
                       <ExternalLink className="h-2.5 w-2.5" />
                     </a>
-                  )
-                )}
+                  );
+                })()}
               </div>
             )}
 
