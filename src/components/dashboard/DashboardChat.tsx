@@ -460,6 +460,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
             compact
           />
         </div>
+      )}
 
       {/* Actions */}
       {(latestActions.length > 0) && !pendingIntake && (
