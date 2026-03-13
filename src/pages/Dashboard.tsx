@@ -108,7 +108,7 @@ export default function Dashboard() {
                 collapsed
               />
               {/* ProfileCard: hidden on mobile, compact on desktop */}
-              <div className="hidden lg:block">
+              <div className="hidden md:block">
                 <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
               </div>
             </div>
