@@ -964,6 +964,7 @@ Deno.serve(async (req) => {
           "peildatum", "kennisbank", "als ai", "goed dat je dit vraagt",
           "ik begrijp je helemaal", "je moet", "scenario",
           "achtergrondinformatie", "dynamische context",
+          "globaal zo uit",
         ];
         const reflectionIssues: string[] = [];
         const lowerFull = fullResponse.toLowerCase();
