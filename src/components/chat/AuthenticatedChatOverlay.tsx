@@ -785,11 +785,11 @@ export function AuthenticatedChatOverlay() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={isPersonal ? "Stel je vraag..." : "Vraag over onderwijs..."}
-                  disabled={currentLoading || (isPersonal && !!pendingIntake)}
+                  disabled={currentLoading}
                   className="flex-1 h-9 text-sm rounded-xl"
                   aria-label="Stel je vraag"
                 />
-                <Button type="submit" size="sm" disabled={currentLoading || !input.trim() || (isPersonal && !!pendingIntake)} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
+                <Button type="submit" size="sm" disabled={currentLoading || !input.trim()} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
                   <Send className="h-3.5 w-3.5" />
                 </Button>
               </form>
