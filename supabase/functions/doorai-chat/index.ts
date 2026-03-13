@@ -1053,12 +1053,23 @@ Deno.serve(async (req) => {
         // Phase suggestion from detector
         const phaseSuggestion = detector?.phase_suggestion || undefined;
 
+        // ── 1-op-3 link regel ──────────────────────────────────
+        const assistantCount = messages.filter(m => m.role === "assistant").length;
+        const LINK_REQUEST_RE = /\b(link|bron|website|url|waar vind)\b/i;
+        const BRONPLICHTIG_RE = /\b(salaris|kosten|collegegeld|cao|subsidie|route|bevoegdheid)\b/i;
+        const shouldIncludeLinks =
+          intent !== "greeting" && (
+            assistantCount % 3 === 0 ||
+            LINK_REQUEST_RE.test(lastUserMessage) ||
+            (intent === "question" && BRONPLICHTIG_RE.test(lastUserMessage))
+          );
+
         const uiPayload = JSON.stringify({
           actions: followupActions,
           slot_chips: slotChips,
           intake_needed: intakeNeeded,
           corrected_slots: Object.keys(correctedSlots).length > 0 ? correctedSlots : undefined,
-          links: uiLinks,
+          links: shouldIncludeLinks ? uiLinks : [],
           phase_suggestion: phaseSuggestion,
         });
         await writer.write(enc.encode(`event: ui\ndata: ${uiPayload}\n\n`));
