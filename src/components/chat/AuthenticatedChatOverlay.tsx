@@ -64,6 +64,7 @@ export function AuthenticatedChatOverlay() {
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
   const [showTopicPanel, setShowTopicPanel] = useState(false);
+  const [turnVisibility, setTurnVisibility] = useState<TurnVisibility | null>(null);
   // Separate message histories per mode
   const [generalMessages, setGeneralMessages] = useState<Array<{ role: string; content: string }>>([
     { role: "assistant", content: "Hoi! Ik ben DoorAI, de wegwijzer van Onderwijsloket Rotterdam. Hoe kan ik je helpen?" },
