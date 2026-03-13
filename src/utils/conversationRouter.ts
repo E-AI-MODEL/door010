@@ -59,11 +59,11 @@ function classifyPersonalMode(s: PersonalTurnSignals): PersonalMode {
   // Backend explicitly said clarify / handoff
   if (s.backendMode === "clarify_batch" || s.backendMode === "handoff") return "clarify";
 
-  // Short assistant reply with no links = likely clarification
-  if (s.assistantContentShort && !s.hasLinks) return "clarify";
-
   // Has actions but no links → guide
   if (s.hasActions && !s.hasLinks) return "guide";
+
+  // Short assistant reply with no actions/links = likely clarification
+  if (s.assistantContentShort && !s.hasActions && !s.hasLinks) return "clarify";
 
   return "answer";
 }
