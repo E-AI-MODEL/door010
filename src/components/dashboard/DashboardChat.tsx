@@ -60,6 +60,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
   });
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
+  const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const profile = { current_phase: currentPhase, preferred_sector: preferredSector };
 
