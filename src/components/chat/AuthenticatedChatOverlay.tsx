@@ -379,11 +379,11 @@ export function AuthenticatedChatOverlay() {
       // ── Run conversation router to decide what UI to show ──
       const vis = decideConversationMode({
         pipeline: "personal",
-        hasActions: latestActions.length > 0 || (assistantContent.length > 0 && latestActions.length > 0),
-        hasLinks: latestLinks.length > 0,
-        hasPhaseSuggestion: !!pendingPhaseSuggestion,
-        hasReflectionWarning: !!reflectionWarning,
-        backendMode: undefined,
+        hasActions: turnHasActions,
+        hasLinks: turnHasLinks,
+        hasPhaseSuggestion: turnHasPhaseSuggestion,
+        hasReflectionWarning: turnHasReflectionWarning,
+        backendMode: turnBackendMode,
         assistantContentShort: assistantContent.split(/[.!?]+/).filter(s => s.trim().length > 5).length <= 2,
       });
       setTurnVisibility(vis);
