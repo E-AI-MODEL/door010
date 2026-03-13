@@ -646,11 +646,12 @@ export function AuthenticatedChatOverlay() {
                     </button>
                   )}
                   <button
-                    onClick={() => setIsExpanded(!isExpanded)}
+                    onClick={cycleSize}
                     className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground"
-                    aria-label={isExpanded ? "Verklein" : "Vergroot"}
+                    aria-label={widgetSize === "fullscreen" ? "Verklein" : "Vergroot"}
+                    title={widgetSize === "compact" ? "Groter" : widgetSize === "expanded" ? "Volledig scherm" : "Compact"}
                   >
-                    {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                    {widgetSize === "fullscreen" ? <Minimize2 className="h-3.5 w-3.5" /> : widgetSize === "expanded" ? <Square className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
                   </button>
                   <button
                     onClick={() => setIsOpen(false)}
