@@ -331,13 +331,10 @@ function computeLinks(
   return [...uniq.values()].slice(0, 6);
 }
 
-// Compute markdown links to inject into the prompt context (max 4)
-function computeTextLinks(uiLinks: UiLink[], faqSourceLinks: UiLink[]): string {
-  // Prioritize: internal pages, then top external, then FAQ sources
-  const all = [...uiLinks, ...faqSourceLinks];
-  const uniq = new Map<string, UiLink>();
-  for (const l of all) uniq.set(l.href, l);
-  const selected = [...uniq.values()].slice(0, 4);
+// Alleen externe FAQ-bronlinks injecteren — geen interne pagina's die toch al als chip verschijnen
+function computeTextLinks(faqSourceLinks: UiLink[]): string {
+  const external = faqSourceLinks.filter(l => l.href.startsWith("http"));
+  const selected = external.slice(0, 2);
   if (selected.length === 0) return "";
   return selected.map(l => `- [${l.label}](${l.href})`).join("\n");
 }
