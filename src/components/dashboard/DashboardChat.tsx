@@ -288,6 +288,11 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
                 });
               }
 
+              // Handle phase_suggestion from backend
+              if (parsed.phase_suggestion && parsed.phase_suggestion.from && parsed.phase_suggestion.to) {
+                setPendingPhaseSuggestion(parsed.phase_suggestion);
+              }
+
               // Check for structured meta
               const structured = parseStructuredMeta(parsed);
               if (structured) {
