@@ -12,6 +12,7 @@ import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/u
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
 import { IntakeSheet } from "@/components/chat/IntakeSheet";
+import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
 
