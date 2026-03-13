@@ -469,8 +469,20 @@ export function AuthenticatedChatOverlay() {
         ...prev,
         { role: "assistant", content: "Sorry, er ging iets mis. Probeer het later opnieuw." },
       ]);
+      setTurnVisibility(null);
     } finally {
       setGeneralLoading(false);
+
+      // ── Run conversation router for general pipeline ──
+      const vis = decideConversationMode({
+        pipeline: "general",
+        hasActions: generalActions.length > 0,
+        hasLinks: generalLinks.length > 0,
+        hasExternalResults: false,
+        offersExternalSearch: false,
+        assistantContentShort: false,
+      });
+      setTurnVisibility(vis);
     }
   };
 
