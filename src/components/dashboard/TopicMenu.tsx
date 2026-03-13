@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight, MessageCircle, ExternalLink, Sparkles, Send, BookOpen, Lightbulb } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageCircle, ExternalLink, Send, BookOpen, Lightbulb } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { phaseData, type OrientationPhase } from "@/data/dashboard-phases";
