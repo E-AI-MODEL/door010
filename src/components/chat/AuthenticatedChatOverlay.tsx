@@ -210,13 +210,10 @@ export function AuthenticatedChatOverlay() {
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", text: m.content }));
 
-      // Pass dismissed slots separately — NOT merged into known_slots
       const detector = runPhaseDetector({
         conversation: conversationTurns,
         known_slots: knownSlots,
         current_phase_ui: currentPhase,
-        previous_next_slot: lastOfferedSlot as any,
-        dismissed_slots: dismissedIntakeSlots,
       });
 
       setKnownSlots(detector.known_slots);
