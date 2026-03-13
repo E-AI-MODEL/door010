@@ -200,6 +200,7 @@ export function AuthenticatedChatOverlay() {
     setLatestActions([]);
     setLatestLinks([]);
     setReflectionWarning(null);
+    setTurnVisibility(null);
 
     let assistantContent = "";
 
