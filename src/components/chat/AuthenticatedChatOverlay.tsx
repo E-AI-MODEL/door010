@@ -125,14 +125,18 @@ export function AuthenticatedChatOverlay() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, pendingIntake, pendingPhaseSuggestion]);
 
+  // Use ref for sendMessage to avoid stale closures in event listeners
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
   // Listen for external messages (from TopicMenu)
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.message) {
         setIsOpen(true);
-        // Small delay so overlay opens first
-        setTimeout(() => sendMessage(detail.message), 100);
+        setChatMode("personal");
+        setTimeout(() => sendMessageRef.current(detail.message), 100);
       }
     };
     window.addEventListener("doorai-send-message", handler);
