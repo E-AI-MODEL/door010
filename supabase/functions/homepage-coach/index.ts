@@ -18,6 +18,51 @@ function classifyAnswerType(msg: string): AnswerType {
   return "verkenning";
 }
 
+// ── Output validation & repair ─────────────────────────────────
+const FORBIDDEN_TERMS = [
+  "peildatum", "kennisbank", "als ai", "goed dat je dit vraagt",
+  "ik begrijp je helemaal", "je moet", "scenario",
+  "globaal zo uit",
+];
+
+function replaceDashes(text: string): string {
+  return text.replace(/[\u2014\u2013]/g, "-");
+}
+
+function validateAndRepair(draft: string, maxSentences: number): { text: string; issues: string[]; repaired: boolean } {
+  let text = replaceDashes(draft);
+  const issues: string[] = [];
+
+  // Check forbidden terms
+  const lower = text.toLowerCase();
+  for (const phrase of FORBIDDEN_TERMS) {
+    if (lower.includes(phrase)) {
+      issues.push(`Bevat verboden term: "${phrase}"`);
+    }
+  }
+
+  // Check bracket-labels (independent of length)
+  if (/\[[A-Z][^\]]{1,30}\]/.test(text)) {
+    issues.push("Bevat bracket-labels zoals [Label]");
+    text = text.replace(/\[[A-Z][^\]]{1,30}\]\s*/g, "");
+  }
+
+  // Check sentence length
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 5);
+  if (sentences.length > maxSentences) {
+    issues.push(`Te lang: ${sentences.length} zinnen (max ${maxSentences})`);
+    text = sentences.slice(0, maxSentences).join(" ").trim();
+  }
+
+  // Check dashes
+  if (/[\u2014\u2013]/.test(text)) {
+    issues.push("Bevat em-dash of en-dash");
+    text = replaceDashes(text);
+  }
+
+  return { text, issues, repaired: issues.length > 0 };
+}
+
 // ── System prompt ──────────────────────────────────────────────
 const SITE_GUIDE_PROMPT = `Je bent DoorAI, de site-gids van Onderwijsloket Rotterdam. Je helpt bezoekers de juiste pagina te vinden.
 
@@ -43,6 +88,12 @@ Je bent een warme, nuchtere wegwijzer: menselijk, direct, vriendelijk. Je helpt 
 - "Wat is de beste route voor jou?"
 - "Je moet ..."
 - "Dat weet ik niet." (zonder vervolg)
+
+## VERBODEN PATRONEN
+- GEEN tekst tussen vierkante haken: [Landelijk], [Regionaal], [Stap 1], etc.
+- GEEN opsommingen, genummerde lijsten, stappen-overzichten.
+- GEEN subkopjes of structurering. Schrijf gewoon lopende tekst.
+- NOOIT het woord "scenario" of "scenario's".
 
 ## VOORKEURSZINNEN (afwisselen)
 - "Helder."
@@ -108,10 +159,6 @@ interface RequestBody {
   messages: ChatMessage[];
 }
 
-function replaceDashes(text: string): string {
-  return text.replace(/[\u2014\u2013]/g, "-");
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -125,7 +172,7 @@ Deno.serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Server-side classify before streaming
+    // Server-side classify before calling LLM
     const lastUserMsg = [...messages].reverse().find(m => m.role === "user")?.content?.trim() ?? "";
     const answerType = classifyAnswerType(lastUserMsg);
     const mode = "public";
@@ -139,39 +186,30 @@ Deno.serve(async (req) => {
 
     // ── Dynamic actions based on conversation context ──
     function buildActions(): Array<{ label: string; value: string }> {
-      // Greeting: broad openers
       if (answerType === "begroeting") {
         return [
           { label: "Welke route past bij mij?", value: "Welke route past bij mij om leraar te worden?" },
           { label: "Ik werk al en wil overstappen", value: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
         ];
       }
-
-      // If no sector known yet after first message, nudge
       if (!mentionsSector && msgCount >= 1) {
         return [
           { label: "Basisonderwijs (PO)", value: "Ik ben geïnteresseerd in het basisonderwijs." },
           { label: "Voortgezet onderwijs (VO)", value: "Ik ben geïnteresseerd in het voortgezet onderwijs." },
         ];
       }
-
-      // Sector known but no route discussed yet
       if (mentionsSector && !mentionsRoute) {
         return [
           { label: "Welke routes zijn er?", value: "Welke opleidingsroutes zijn er voor mij?" },
           { label: "Bekijk vacatures", value: "Zijn er vacatures in het onderwijs?" },
         ];
       }
-
-      // Route discussed, deepen
       if (mentionsRoute) {
         return [
           { label: "Bekijk evenementen", value: "Zijn er open dagen of informatie-avonden?" },
           { label: "Maak een account", value: "Hoe kan ik een account aanmaken voor persoonlijk advies?" },
         ];
       }
-
-      // Default: contextual deepeners
       return [
         { label: "Vertel me meer", value: "Kun je daar meer over vertellen?" },
         { label: "Bekijk opleidingen", value: "Welke opleidingsroutes zijn er?" },
@@ -203,6 +241,9 @@ Deno.serve(async (req) => {
           ],
     };
 
+    // ── Non-streaming LLM call for draft validation ──
+    const maxSentences = answerType === "begroeting" ? 2 : 3;
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -215,7 +256,7 @@ Deno.serve(async (req) => {
           { role: "system", content: SITE_GUIDE_PROMPT },
           ...messages,
         ],
-        stream: true,
+        stream: false,
       }),
     });
 
@@ -240,7 +281,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Stream: send meta first, then proxy upstream with dash filter, then close
+    const llmData = await response.json();
+    const rawDraft = llmData.choices?.[0]?.message?.content ?? "";
+
+    // ── Validate & repair before streaming ──
+    const validated = validateAndRepair(rawDraft, maxSentences);
+    const finalText = validated.text;
+
+    if (validated.issues.length > 0) {
+      console.warn("Homepage-coach validation issues (repaired):", validated.issues);
+    }
+
+    // ── Stream validated response word-by-word for smooth UX ──
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const enc = new TextEncoder();
@@ -250,45 +302,16 @@ Deno.serve(async (req) => {
         // Send server-side meta as first data event
         await writer.write(enc.encode(`data: ${JSON.stringify({ meta })}\n\n`));
 
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          let nlIdx: number;
-          while ((nlIdx = buffer.indexOf("\n")) !== -1) {
-            const line = buffer.slice(0, nlIdx);
-            buffer = buffer.slice(nlIdx + 1);
-
-            if (line.startsWith("data: ")) {
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr === "[DONE]") {
-                await writer.write(enc.encode("data: [DONE]\n\n"));
-                continue;
-              }
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const content = parsed.choices?.[0]?.delta?.content;
-                if (typeof content === "string") {
-                  parsed.choices[0].delta.content = replaceDashes(content);
-                }
-                await writer.write(enc.encode(`data: ${JSON.stringify(parsed)}\n\n`));
-              } catch {
-                await writer.write(enc.encode(line + "\n"));
-              }
-            } else {
-              await writer.write(enc.encode(line + "\n"));
-            }
-          }
+        // Stream the validated text word-by-word
+        const words = finalText.split(/(\s+)/);
+        for (const word of words) {
+          const chunk = {
+            choices: [{ delta: { content: word }, index: 0 }],
+          };
+          await writer.write(enc.encode(`data: ${JSON.stringify(chunk)}\n\n`));
         }
 
-        if (buffer.trim()) {
-          await writer.write(enc.encode(buffer + "\n"));
-        }
+        await writer.write(enc.encode("data: [DONE]\n\n"));
       } catch (e) {
         console.error("Stream error:", e);
       } finally {

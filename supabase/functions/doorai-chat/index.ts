@@ -997,11 +997,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    const reflectionPass = reflectionIssues.length === 0;
+    // ── Re-validate the final draft after any repairs ──────────
+    const finalIssues: string[] = [];
+    const finalLower = draft.toLowerCase();
+    for (const phrase of REFLECTION_FORBIDDEN) {
+      if (finalLower.includes(phrase)) {
+        finalIssues.push(`Bevat verboden term: "${phrase}"`);
+      }
+    }
+    if (/\[[A-Z][^\]]{1,30}\]/.test(draft)) {
+      finalIssues.push("Bevat bracket-labels zoals [Label]");
+    }
+    const finalSentences = draft.split(/[.!?]+/).filter(s => s.trim().length > 5);
+    if (finalSentences.length > maxS * 1.2) {
+      finalIssues.push(`Te lang: ${finalSentences.length} zinnen (max ~${maxS})`);
+    }
+    if (/[\u2014\u2013]/.test(draft)) {
+      finalIssues.push("Bevat em-dash of en-dash");
+    }
+
+    const reflectionPass = finalIssues.length === 0;
+    const wasRepaired = reflectionIssues.length > 0 && reflectionPass;
     const reflectionPayload = JSON.stringify({
       pass: reflectionPass,
-      issues: reflectionIssues,
-      repaired: !reflectionPass,
+      issues: finalIssues,
+      repaired: wasRepaired,
     });
 
     // ── Stream the validated/repaired response to client ─────────
