@@ -717,20 +717,8 @@ export function AuthenticatedChatOverlay() {
               <div />
             </div>
 
-            {/* Intake — personal mode only */}
-            {isPersonal && pendingIntake && (
-              <div className="px-4 pb-2 shrink-0">
-                <IntakeSheet
-                  questions={pendingIntake}
-                  onSubmit={handleIntakeSubmit}
-                  onDismiss={handleIntakeDismiss}
-                  compact
-                />
-              </div>
-            )}
-
             {/* Phase confirmation — personal mode only */}
-            {isPersonal && pendingPhaseSuggestion && !pendingIntake && (
+            {isPersonal && pendingPhaseSuggestion && (
               <div className="px-4 pb-2 shrink-0">
                 <PhaseConfirmation
                   message={pendingPhaseSuggestion.message}
