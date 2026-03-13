@@ -27,6 +27,12 @@ export type DetectorPhaseCode =
   | "matching"
   | "voorbereiding";
 
+export interface ExitCriterion {
+  type: "slots_present" | "intent";
+  slots?: string[];
+  intent?: string;
+}
+
 export interface PhaseRules {
   schema_version: string;
   audience?: { label: string; code: string };
@@ -38,6 +44,7 @@ export interface PhaseRules {
     sort?: number;
     required_slots: SlotKey[];
     optional_slots: SlotKey[];
+    exit_criteria?: ExitCriterion[];
     next_phase_default?: DetectorPhaseCode;
   }>;
 }
