@@ -747,8 +747,8 @@ export function AuthenticatedChatOverlay() {
               <div />
             </div>
 
-            {/* Phase confirmation — personal mode only */}
-            {isPersonal && pendingPhaseSuggestion && (
+            {/* Phase confirmation — only when router allows */}
+            {isPersonal && pendingPhaseSuggestion && (turnVisibility?.showPhaseSuggestion !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 <PhaseConfirmation
                   message={pendingPhaseSuggestion.message}
@@ -759,8 +759,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Actions — max 1 doorvraagchip */}
-            {currentActions.length > 0 && (
+            {/* Actions — only when router allows */}
+            {currentActions.length > 0 && (turnVisibility?.showActionChip !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 <ResponseActions
                   primaryFollowup={currentActions[0] ? { label: currentActions[0].label, value: currentActions[0].value } : null}
@@ -771,8 +771,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Link chip — max 1 */}
-            {currentLinks.length > 0 && !currentLoading && (
+            {/* Link chip — only when router allows */}
+            {currentLinks.length > 0 && !currentLoading && (turnVisibility?.showLinkChip !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 {(() => {
                   const link = currentLinks[0];
@@ -798,8 +798,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Reflection warning — personal mode only */}
-            {isPersonal && reflectionWarning && !currentLoading && (
+            {/* Reflection warning — only when router allows */}
+            {isPersonal && reflectionWarning && !currentLoading && (turnVisibility?.showReflectionWarning !== false) && (
               <div className="px-4 pb-2 shrink-0">
                 <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
                   ⚠️ Dit antwoord is mogelijk onvolledig of bevat aandachtspunten.
