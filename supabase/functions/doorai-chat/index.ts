@@ -1025,8 +1025,12 @@ Deno.serve(async (req) => {
           return [];
         }
 
-        // Intake trigger — now includes role_interest as third core slot
-        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "role_interest", "admission_requirements"];
+        // Intake trigger — only school_type and admission_requirements (role_interest is organic)
+        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "admission_requirements"];
+        const INTAKE_QUESTIONS: Record<string, string> = {
+          school_type: "Naar welke sector gaat je interesse uit?",
+          admission_requirements: "Wat is je hoogst afgeronde vooropleiding?",
+        };
         const intakeNeeded =
           detector?.next_slot_key !== undefined &&
           INTAKE_TRIGGER_SLOTS.includes(detector.next_slot_key as SlotKey) &&
