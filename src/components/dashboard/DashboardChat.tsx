@@ -383,7 +383,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
     }
   }, [externalMessage]);
 
-  const visibleMessages = messages.slice(-12);
+  const visibleMessages = messages.slice(-8);
 
   return (
     <motion.div
