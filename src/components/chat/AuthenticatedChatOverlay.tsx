@@ -741,8 +741,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Link chip — max 1, hidden during intake */}
-            {currentLinks.length > 0 && (!isPersonal || !pendingIntake) && !currentLoading && (
+            {/* Link chip — max 1 */}
+            {currentLinks.length > 0 && !currentLoading && (
               <div className="px-4 pb-2 shrink-0">
                 {(() => {
                   const link = currentLinks[0];
