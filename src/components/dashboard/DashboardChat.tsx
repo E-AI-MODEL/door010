@@ -375,7 +375,15 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
     setPendingPhaseSuggestion(null);
   }, []);
 
-  const visibleMessages = messages.slice(-6);
+  // Handle external messages from TopicMenu
+  useEffect(() => {
+    if (externalMessage && !isLoading) {
+      sendMessage(externalMessage);
+      onExternalMessageSent?.();
+    }
+  }, [externalMessage]);
+
+  const visibleMessages = messages.slice(-12);
 
   return (
     <motion.div
