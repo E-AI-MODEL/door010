@@ -213,10 +213,19 @@ export function AuthenticatedChatOverlay() {
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", text: m.content }));
 
+      // Merge dismissed slots as "dismissed" so detector skips them
+      const effectiveSlots: KnownSlots = { ...knownSlots };
+      for (const slot of dismissedIntakeSlots) {
+        if (!effectiveSlots[slot as keyof KnownSlots]) {
+          (effectiveSlots as Record<string, string>)[slot] = "dismissed";
+        }
+      }
+
       const detector = runPhaseDetector({
         conversation: conversationTurns,
-        known_slots: knownSlots,
+        known_slots: effectiveSlots,
         current_phase_ui: currentPhase,
+        previous_next_slot: lastOfferedSlot as any,
       });
 
       setKnownSlots(detector.known_slots);
