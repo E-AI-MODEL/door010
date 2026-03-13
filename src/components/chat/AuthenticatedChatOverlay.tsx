@@ -258,6 +258,12 @@ export function AuthenticatedChatOverlay() {
       const decoder = new TextDecoder();
       let buffer = "";
       let currentEventType = "";
+      // Track signals locally for the router (avoids stale state)
+      let turnHasActions = false;
+      let turnHasLinks = false;
+      let turnHasPhaseSuggestion = false;
+      let turnHasReflectionWarning = false;
+      let turnBackendMode: string | undefined;
 
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
