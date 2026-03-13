@@ -312,7 +312,10 @@ function computeLinks(
   const p = (phase || "interesseren").toLowerCase();
   const msg = lastMsg.toLowerCase();
 
-  links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
+  // Only add routes link when contextually relevant (not always)
+  if (ROUTE_TOPIC_RE.test(msg) || p === "orienteren" || p === "beslissen") {
+    links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
+  }
 
   if (p === "matchen" || LIVE_TOPIC_RE.test(msg)) {
     links.push({ label: "Vacatures bekijken", href: "/vacatures" });
@@ -339,7 +342,7 @@ function computeLinks(
     }
   }
 
-  if (links.length <= 1) links.push({ label: "Events en meelopen", href: "/events" });
+  // No forced fallback — only show links when relevant
 
   const uniq = new Map<string, UiLink>();
   for (const l of links) uniq.set(l.href, l);
@@ -1025,8 +1028,12 @@ Deno.serve(async (req) => {
           return [];
         }
 
-        // Intake trigger — now includes role_interest as third core slot
-        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "role_interest", "admission_requirements"];
+        // Intake trigger — only school_type and admission_requirements (role_interest is organic)
+        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "admission_requirements"];
+        const INTAKE_QUESTIONS: Record<string, string> = {
+          school_type: "Naar welke sector gaat je interesse uit?",
+          admission_requirements: "Wat is je hoogst afgeronde vooropleiding?",
+        };
         const intakeNeeded =
           detector?.next_slot_key !== undefined &&
           INTAKE_TRIGGER_SLOTS.includes(detector.next_slot_key as SlotKey) &&
@@ -1053,21 +1060,24 @@ Deno.serve(async (req) => {
         // Phase suggestion from detector
         const phaseSuggestion = detector?.phase_suggestion || undefined;
 
-        // ── 1-op-3 link regel ──────────────────────────────────
-        const assistantCount = messages.filter(m => m.role === "assistant").length;
+        // ── Intent-based link logic (replaces 1-op-3 rule) ──
         const LINK_REQUEST_RE = /\b(link|bron|website|url|waar vind)\b/i;
-        const BRONPLICHTIG_RE = /\b(salaris|kosten|collegegeld|cao|subsidie|route|bevoegdheid)\b/i;
+        const BRONPLICHTIG_RE = /\b(salaris|kosten|collegegeld|cao|subsidie|route|bevoegdheid|vacature|events?|open dag)\b/i;
         const shouldIncludeLinks =
-          intent !== "greeting" && (
-            assistantCount % 3 === 0 ||
-            LINK_REQUEST_RE.test(lastUserMessage) ||
-            (intent === "question" && BRONPLICHTIG_RE.test(lastUserMessage))
-          );
+          intent === "question" ||
+          intent === "exploration" ||
+          LINK_REQUEST_RE.test(lastUserMessage) ||
+          BRONPLICHTIG_RE.test(lastUserMessage);
+
+        const intakeQuestionText = intakeNeeded && detector?.next_slot_key
+          ? INTAKE_QUESTIONS[detector.next_slot_key as string] || "Kun je even het volgende aangeven?"
+          : undefined;
 
         const uiPayload = JSON.stringify({
           actions: followupActions,
           slot_chips: slotChips,
           intake_needed: intakeNeeded,
+          intake_question: intakeQuestionText,
           corrected_slots: Object.keys(correctedSlots).length > 0 ? correctedSlots : undefined,
           links: shouldIncludeLinks ? uiLinks : [],
           phase_suggestion: phaseSuggestion,
