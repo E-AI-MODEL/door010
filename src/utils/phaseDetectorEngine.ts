@@ -301,9 +301,13 @@ export function runPhaseDetector(args: {
   const slotChoice = chooseNextSlot(picked.phase, known, args.previous_next_slot);
   const q = pickQuestionForSlot(slotChoice.nextSlot);
 
+  // Count user turns — require at least 4 before suggesting phase transition
+  const userTurns = args.conversation.filter(t => t.role === "user").length;
+  const MIN_TURNS_FOR_PHASE_SUGGESTION = 4;
+
   // Build phase suggestion if exit criteria are met and we'd move to a new phase
   let phaseSuggestion: PhaseDetectorOutput["phase_suggestion"] | undefined;
-  if (picked.exitCriteriaMet && nextPhaseTarget) {
+  if (picked.exitCriteriaMet && nextPhaseTarget && userTurns >= MIN_TURNS_FOR_PHASE_SUGGESTION) {
     const nextUi = DETECTOR_TO_UI[nextPhaseTarget];
     if (nextUi && nextUi !== currentUi) {
       phaseSuggestion = {
