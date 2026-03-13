@@ -366,8 +366,8 @@ export function AuthenticatedChatOverlay() {
 
             // Legacy fallback
             if (parsed.actions && Array.isArray(parsed.actions)) {
-              setLatestActions(parsed.actions.slice(0, 2));
-              if (parsed.links) setLatestLinks((parsed.links as Array<{ label: string; href: string }>).slice(0, 6));
+              setLatestActions(parsed.actions.slice(0, 1));
+              if (parsed.links) setLatestLinks((parsed.links as Array<{ label: string; href: string }>).slice(0, 1));
               continue;
             }
 
