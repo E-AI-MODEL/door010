@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { MessageCircle, X, Send, Bot, Mail, Phone } from "lucide-react";
+import { MessageCircle, X, Send, Bot, Mail, Phone, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,10 +11,11 @@ import { IntakeSheet } from "@/components/chat/IntakeSheet";
 import {
   needsClarification,
   buildIntakeQuestions,
-  classifyAnswerType,
   parseStructuredMeta,
 } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
+import { decideConversationMode } from "@/utils/conversationRouter";
+import type { TurnVisibility } from "@/utils/conversationRouter";
 
 // ===== Types =====
 
@@ -61,6 +62,8 @@ export function PublicChatWidget() {
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
+  const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
+  const [turnVisibility, setTurnVisibility] = useState<TurnVisibility | null>(null);
 
   const [signals, setSignals] = useState<ConversationSignals>({
     sector: "UNK",
@@ -131,6 +134,8 @@ export function PublicChatWidget() {
     setInput("");
     setIsLoading(true);
     setPendingIntake(null);
+    setLatestLinks([]);
+    setTurnVisibility(null);
 
     // Check if intake is needed
     const missingSector = nextSignals.sector === "UNK";
@@ -173,6 +178,10 @@ export function PublicChatWidget() {
       let buffer = "";
       let currentEventType = "";
       let parsedMeta: StructuredResponse | null = null;
+      let turnHasActions = false;
+      let turnHasLinks = false;
+      const hasExternalResults = false;
+      const offersExternalSearch = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -214,6 +223,10 @@ export function PublicChatWidget() {
 
               if (parsedMeta?.primary_followup) pf = parsedMeta.primary_followup;
               if (parsedMeta?.secondary_action) sa = parsedMeta.secondary_action;
+              if (parsedMeta?.verifiedLinks?.length) {
+                setLatestLinks(parsedMeta.verifiedLinks.slice(0, 1).map((link) => ({ label: link.label, href: link.href })));
+                turnHasLinks = true;
+              }
 
               // Fallback: parse actions array from payload
               if (!pf && parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
@@ -221,6 +234,11 @@ export function PublicChatWidget() {
                 if (parsed.actions.length > 1) {
                   sa = { label: parsed.actions[1].label, value: parsed.actions[1].value };
                 }
+              }
+              if (pf || sa) turnHasActions = true;
+              if (parsed.links && Array.isArray(parsed.links)) {
+                setLatestLinks(parsed.links.slice(0, 1));
+                turnHasLinks = parsed.links.length > 0;
               }
 
               setMessages((prev) => {
@@ -249,6 +267,11 @@ export function PublicChatWidget() {
                 if (metaActions.length > 1) {
                   sa = { label: metaActions[1].label, value: metaActions[1].value };
                 }
+                turnHasActions = true;
+              }
+              if (parsed.meta.verified_links && Array.isArray(parsed.meta.verified_links)) {
+                setLatestLinks(parsed.meta.verified_links.slice(0, 1));
+                turnHasLinks = parsed.meta.verified_links.length > 0;
               }
               setMessages((prev) => {
                 const updated = [...prev];
@@ -267,6 +290,11 @@ export function PublicChatWidget() {
             if (parsed.actions && Array.isArray(parsed.actions)) {
               const pf = parsed.actions[0] ? { label: parsed.actions[0].label, value: parsed.actions[0].value } : null;
               const sa = parsed.actions[1] ? { label: parsed.actions[1].label, value: parsed.actions[1].value } : null;
+              turnHasActions = parsed.actions.length > 0;
+              if (parsed.links && Array.isArray(parsed.links)) {
+                setLatestLinks(parsed.links.slice(0, 1));
+                turnHasLinks = parsed.links.length > 0;
+              }
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -296,12 +324,14 @@ export function PublicChatWidget() {
       }
 
       // If no actions came from backend, generate thematic defaults
+      let fallbackAddedActions = false;
       setMessages((prev) => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
         if (last?.role === "assistant" && !last.primaryFollowup) {
+          fallbackAddedActions = true;
           // Use conversation context for better defaults
-          const allText = updated.filter(m => m.role === "user").map(m => m.content.toLowerCase()).join(" ");
+          const allText = updated.filter((m) => m.role === "user").map((m) => m.content.toLowerCase()).join(" ");
           const mentionsRoute = /\b(route|opleiding|zij-instroom|pabo|pdg|lerarenopleiding)\b/i.test(allText);
           const mentionsSalary = /\b(salaris|verdien|loon|cao)\b/i.test(allText);
           const mentionsCosts = /\b(kosten|collegegeld|subsidie|financier)\b/i.test(allText);
@@ -322,6 +352,17 @@ export function PublicChatWidget() {
         }
         return [...updated];
       });
+      if (fallbackAddedActions) turnHasActions = true;
+
+      const vis = decideConversationMode({
+        pipeline: "general",
+        hasActions: turnHasActions,
+        hasLinks: turnHasLinks,
+        hasExternalResults,
+        offersExternalSearch,
+        assistantContentShort: assistantContent.split(/[.!?]+/).filter((s) => s.trim().length > 5).length <= 2,
+      });
+      setTurnVisibility(vis);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
@@ -333,6 +374,7 @@ export function PublicChatWidget() {
           secondaryAction: null,
         },
       ]);
+      setTurnVisibility(null);
     } finally {
       setIsLoading(false);
     }
@@ -481,7 +523,7 @@ export function PublicChatWidget() {
               )}
 
               {/* Action buttons */}
-              {!pendingIntake && !isLoading && (latestFollowups.primaryFollowup || latestFollowups.secondaryAction) && (
+              {!pendingIntake && !isLoading && (latestFollowups.primaryFollowup || latestFollowups.secondaryAction) && (turnVisibility?.showActionChip !== false) && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -494,6 +536,33 @@ export function PublicChatWidget() {
                     compact
                   />
                 </motion.div>
+              )}
+
+              {/* Link chip */}
+              {!pendingIntake && !isLoading && latestLinks.length > 0 && (turnVisibility?.showLinkChip !== false) && (
+                <div className="px-4 pt-2.5 pb-1">
+                  {(() => {
+                    const link = latestLinks[0];
+                    return link.href.startsWith("/") ? (
+                      <Link
+                        to={link.href}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                      >
+                        {link.label}
+                      </Link>
+                    ) : (
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                      >
+                        {link.label}
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    );
+                  })()}
+                </div>
               )}
 
               {/* Input */}
