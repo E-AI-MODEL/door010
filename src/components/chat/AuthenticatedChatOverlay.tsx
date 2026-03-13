@@ -302,15 +302,14 @@ export function AuthenticatedChatOverlay() {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
 
-              // Handle intake_needed — use slot_key from backend, skip if dismissed
-              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
-                const slotKey = parsed.slot_key || "slot_0";
-                setLastOfferedSlot(slotKey);
-                if (!dismissedIntakeSlots.has(slotKey)) {
+              // Handle intake_needed — use slot_key from backend only if present
+              if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips) && parsed.slot_key) {
+                setLastOfferedSlot(parsed.slot_key);
+                if (!dismissedIntakeSlots.has(parsed.slot_key)) {
                   // Use SSOT question text from backend, with simple fallback
                   const intakeQuestion = parsed.intake_question || "Kun je dit even aangeven?";
                   setPendingIntake([{
-                    id: slotKey,
+                    id: parsed.slot_key,
                     question: intakeQuestion,
                     type: "choice",
                     options: parsed.slot_chips.map((c: { label: string }) => c.label),
@@ -542,7 +541,7 @@ export function AuthenticatedChatOverlay() {
     } catch (e) {
       console.warn("Phase update skipped:", e);
     }
-    sendMessage(`Ja, ik wil door naar ${newPhase}.`);
+    sendMessage("Ja, graag.");
   }, [pendingPhaseSuggestion, user]);
 
   const handlePhaseDecline = useCallback(() => {
@@ -771,8 +770,6 @@ export function AuthenticatedChatOverlay() {
             {isPersonal && pendingPhaseSuggestion && !pendingIntake && (
               <div className="px-4 pb-2 shrink-0">
                 <PhaseConfirmation
-                  from={pendingPhaseSuggestion.from}
-                  to={pendingPhaseSuggestion.to}
                   message={pendingPhaseSuggestion.message}
                   onAccept={handlePhaseAccept}
                   onDecline={handlePhaseDecline}
