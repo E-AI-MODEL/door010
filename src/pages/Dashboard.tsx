@@ -98,9 +98,9 @@ export default function Dashboard() {
         <PhaseProgress currentPhase={currentPhase} />
 
         <div className="container py-4 md:py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
             {/* Sidebar: TopicMenu + ProfileCard */}
-            <div className="lg:col-span-4 xl:col-span-3 space-y-4">
+            <div className="md:col-span-4 xl:col-span-3 space-y-4">
               <TopicMenu
                 currentPhase={currentPhase}
                 knownSlots={knownSlots}
@@ -108,13 +108,13 @@ export default function Dashboard() {
                 collapsed
               />
               {/* ProfileCard: hidden on mobile, compact on desktop */}
-              <div className="hidden lg:block">
+              <div className="hidden md:block">
                 <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
               </div>
             </div>
 
             {/* Main content area — now shows a prompt to use the chat overlay */}
-            <div className="lg:col-span-8 xl:col-span-9">
+            <div className="md:col-span-8 xl:col-span-9">
               <div className="rounded-3xl border bg-card shadow-sm p-8 text-center space-y-4">
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                   <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />

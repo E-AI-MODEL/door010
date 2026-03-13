@@ -1,42 +1,41 @@
 
 
-# Fix: Chat placeholders + profiel zichtbaarheid + draft controle
+# Plan: FAQ-data verrijken en importeren
 
-## Probleem 1: Placeholders in chatantwoorden
+## Wat ik ga doen
 
-De screenshot toont `[Landelijk]` en `[Regionaal]` als platte tekst in het antwoord. Dit zijn bracket-labels die het LLM genereert ondanks de "geen opsommingen" regel. Het antwoord is ook te lang (7+ zinnen vs max 3).
+De geüploade `ingest_faqs_payload_DOORTJE_ZIB_MVP_v2_deduped.json` (17 FAQ's) bevat goede vragen maar heeft twee problemen:
 
-**Oorzaak**: Het systeem-prompt verbiedt bullets en genummerde lijsten, maar niet bracket-labels (`[Label]`). De reflectielaag controleert op verboden termen en zinlengte, maar:
-- Geen detectie van `[...]`-patronen
-- Zinslimiet is te ruim: `maxS * 1.5` (= 6 zinnen bij max 4)
+1. **Dunne antwoorden** — items 5, 6, 7, 8 bevatten alleen "Vervolgvragen" zonder inhoudelijk antwoord
+2. **Gemixte antwoorden** — item 1 en 2 bevatten antwoorden die niet bij de vraag passen (salaris-info bij "intensiteit", buitenland-info bij "wat is zij-instroom")
 
-**Fix in `doorai-chat/index.ts`**:
-- Systeem-prompt uitbreiden: expliciet verbieden van `[Label]`-stijl, subkopjes, en elke vorm van structurering
-- Reflectielaag: detectie van `[...]` bracket-labels toevoegen als verboden patroon
-- Multiplier verlagen van `1.5` naar `1.2` voor strengere lengte-controle
-- Toevoegen van `scenario` en `globaal zo uit` aan verboden termen (zichtbaar in screenshot)
+Ik ga:
 
-## Probleem 2: Profiel niet zichtbaar op dashboard
+### Stap 1: FAQ-data opschonen en verrijken
 
-Bij 1021px viewport is de gebruiker net onder de `lg` breakpoint (1024px). De `ProfileCard` heeft `hidden lg:block` en is daardoor onzichtbaar. De gebruiker mist het profieloverzicht op het dashboard.
+Een verbeterde versie van het JSON-bestand aanmaken als `src/data/faq-seed.json` met:
 
-**Fix in `Dashboard.tsx`**:
-- Breakpoint aanpassen van `lg:block` naar `md:block` (768px+) zodat het profiel ook op tablets en smalle desktops zichtbaar is
-- Grid aanpassen naar `md:grid-cols-12` layout
+- **17 bestaande items opschonen**: antwoorden koppelen aan de juiste vraag, dunne items aanvullen met kennis uit `KNOWLEDGE_BLOCKS` en `ROUTE_SUMMARIES`
+- **~15 nieuwe items toevoegen** op basis van de hardcoded `KNOWLEDGE_BLOCKS` die nu in `doorai-chat` staan (salaris, kosten, bevoegdheden, PDG, verwantschap, SOOL-subsidie, etc.)
+- **Categorieën standaardiseren**: `route`, `salaris`, `toelating`, `bevoegdheid`, `subsidie`, `algemeen`, `duur`, `vacature`
+- **Alias-tags behouden** — deze zijn waardevol voor full-text search
 
-## Probleem 3: "Onderwerpen" uitklapmenu op dashboard
+### Stap 2: Importeren via `ingest-faqs`
 
-De tweede screenshot toont het Onderwerpen-menu als collapsed dropdown. Op 1021px viewport (< lg) verschijnt het als een inklapbaar menu. Dit is correct gedrag, maar kan beter: standaard open op medium schermen.
+De opgeschoonde dataset importeren met `mode: "replace"` zodat de 3 test-items worden vervangen.
 
-**Fix in `TopicMenu.tsx`**:
-- Mobile toggle breakpoint aanpassen van `lg:hidden` naar `md:hidden`
-- Desktop header breakpoint aanpassen van `hidden lg:flex` naar `hidden md:flex`
+### Concreet resultaat
 
-## Bestanden
+~32 FAQ-items in de database die dekken:
 
-| Bestand | Actie |
-|---------|-------|
-| `supabase/functions/doorai-chat/index.ts` | Systeem-prompt + reflectielaag verscherpen |
-| `src/pages/Dashboard.tsx` | ProfileCard en grid breakpoints aanpassen |
-| `src/components/dashboard/TopicMenu.tsx` | Menu breakpoints aanpassen naar `md` |
+| Bron | Items |
+|------|-------|
+| Geüploade ZIB-data (opgeschoond) | 17 |
+| KNOWLEDGE_BLOCKS → FAQ conversie | ~15 |
+
+### Wat NIET verandert
+
+- De `KNOWLEDGE_BLOCKS` in `doorai-chat` blijven als fallback
+- De `ingest-faqs` edge function blijft ongewijzigd
+- De hybride retrieval-logica blijft ongewijzigd
 

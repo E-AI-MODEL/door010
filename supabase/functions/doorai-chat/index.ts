@@ -613,6 +613,8 @@ const DOORAI_CORE = `Je bent DoorAI, de orientatie-assistent van Onderwijsloket 
 ## BELANGRIJKSTE REGEL: KORT ANTWOORDEN
 - MAXIMAAL 3 ZINNEN per antwoord. Dit is de allerbelangrijkste regel.
 - Geen opsommingen, geen genummerde lijsten, geen stappen-overzichten.
+- GEEN tekst tussen vierkante haken zoals [Landelijk], [Regionaal], [Label]. Nooit.
+- GEEN subkopjes, geen structurering, geen "scenario's". Schrijf gewoon lopende tekst.
 - Eén kernpunt per antwoord. Niet alles tegelijk uitleggen.
 - Stel maximaal 1 vervolgvraag per beurt, altijd als laatste zin.
 
@@ -638,8 +640,10 @@ const DOORAI_CORE = `Je bent DoorAI, de orientatie-assistent van Onderwijsloket 
 ## Verboden
 - "Goed dat je dit vraagt." / "Ik begrijp je helemaal." / "Als AI kan ik..." / "Je moet ..."
 - Opsommingen, stappen, bullets, genummerde lijsten.
+- Tekst tussen vierkante haken: [Landelijk], [Regionaal], [Stap 1], etc.
 - Het woord "kennisbank" of "peildatum".
 - Zinnen als "Het traject ziet er globaal zo uit:" gevolgd door stappen.
+- Het woord "scenario" of "scenario's".
 
 ## Links
 - Linkchips verschijnen automatisch onder je antwoord. Herhaal ze NOOIT in de lopende tekst.
@@ -960,6 +964,7 @@ Deno.serve(async (req) => {
           "peildatum", "kennisbank", "als ai", "goed dat je dit vraagt",
           "ik begrijp je helemaal", "je moet", "scenario",
           "achtergrondinformatie", "dynamische context",
+          "globaal zo uit",
         ];
         const reflectionIssues: string[] = [];
         const lowerFull = fullResponse.toLowerCase();
@@ -975,7 +980,12 @@ Deno.serve(async (req) => {
         };
         const maxS = intentMaxSentences[intent] ?? 4;
         const sentences = fullResponse.split(/[.!?]+/).filter(s => s.trim().length > 5);
-        if (sentences.length > maxS * 1.5) {
+        if (sentences.length > maxS * 1.2) {
+
+        // Detect bracket-labels like [Landelijk], [Stap 1], etc.
+        if (/\[[A-Z][^\]]{1,30}\]/.test(fullResponse)) {
+          reflectionIssues.push("Bevat bracket-labels zoals [Label]");
+        }
           reflectionIssues.push(`Te lang: ${sentences.length} zinnen (max ~${maxS})`);
         }
 

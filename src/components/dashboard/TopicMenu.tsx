@@ -408,7 +408,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
       {/* Mobile toggle */}
       <button
         onClick={() => setMenuOpen(!menuOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 lg:hidden"
+        className="w-full flex items-center justify-between px-4 py-3 md:hidden"
       >
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -418,13 +418,13 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
       </button>
 
       {/* Desktop: always visible header */}
-      <div className="hidden lg:flex items-center gap-2 px-4 py-3 border-b border-border">
+      <div className="hidden md:flex items-center gap-2 px-4 py-3 border-b border-border">
         <Sparkles className="h-4 w-4 text-primary" />
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Onderwerpen</span>
       </div>
 
       {/* Content */}
-      <div className={`${menuOpen ? "block" : "hidden"} lg:block`}>
+      <div className={`${menuOpen ? "block" : "hidden"} md:block`}>
         {groups.map((group, i) => (
           <TopicGroupSection
             key={i}
@@ -432,7 +432,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
             onSendMessage={(msg) => {
               onSendMessage(msg);
               // Auto-collapse on mobile after sending
-              if (window.innerWidth < 1024) setMenuOpen(false);
+              if (window.innerWidth < 768) setMenuOpen(false);
             }}
             defaultOpen={i === 0}
           />
