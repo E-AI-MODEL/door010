@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight, MessageCircle, ExternalLink, Sparkles, Send, BookOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageCircle, ExternalLink, Sparkles, Send, BookOpen, Lightbulb } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { phaseData, type OrientationPhase } from "@/data/dashboard-phases";
 import type { KnownSlots } from "@/utils/phaseDetectorEngine";
+import { loadPhaseDetectorConfig, type DetectorPhaseCode } from "@/utils/phaseDetectorParser";
 
 interface SubTopic {
   label: string;
@@ -173,6 +174,49 @@ function getSlotTopics(slots: KnownSlots): TopicMenuItem[] {
     });
   }
   return items;
+}
+
+const UI_TO_DETECTOR: Record<OrientationPhase, DetectorPhaseCode> = {
+  interesseren: "interesse",
+  orienteren: "orientatie",
+  beslissen: "beslissing",
+  matchen: "matching",
+  voorbereiden: "voorbereiding",
+};
+
+function getSSOTTopics(phase: OrientationPhase): TopicMenuItem[] {
+  try {
+    const { questions } = loadPhaseDetectorConfig();
+    const detectorPhase = UI_TO_DETECTOR[phase];
+    const phaseQIds = questions.phase_to_questions?.[detectorPhase];
+    if (!phaseQIds || !questions.question_catalog) return [];
+
+    // Group catalog entries by theme
+    const themeMap = new Map<string, SubTopic[]>();
+    for (const ref of phaseQIds) {
+      const entry = questions.question_catalog[ref.question_id];
+      if (!entry?.question_text || entry.question_text.length > 120) continue;
+      const theme = entry.theme || "Overig";
+      if (!themeMap.has(theme)) themeMap.set(theme, []);
+      const subs = themeMap.get(theme)!;
+      if (subs.length < 4) {
+        subs.push({ label: entry.question_text.slice(0, 60), chatMessage: entry.question_text });
+      }
+    }
+
+    // Convert to menu items, max 5 themes
+    const items: TopicMenuItem[] = [];
+    let count = 0;
+    for (const [theme, subs] of themeMap) {
+      if (count >= 5) break;
+      if (subs.length === 0) continue;
+      items.push({ label: theme.replace(/^\d+\.\s*/, ""), subTopics: subs });
+      count++;
+    }
+    return items;
+  } catch {
+    return [];
+  }
 }
 
 const FAQ_TOPICS: TopicMenuItem[] = [
@@ -374,6 +418,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
 
   const phaseTopics = getPhaseTopics(currentPhase);
   const slotTopics = getSlotTopics(knownSlots);
+  const ssotTopics = useMemo(() => getSSOTTopics(currentPhase), [currentPhase]);
 
   const groups: TopicGroup[] = [
     {
@@ -388,6 +433,14 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
       title: "Op basis van jouw profiel",
       icon: BookOpen,
       items: slotTopics,
+    });
+  }
+
+  if (ssotTopics.length > 0) {
+    groups.push({
+      title: "Meer onderwerpen",
+      icon: Lightbulb,
+      items: ssotTopics,
     });
   }
 

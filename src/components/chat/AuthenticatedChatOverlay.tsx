@@ -60,6 +60,7 @@ export function AuthenticatedChatOverlay() {
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const [dismissedIntakeSlots, setDismissedIntakeSlots] = useState<Set<string>>(new Set());
+  const [lastOfferedSlot, setLastOfferedSlot] = useState<string | undefined>(undefined);
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
   const [showTopicPanel, setShowTopicPanel] = useState(false);
@@ -212,10 +213,19 @@ export function AuthenticatedChatOverlay() {
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", text: m.content }));
 
+      // Merge dismissed slots as "dismissed" so detector skips them
+      const effectiveSlots: KnownSlots = { ...knownSlots };
+      for (const slot of dismissedIntakeSlots) {
+        if (!effectiveSlots[slot as keyof KnownSlots]) {
+          (effectiveSlots as Record<string, string>)[slot] = "dismissed";
+        }
+      }
+
       const detector = runPhaseDetector({
         conversation: conversationTurns,
-        known_slots: knownSlots,
+        known_slots: effectiveSlots,
         current_phase_ui: currentPhase,
+        previous_next_slot: lastOfferedSlot as any,
       });
 
       setKnownSlots(detector.known_slots);
@@ -301,6 +311,7 @@ export function AuthenticatedChatOverlay() {
               // Handle intake_needed — use dynamic question from backend, skip if user dismissed this slot
               if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
                 const slotKey = parsed.slot_key || "slot_0";
+                setLastOfferedSlot(slotKey); // Track for next detector call
                 if (!dismissedIntakeSlots.has(slotKey)) {
                   const intakeQuestion = parsed.intake_question || "Kun je even het volgende aangeven?";
                   setPendingIntake([{

@@ -1072,9 +1072,7 @@ Deno.serve(async (req) => {
           if (phase === "voorbereiden") return [
             { label: "Wat moet ik regelen?", value: "Wat moet ik praktisch regelen voor de start?" },
           ];
-          if (sector) return [
-            { label: `Meer over ${sectorLabel}`, value: `Vertel me meer over werken in ${sectorLabel}.` },
-          ];
+          // No generic fallback — only phase-specific followups
           return [];
         }
 

@@ -67,6 +67,8 @@ export interface PhaseQuestions {
       question_id: string;
       question_text: string;
       phase_code?: DetectorPhaseCode;
+      theme?: string;
+      subtheme?: string | null;
       fills_slots?: SlotKey[];
     }
   >;
