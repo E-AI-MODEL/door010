@@ -11,16 +11,7 @@ interface Profile {
   preferred_sector: string | null;
 }
 
-const PHASE_INFO: Record<string, { title: string; context: string }> = {
-  interesseren: { title: "interesseren", context: "Je verkent of het onderwijs iets voor je is." },
-  orienteren: { title: "oriënteren", context: "Je bekijkt welke richting het beste bij je past." },
-  beslissen: { title: "beslissen", context: "Je staat voor een keuze en wilt het helder krijgen." },
-  matchen: { title: "matchen", context: "Je zoekt een concrete school of opleiding." },
-  voorbereiden: { title: "voorbereiden", context: "Je maakt je klaar voor de start." },
-};
-
 // Welcome actions removed — TopicMenu now handles topic suggestions.
-// Only keep minimal phase-contextual hints if needed.
 const PHASE_WELCOME_ACTIONS: Record<string, Array<{ label: string; value: string }>> = {
   interesseren: [],
   orienteren: [],
@@ -52,7 +43,7 @@ export function useChatConversation(userId: string | undefined, profile: Profile
   const [isLoading, setIsLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
-  // Realtime subscription for incoming messages (punt 3)
+  // Realtime subscription for incoming messages
   useEffect(() => {
     if (!conversationId) return;
 
@@ -68,7 +59,6 @@ export function useChatConversation(userId: string | undefined, profile: Profile
         },
         (payload) => {
           const newMsg = payload.new as { id: string; role: string; content: string; created_at: string };
-          // Only add advisor messages (user/assistant are added locally)
           if (newMsg.role === 'advisor') {
             setMessages(prev => [...prev, { role: 'advisor', content: newMsg.content }]);
           }
@@ -81,21 +71,20 @@ export function useChatConversation(userId: string | undefined, profile: Profile
     };
   }, [conversationId]);
 
-  const getWelcomeMessage = useCallback((phase: string): { content: string; actions: Array<{ label: string; value: string }> } => {
-    const info = PHASE_INFO[phase] || PHASE_INFO.interesseren;
-    const actions = PHASE_WELCOME_ACTIONS[phase] || PHASE_WELCOME_ACTIONS.interesseren;
+  const getWelcomeMessage = useCallback((): { content: string; actions: Array<{ label: string; value: string }> } => {
+    const phase = profile?.current_phase || "interesseren";
+    const actions = PHASE_WELCOME_ACTIONS[phase] || [];
     return {
-      content: `Welkom terug, goed dat je er bent.\n\nJe zit in de **${info.title}**-fase. ${info.context}\n\nKies een suggestie hieronder of typ je vraag.`,
+      content: "Welkom terug! Stel gerust je vraag of kies een onderwerp via het menu.",
       actions,
     };
-  }, []);
+  }, [profile]);
 
   const loadConversation = useCallback(async () => {
     if (!userId || initialized) return;
     setInitialized(true);
 
     try {
-      // Try to load latest conversation
       const { data: convs } = await supabase
         .from("conversations")
         .select("id")
@@ -116,7 +105,6 @@ export function useChatConversation(userId: string | undefined, profile: Profile
         if (msgs && msgs.length > 0) {
           const loaded = msgs.map((m) => ({
             role: m.role as "user" | "assistant" | "advisor",
-            // Strip any legacy <!--ACTIONS:...--> from stored messages
             content: m.content
               .replace(/<!--ACTIONS:\[.*?\]-->/s, "")
               .replace(/<!--ACTIONS:[\s\S]*$/, "")
@@ -131,8 +119,7 @@ export function useChatConversation(userId: string | undefined, profile: Profile
     }
 
     // No existing conversation — show welcome
-    const phase = profile?.current_phase || "interesseren";
-    const welcome = getWelcomeMessage(phase);
+    const welcome = getWelcomeMessage();
     setMessages([{ role: "assistant", content: welcome.content }]);
     setLatestActions(welcome.actions);
   }, [userId, profile, initialized, getWelcomeMessage]);
@@ -162,7 +149,6 @@ export function useChatConversation(userId: string | undefined, profile: Profile
       role,
       content,
     });
-    // Touch conversation updated_at
     await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
   }, []);
 
