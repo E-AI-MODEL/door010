@@ -14,6 +14,8 @@ import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
 import { TopicMenu } from "@/components/dashboard/TopicMenu";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse } from "@/utils/responsePipeline";
+import { decideConversationMode } from "@/utils/conversationRouter";
+import type { TurnVisibility } from "@/utils/conversationRouter";
 import type { OrientationPhase } from "@/data/dashboard-phases";
 
 const DOORAI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
