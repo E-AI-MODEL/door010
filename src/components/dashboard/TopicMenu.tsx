@@ -408,7 +408,7 @@ export function TopicMenu({ currentPhase, knownSlots, onSendMessage, collapsed }
       {/* Mobile toggle */}
       <button
         onClick={() => setMenuOpen(!menuOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 lg:hidden"
+        className="w-full flex items-center justify-between px-4 py-3 md:hidden"
       >
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
