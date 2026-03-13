@@ -469,6 +469,9 @@ export function AuthenticatedChatOverlay() {
     }
   };
 
+  // Keep ref in sync for event listener
+  sendMessageRef.current = chatMode === "personal" ? sendMessage : sendGeneralMessage;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (chatMode === "general") {
