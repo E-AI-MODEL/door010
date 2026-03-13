@@ -12,13 +12,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Users, MessageCircle, Bell, LogOut, Calendar, RefreshCw, Search, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Users, MessageCircle, Bell, LogOut, Calendar, RefreshCw, Search, ArrowLeft, Globe } from "lucide-react";
 import { UserOverviewTable, type ProfileWithEmail } from "@/components/backoffice/UserOverviewTable";
 import { AdvisorChatPanel } from "@/components/backoffice/AdvisorChatPanel";
 import { BackofficeStats } from "@/components/backoffice/BackofficeStats";
 import { BackofficeAlerts, type DashboardAlert } from "@/components/backoffice/BackofficeAlerts";
 import { CandidateDetailPanel } from "@/components/backoffice/CandidateDetailPanel";
 import { AppointmentsTab } from "@/components/backoffice/AppointmentsTab";
+import { TrustedSourcesTab } from "@/components/backoffice/TrustedSourcesTab";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 
@@ -381,6 +382,10 @@ export default function Backoffice() {
                   <MessageCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   {isMobile ? "Chat" : "Gesprekken"}
                 </TabsTrigger>
+                <TabsTrigger value="sources" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                  <Globe className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                  Bronnen
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -467,6 +472,17 @@ export default function Backoffice() {
                     </div>
                   </div>
                 )}
+              </motion.div>
+            </TabsContent>
+
+            {/* === SOURCES TAB === */}
+            <TabsContent value="sources">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <TrustedSourcesTab />
               </motion.div>
             </TabsContent>
 

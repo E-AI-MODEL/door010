@@ -39,6 +39,8 @@ interface DashboardChatProps {
   preferredSector: string | null;
   knownSlotsFromDb?: Record<string, string>;
   profileMeta?: ProfileMeta;
+  externalMessage?: string | null;
+  onExternalMessageSent?: () => void;
 }
 
 interface ChatMessageExt {
@@ -47,7 +49,7 @@ interface ChatMessageExt {
   structured?: StructuredResponse | null;
 }
 
-export function DashboardChat({ userId, currentPhase, preferredSector, knownSlotsFromDb, profileMeta }: DashboardChatProps) {
+export function DashboardChat({ userId, currentPhase, preferredSector, knownSlotsFromDb, profileMeta, externalMessage, onExternalMessageSent }: DashboardChatProps) {
   const [input, setInput] = useState("");
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>(() => {
@@ -107,7 +109,7 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
   useEffect(() => {
     const el = chatContainerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, pendingIntake, pendingPhaseSuggestion]);
 
   const maybePersistProfile = useCallback(
     async (detector: ReturnType<typeof runPhaseDetector>, slotsToSave?: KnownSlots) => {
@@ -373,7 +375,15 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
     setPendingPhaseSuggestion(null);
   }, []);
 
-  const visibleMessages = messages.slice(-6);
+  // Handle external messages from TopicMenu
+  useEffect(() => {
+    if (externalMessage && !isLoading) {
+      sendMessage(externalMessage);
+      onExternalMessageSent?.();
+    }
+  }, [externalMessage]);
+
+  const visibleMessages = messages.slice(-12);
 
   return (
     <motion.div
