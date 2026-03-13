@@ -316,7 +316,7 @@ export function runPhaseDetector(args: {
       phaseSuggestion = {
         from: currentUi,
         to: nextUi,
-        message: `Je lijkt klaar om een volgende stap te zetten. Wil je verder met ${PHASE_LABELS[nextUi].toLowerCase()}?`,
+        message: "Wil je meer zien?",
       };
     }
   }

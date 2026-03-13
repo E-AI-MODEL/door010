@@ -541,7 +541,7 @@ export function AuthenticatedChatOverlay() {
     } catch (e) {
       console.warn("Phase update skipped:", e);
     }
-    sendMessage(`Ja, ik wil door naar ${newPhase}.`);
+    sendMessage("Ja, graag.");
   }, [pendingPhaseSuggestion, user]);
 
   const handlePhaseDecline = useCallback(() => {
