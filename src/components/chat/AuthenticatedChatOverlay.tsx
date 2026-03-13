@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2, Globe, User, Menu } from "lucide-react";
+import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2, Globe, User, Menu, Square } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,11 +47,13 @@ interface ChatMessageExt {
   structured?: StructuredResponse | null;
 }
 
+type WidgetSize = "compact" | "expanded" | "fullscreen";
+
 export function AuthenticatedChatOverlay() {
   const { user } = useAuth();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [widgetSize, setWidgetSize] = useState<WidgetSize>("compact");
   const [chatMode, setChatMode] = useState<ChatMode>("personal");
   const [input, setInput] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -583,9 +585,17 @@ export function AuthenticatedChatOverlay() {
   const currentLoading = isPersonal ? isLoading : generalLoading;
   const visibleMessages = currentMessages.slice(-8);
 
-  // Sizes
-  const width = isExpanded ? 480 : 380;
-  const height = isExpanded ? 680 : 500;
+  // Size presets
+  const isFullscreen = widgetSize === "fullscreen";
+  const sizeStyles = isFullscreen
+    ? { width: "100vw", height: "100vh", bottom: 0, right: 0, borderRadius: 0 }
+    : widgetSize === "expanded"
+    ? { width: `min(520px, calc(100vw - 3rem))`, height: `min(720px, calc(100vh - 6rem))` }
+    : { width: `min(380px, calc(100vw - 3rem))`, height: `min(500px, calc(100vh - 6rem))` };
+
+  const cycleSize = () => {
+    setWidgetSize(prev => prev === "compact" ? "expanded" : prev === "expanded" ? "fullscreen" : "compact");
+  };
 
   return (
     <>
@@ -612,10 +622,10 @@ export function AuthenticatedChatOverlay() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 bg-card rounded-3xl shadow-2xl border border-border overflow-hidden flex flex-col"
-            style={{
-              width: `min(${width}px, calc(100vw - 3rem))`,
-              height: `min(${height}px, calc(100vh - 6rem))`,
+            className={`fixed z-50 bg-card border border-border overflow-hidden flex flex-col ${isFullscreen ? "inset-0" : "bottom-6 right-6 rounded-3xl shadow-2xl"}`}
+            style={isFullscreen ? {} : {
+              width: sizeStyles.width as string,
+              height: sizeStyles.height as string,
             }}
           >
             {/* Header */}
@@ -636,11 +646,12 @@ export function AuthenticatedChatOverlay() {
                     </button>
                   )}
                   <button
-                    onClick={() => setIsExpanded(!isExpanded)}
+                    onClick={cycleSize}
                     className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground"
-                    aria-label={isExpanded ? "Verklein" : "Vergroot"}
+                    aria-label={widgetSize === "fullscreen" ? "Verklein" : "Vergroot"}
+                    title={widgetSize === "compact" ? "Groter" : widgetSize === "expanded" ? "Volledig scherm" : "Compact"}
                   >
-                    {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                    {widgetSize === "fullscreen" ? <Minimize2 className="h-3.5 w-3.5" /> : widgetSize === "expanded" ? <Square className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
                   </button>
                   <button
                     onClick={() => setIsOpen(false)}

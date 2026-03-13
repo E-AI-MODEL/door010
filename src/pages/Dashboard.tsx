@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PhaseProgress } from "@/components/dashboard/PhaseProgress";
 import { ProfileCard } from "@/components/dashboard/DashboardCards";
 import { TopicMenu } from "@/components/dashboard/TopicMenu";
+import { RecommendedContent } from "@/components/dashboard/RecommendedContent";
 import { phaseData, type OrientationPhase } from "@/data/dashboard-phases";
 import type { KnownSlots } from "@/utils/phaseDetectorEngine";
 
@@ -33,7 +34,7 @@ function parseKnownSlots(raw: unknown): Record<string, string> {
 }
 
 export default function Dashboard() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,9 +87,12 @@ export default function Dashboard() {
   const phaseInfo = phaseData[currentPhase];
   const knownSlots: KnownSlots = profile?.known_slots || {};
 
-  // Send message to the global overlay via custom event
   const handleTopicMessage = (message: string) => {
     window.dispatchEvent(new CustomEvent("doorai-send-message", { detail: { message } }));
+  };
+
+  const handleOpenChat = (message?: string) => {
+    window.dispatchEvent(new CustomEvent("doorai-send-message", { detail: { message: message || "" } }));
   };
 
   return (
@@ -97,31 +101,33 @@ export default function Dashboard() {
       <main className="flex-1">
         <PhaseProgress currentPhase={currentPhase} />
 
-        <div className="container py-4 md:py-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
-            {/* Sidebar: TopicMenu + ProfileCard */}
+        <div className="container py-5 md:py-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-6">
+            {/* Left column: Profile summary + Topic navigation */}
             <div className="md:col-span-4 xl:col-span-3 space-y-4">
-              <TopicMenu
-                currentPhase={currentPhase}
-                knownSlots={knownSlots}
-                onSendMessage={handleTopicMessage}
-              />
-              {/* ProfileCard: hidden on mobile, compact on desktop */}
-              <div className="hidden md:block">
+              {/* Compact profile summary */}
+              <div className="rounded-2xl border border-border bg-card p-4">
                 <ProfileCard profile={profile} phaseTitle={phaseInfo.title} />
+              </div>
+
+              {/* Topic menu */}
+              <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <TopicMenu
+                  currentPhase={currentPhase}
+                  knownSlots={knownSlots}
+                  onSendMessage={handleTopicMessage}
+                />
               </div>
             </div>
 
-            {/* Main content area — now shows a prompt to use the chat overlay */}
+            {/* Right column: Recommended content */}
             <div className="md:col-span-8 xl:col-span-9">
-              <div className="rounded-3xl border bg-card shadow-sm p-8 text-center space-y-4">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                  <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-                </div>
-                <h2 className="text-lg font-semibold text-foreground">DOORai staat voor je klaar</h2>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Kies een onderwerp uit het menu of klik op de chatknop rechtsonder om een gesprek te starten.
-                </p>
+              <div className="rounded-2xl border border-border bg-card p-5 md:p-6">
+                <RecommendedContent
+                  currentPhase={currentPhase}
+                  knownSlots={knownSlots}
+                  onOpenChat={handleOpenChat}
+                />
               </div>
             </div>
           </div>

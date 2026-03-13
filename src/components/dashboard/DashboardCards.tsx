@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { 
   User, 
@@ -55,65 +54,48 @@ interface ProfileCardProps {
 
 export function ProfileCard({ profile, phaseTitle }: ProfileCardProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2 }}
-      className="rounded-3xl border bg-card shadow-door p-6"
-    >
-      <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-5">
-        Mijn profiel
-      </h2>
-
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 rounded-full p-2.5">
-            <User className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">
-              {profile?.first_name
-                ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ""}`
-                : "Niet ingevuld"}
-            </p>
-            <p className="text-xs text-muted-foreground">Naam</p>
-          </div>
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="bg-primary/10 rounded-full p-2">
+          <User className="h-4 w-4 text-primary" />
         </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-muted/50 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Sector</p>
-            <p className="text-sm font-medium text-foreground">
-              {profile?.preferred_sector ? profile.preferred_sector.toUpperCase() : "Onbekend"}
-            </p>
-          </div>
-          <div className="rounded-xl bg-muted/50 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Fase</p>
-            <p className="text-sm font-medium text-primary">{phaseTitle}</p>
-          </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">
+            {profile?.first_name
+              ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ""}`
+              : "Niet ingevuld"}
+          </p>
         </div>
       </div>
 
-      <Button variant="outline" size="sm" className="w-full mt-5 rounded-xl" asChild>
-        <Link to="/profile">
-          Profiel bewerken
-        </Link>
-      </Button>
-
-      <div className="mt-4 pt-3 border-t border-border">
-        <div className="flex items-center gap-2">
-          <MapPin className="h-3.5 w-3.5 text-primary" />
-          <a
-            href="https://www.onderwijsloketrotterdam.nl"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center text-xs text-primary hover:underline"
-          >
-            Onderwijsloket Rotterdam
-            <ExternalLink className="ml-1 h-3 w-3" />
-          </a>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sector</p>
+          <p className="text-xs font-medium text-foreground mt-0.5">
+            {profile?.preferred_sector ? profile.preferred_sector.toUpperCase() : "—"}
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Fase</p>
+          <p className="text-xs font-medium text-primary mt-0.5">{phaseTitle}</p>
         </div>
       </div>
-    </motion.div>
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button variant="outline" size="sm" className="flex-1 h-8 text-xs rounded-lg" asChild>
+          <Link to="/profile">Profiel bewerken</Link>
+        </Button>
+        <a
+          href="https://www.onderwijsloketrotterdam.nl"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline shrink-0"
+        >
+          <MapPin className="h-3 w-3" />
+          Loket
+          <ExternalLink className="h-2.5 w-2.5" />
+        </a>
+      </div>
+    </div>
   );
 }
