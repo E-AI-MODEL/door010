@@ -433,6 +433,8 @@ export function AuthenticatedChatOverlay() {
       let buffer = "";
       let genHasActions = false;
       let genHasLinks = false;
+      let genHasExternalResults = false;
+      let genOffersExternalSearch = false;
 
       setGeneralMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -464,6 +466,8 @@ export function AuthenticatedChatOverlay() {
                 setGeneralLinks(parsed.meta.verified_links.slice(0, 1));
                 genHasLinks = parsed.meta.verified_links.length > 0;
               }
+              genOffersExternalSearch = genOffersExternalSearch || parsed.meta.offers_external_search === true || parsed.meta.external_search_offer === true;
+              genHasExternalResults = genHasExternalResults || parsed.meta.has_external_results === true || (typeof parsed.meta.external_results_count === "number" && parsed.meta.external_results_count > 0);
               continue;
             }
 
@@ -488,8 +492,8 @@ export function AuthenticatedChatOverlay() {
         pipeline: "general",
         hasActions: genHasActions,
         hasLinks: genHasLinks,
-        hasExternalResults: false,
-        offersExternalSearch: false,
+        hasExternalResults: genHasExternalResults,
+        offersExternalSearch: genOffersExternalSearch,
         assistantContentShort: assistantContent.split(/[.!?]+/).filter(s => s.trim().length > 5).length <= 2,
       });
       setTurnVisibility(vis);

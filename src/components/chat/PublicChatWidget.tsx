@@ -7,13 +7,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
-import { IntakeSheet } from "@/components/chat/IntakeSheet";
 import {
-  needsClarification,
-  buildIntakeQuestions,
   parseStructuredMeta,
 } from "@/utils/responsePipeline";
-import type { StructuredResponse, IntakeQuestion, FollowUpAction } from "@/utils/responsePipeline";
+import type { StructuredResponse, FollowUpAction } from "@/utils/responsePipeline";
 import { decideConversationMode } from "@/utils/conversationRouter";
 import type { TurnVisibility } from "@/utils/conversationRouter";
 
@@ -24,7 +21,6 @@ interface Message {
   content: string;
   structured?: StructuredResponse | null;
   primaryFollowup?: FollowUpAction | null;
-  secondaryAction?: FollowUpAction | null;
 }
 
 interface ConversationSignals {
@@ -61,7 +57,6 @@ export function PublicChatWidget() {
   const inputRef = useRef<HTMLInputElement>(null);
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [turnVisibility, setTurnVisibility] = useState<TurnVisibility | null>(null);
 
@@ -70,9 +65,8 @@ export function PublicChatWidget() {
     studyLevel: "UNK",
   });
 
-  const initialFollowups: Pick<Message, "primaryFollowup" | "secondaryAction"> = {
+  const initialFollowups: Pick<Message, "primaryFollowup"> = {
     primaryFollowup: { label: "Welke route past bij mij?", value: "Welke route past bij mij om leraar te worden?" },
-    secondaryAction: { label: "Ik werk al en wil overstappen", value: "Ik werk al. Kan ik overstappen naar het onderwijs?" },
   };
 
   const [messages, setMessages] = useState<Message[]>([
@@ -87,11 +81,11 @@ export function PublicChatWidget() {
   const latestFollowups = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
-      if (m.role === "assistant" && (m.primaryFollowup || m.secondaryAction)) {
-        return { primaryFollowup: m.primaryFollowup, secondaryAction: m.secondaryAction };
+      if (m.role === "assistant" && m.primaryFollowup) {
+        return { primaryFollowup: m.primaryFollowup };
       }
     }
-    return { primaryFollowup: null, secondaryAction: null };
+    return { primaryFollowup: null };
   }, [messages]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -133,25 +127,8 @@ export function PublicChatWidget() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
-    setPendingIntake(null);
     setLatestLinks([]);
     setTurnVisibility(null);
-
-    // Check if intake is needed
-    const missingSector = nextSignals.sector === "UNK";
-    const missingLevel = nextSignals.studyLevel === "UNK";
-    if (needsClarification(text, { missingSector, missingLevel, backendMode: "direct" })) {
-      const intakeQs = buildIntakeQuestions({ missingSector, missingLevel });
-      if (intakeQs.length > 0) {
-        setPendingIntake(intakeQs);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
-        ]);
-        setIsLoading(false);
-        return;
-      }
-    }
 
     let assistantContent = "";
 
@@ -180,8 +157,8 @@ export function PublicChatWidget() {
       let parsedMeta: StructuredResponse | null = null;
       let turnHasActions = false;
       let turnHasLinks = false;
-      const hasExternalResults = false;
-      const offersExternalSearch = false;
+      let hasExternalResults = false;
+      let offersExternalSearch = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -219,23 +196,22 @@ export function PublicChatWidget() {
 
               // Extract actions from payload
               let pf: FollowUpAction | null = null;
-              let sa: FollowUpAction | null = null;
-
               if (parsedMeta?.primary_followup) pf = parsedMeta.primary_followup;
-              if (parsedMeta?.secondary_action) sa = parsedMeta.secondary_action;
               if (parsedMeta?.verifiedLinks?.length) {
                 setLatestLinks(parsedMeta.verifiedLinks.slice(0, 1).map((link) => ({ label: link.label, href: link.href })));
                 turnHasLinks = true;
               }
 
+              const maybeOffer = parsed?.meta?.offers_external_search ?? parsed?.offers_external_search ?? parsed?.meta?.external_search_offer ?? parsed?.external_search_offer;
+              const maybeExternalResults = parsed?.meta?.has_external_results ?? parsed?.has_external_results ?? parsed?.meta?.external_results_count ?? parsed?.external_results_count;
+              offersExternalSearch = offersExternalSearch || maybeOffer === true;
+              hasExternalResults = hasExternalResults || (typeof maybeExternalResults === "number" ? maybeExternalResults > 0 : maybeExternalResults === true);
+
               // Fallback: parse actions array from payload
               if (!pf && parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
                 pf = { label: parsed.actions[0].label, value: parsed.actions[0].value };
-                if (parsed.actions.length > 1) {
-                  sa = { label: parsed.actions[1].label, value: parsed.actions[1].value };
-                }
               }
-              if (pf || sa) turnHasActions = true;
+              if (pf) turnHasActions = true;
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 1));
                 turnHasLinks = parsed.links.length > 0;
@@ -247,7 +223,6 @@ export function PublicChatWidget() {
                 if (last?.role === "assistant") {
                   last.structured = parsedMeta;
                   last.primaryFollowup = pf;
-                  last.secondaryAction = sa;
                 }
                 return [...updated];
               });
@@ -261,14 +236,12 @@ export function PublicChatWidget() {
               parsedMeta = parseStructuredMeta(parsed.meta);
               const metaActions = parsed.meta.actions;
               let pf: FollowUpAction | null = null;
-              let sa: FollowUpAction | null = null;
               if (Array.isArray(metaActions) && metaActions.length > 0) {
                 pf = { label: metaActions[0].label, value: metaActions[0].value };
-                if (metaActions.length > 1) {
-                  sa = { label: metaActions[1].label, value: metaActions[1].value };
-                }
                 turnHasActions = true;
               }
+              offersExternalSearch = offersExternalSearch || parsed.meta.offers_external_search === true || parsed.meta.external_search_offer === true;
+              hasExternalResults = hasExternalResults || parsed.meta.has_external_results === true || (typeof parsed.meta.external_results_count === "number" && parsed.meta.external_results_count > 0);
               if (parsed.meta.verified_links && Array.isArray(parsed.meta.verified_links)) {
                 setLatestLinks(parsed.meta.verified_links.slice(0, 1));
                 turnHasLinks = parsed.meta.verified_links.length > 0;
@@ -279,7 +252,6 @@ export function PublicChatWidget() {
                 if (last?.role === "assistant") {
                   last.structured = parsedMeta;
                   last.primaryFollowup = pf;
-                  last.secondaryAction = sa;
                 }
                 return [...updated];
               });
@@ -289,7 +261,6 @@ export function PublicChatWidget() {
             // Legacy actions fallback
             if (parsed.actions && Array.isArray(parsed.actions)) {
               const pf = parsed.actions[0] ? { label: parsed.actions[0].label, value: parsed.actions[0].value } : null;
-              const sa = parsed.actions[1] ? { label: parsed.actions[1].label, value: parsed.actions[1].value } : null;
               turnHasActions = parsed.actions.length > 0;
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 1));
@@ -300,7 +271,6 @@ export function PublicChatWidget() {
                 const last = updated[updated.length - 1];
                 if (last?.role === "assistant") {
                   last.primaryFollowup = pf;
-                  last.secondaryAction = sa;
                 }
                 return [...updated];
               });
@@ -334,20 +304,12 @@ export function PublicChatWidget() {
           const allText = updated.filter((m) => m.role === "user").map((m) => m.content.toLowerCase()).join(" ");
           const mentionsRoute = /\b(route|opleiding|zij-instroom|pabo|pdg|lerarenopleiding)\b/i.test(allText);
           const mentionsSalary = /\b(salaris|verdien|loon|cao)\b/i.test(allText);
-          const mentionsCosts = /\b(kosten|collegegeld|subsidie|financier)\b/i.test(allText);
-
           if (!mentionsRoute) {
             last.primaryFollowup = { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" };
           } else if (!mentionsSalary) {
             last.primaryFollowup = { label: "Salaris bekijken", value: "Wat verdient een leraar gemiddeld?" };
           } else {
             last.primaryFollowup = { label: "Vacatures zoeken", value: "Welke vacatures zijn er in het onderwijs?" };
-          }
-
-          if (!mentionsCosts && mentionsRoute) {
-            last.secondaryAction = { label: "Kosten bekijken", value: "Wat kost een opleiding en welke financiering is er?" };
-          } else {
-            last.secondaryAction = { label: "Meer weten", value: "Kun je daar meer over vertellen?" };
           }
         }
         return [...updated];
@@ -371,19 +333,12 @@ export function PublicChatWidget() {
           role: "assistant",
           content: "Sorry, er ging iets mis. Probeer het zo nog eens.",
           primaryFollowup: { label: "Probeer opnieuw", value: "Kun je dat nog eens uitleggen?" },
-          secondaryAction: null,
         },
       ]);
       setTurnVisibility(null);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleIntakeSubmit = (answers: Record<string, string>) => {
-    setPendingIntake(null);
-    const summary = Object.entries(answers).map(([, v]) => v).join(", ");
-    sendMessageWithText(`Mijn situatie: ${summary}`);
   };
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -510,20 +465,8 @@ export function PublicChatWidget() {
 
             {/* Bottom area: intake + actions + input */}
             <div className="shrink-0 border-t border-border bg-card">
-              {/* Intake sheet */}
-              {pendingIntake && (
-                <div className="px-4 pt-2.5 pb-1">
-                  <IntakeSheet
-                    questions={pendingIntake}
-                    onSubmit={handleIntakeSubmit}
-                    onDismiss={() => setPendingIntake(null)}
-                    compact
-                  />
-                </div>
-              )}
-
               {/* Action buttons */}
-              {!pendingIntake && !isLoading && (latestFollowups.primaryFollowup || latestFollowups.secondaryAction) && (turnVisibility?.showActionChip !== false) && (
+              {!isLoading && latestFollowups.primaryFollowup && (turnVisibility?.showActionChip !== false) && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -531,7 +474,7 @@ export function PublicChatWidget() {
                 >
                   <ResponseActions
                     primaryFollowup={latestFollowups.primaryFollowup}
-                    secondaryAction={latestFollowups.secondaryAction}
+                    secondaryAction={null}
                     onAskClick={(value) => sendMessageWithText(value)}
                     compact
                   />
@@ -539,7 +482,7 @@ export function PublicChatWidget() {
               )}
 
               {/* Link chip */}
-              {!pendingIntake && !isLoading && latestLinks.length > 0 && (turnVisibility?.showLinkChip !== false) && (
+              {!isLoading && latestLinks.length > 0 && (turnVisibility?.showLinkChip !== false) && (
                 <div className="px-4 pt-2.5 pb-1">
                   {(() => {
                     const link = latestLinks[0];
@@ -573,14 +516,14 @@ export function PublicChatWidget() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Stel je vraag…"
-                    disabled={isLoading || !!pendingIntake}
+                    disabled={isLoading}
                     className="flex-1 h-9 text-sm rounded-xl"
                     aria-label="Stel je vraag"
                   />
                   <Button
                     type="submit"
                     size="sm"
-                    disabled={isLoading || !input.trim() || !!pendingIntake}
+                    disabled={isLoading || !input.trim()}
                     className="h-9 w-9 p-0 rounded-xl bg-primary hover:bg-primary/90"
                     aria-label="Verstuur bericht"
                   >
