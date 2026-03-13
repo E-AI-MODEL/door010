@@ -137,15 +137,14 @@ function evaluateExitCriteria(
 
   for (const criterion of phaseRule.exit_criteria) {
     if (criterion.type === "slots_present") {
-      const requiredSlots = (criterion as { type: string; slots: string[] }).slots || [];
-      const allPresent = requiredSlots.every((s: string) => !!known[s as SlotKey]);
+      const requiredSlots = criterion.slots || [];
+      const allPresent = requiredSlots.every((s) => !!known[s as SlotKey]);
       if (allPresent) return true;
     }
     if (criterion.type === "intent") {
-      const intent = (criterion as { type: string; intent: string }).intent;
-      // Simple intent matching
+      const intent = criterion.intent;
       if (intent === "wants_orientation_info" && 
-          /(route|opleiding|hoe word|zij-instroom|bevoegdheid|welke stappen)/.test(lastText)) {
+          /(hoe word|hoe kan ik|wat moet ik|welke stappen|route|opleiding|zij-instroom|bevoegdheid)/.test(lastText)) {
         return true;
       }
     }
