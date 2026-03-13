@@ -517,10 +517,11 @@ export function AuthenticatedChatOverlay() {
     setPendingIntake(null);
   }, [pendingIntake]);
 
-  // Topic menu sends message via overlay
+  // Topic menu sends message via overlay — use ref to avoid stale closure
   const handleTopicSend = useCallback((msg: string) => {
     setShowTopicPanel(false);
-    sendMessage(msg);
+    setChatMode("personal");
+    setTimeout(() => sendMessageRef.current(msg), 50);
   }, []);
 
   const handlePhaseAccept = useCallback(async () => {
