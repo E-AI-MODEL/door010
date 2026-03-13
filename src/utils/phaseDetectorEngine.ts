@@ -7,7 +7,7 @@
  * - stelt maximaal 1 vervolgvraag per beurt (via SSOT mapping)
  * - respecteert exit_criteria uit SSOT voor fase-doorstroom
  */
-import { loadPhaseDetectorConfig, DetectorPhaseCode, SlotKey } from "./phaseDetectorParser";
+import { loadPhaseDetectorConfig, DetectorPhaseCode, SlotKey, ExitCriterion } from "./phaseDetectorParser";
 
 export type UiPhaseCode =
   | "interesseren"
