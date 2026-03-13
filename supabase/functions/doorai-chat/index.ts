@@ -765,7 +765,7 @@ Deno.serve(async (req) => {
     uiLinks = uiLinks.slice(0, 6);
 
     // Step 4: Build text links for LLM prompt injection
-    const textLinks = computeTextLinks(uiLinks, faqSourceLinks);
+    const textLinks = computeTextLinks(faqSourceLinks);
 
     // Step 5: Assemble context & system prompt
     const dynamicContext = assembleContext(
