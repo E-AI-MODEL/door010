@@ -357,6 +357,22 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
     sendMessage(`Mijn situatie: ${summary}`);
   };
 
+  const handlePhaseAccept = useCallback(async () => {
+    if (!pendingPhaseSuggestion) return;
+    const newPhase = pendingPhaseSuggestion.to as UiPhaseCode;
+    setPendingPhaseSuggestion(null);
+    try {
+      await supabase.from("profiles").update({ current_phase: newPhase }).eq("user_id", userId);
+    } catch (e) {
+      console.warn("Phase update skipped:", e);
+    }
+    sendMessage(`Ja, ik wil door naar ${newPhase}.`);
+  }, [pendingPhaseSuggestion, userId]);
+
+  const handlePhaseDecline = useCallback(() => {
+    setPendingPhaseSuggestion(null);
+  }, []);
+
   const visibleMessages = messages.slice(-6);
 
   return (
