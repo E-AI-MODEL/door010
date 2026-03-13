@@ -105,7 +105,6 @@ export default function Dashboard() {
                 currentPhase={currentPhase}
                 knownSlots={knownSlots}
                 onSendMessage={handleTopicMessage}
-                collapsed
               />
               {/* ProfileCard: hidden on mobile, compact on desktop */}
               <div className="hidden md:block">
