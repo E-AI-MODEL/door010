@@ -506,6 +506,23 @@ export function AuthenticatedChatOverlay() {
     sendMessage(`Mijn situatie: ${summary}`);
   };
 
+  const handleIntakeDismiss = useCallback(() => {
+    if (pendingIntake) {
+      setDismissedIntakeSlots(prev => {
+        const next = new Set(prev);
+        pendingIntake.forEach(q => next.add(q.id));
+        return next;
+      });
+    }
+    setPendingIntake(null);
+  }, [pendingIntake]);
+
+  // Topic menu sends message via overlay
+  const handleTopicSend = useCallback((msg: string) => {
+    setShowTopicPanel(false);
+    sendMessage(msg);
+  }, []);
+
   const handlePhaseAccept = useCallback(async () => {
     if (!pendingPhaseSuggestion || !user) return;
     const newPhase = pendingPhaseSuggestion.to as UiPhaseCode;
