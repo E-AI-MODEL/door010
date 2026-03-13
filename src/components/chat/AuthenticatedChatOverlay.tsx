@@ -50,6 +50,7 @@ export function AuthenticatedChatOverlay() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [chatMode, setChatMode] = useState<ChatMode>("personal");
   const [input, setInput] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -58,6 +59,13 @@ export function AuthenticatedChatOverlay() {
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
+  // Separate message histories per mode
+  const [generalMessages, setGeneralMessages] = useState<Array<{ role: string; content: string }>>([
+    { role: "assistant", content: "Hoi! Ik ben DoorAI, de wegwijzer van Onderwijsloket Rotterdam. Hoe kan ik je helpen?" },
+  ]);
+  const [generalActions, setGeneralActions] = useState<Array<{ label: string; value: string }>>([]);
+  const [generalLinks, setGeneralLinks] = useState<Array<{ label: string; href: string }>>([]);
+  const [generalLoading, setGeneralLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
