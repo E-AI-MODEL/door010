@@ -312,7 +312,10 @@ function computeLinks(
   const p = (phase || "interesseren").toLowerCase();
   const msg = lastMsg.toLowerCase();
 
-  links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
+  // Only add routes link when contextually relevant (not always)
+  if (ROUTE_TOPIC_RE.test(msg) || p === "orienteren" || p === "beslissen") {
+    links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
+  }
 
   if (p === "matchen" || LIVE_TOPIC_RE.test(msg)) {
     links.push({ label: "Vacatures bekijken", href: "/vacatures" });
