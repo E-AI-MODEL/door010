@@ -1057,21 +1057,24 @@ Deno.serve(async (req) => {
         // Phase suggestion from detector
         const phaseSuggestion = detector?.phase_suggestion || undefined;
 
-        // ── 1-op-3 link regel ──────────────────────────────────
-        const assistantCount = messages.filter(m => m.role === "assistant").length;
+        // ── Intent-based link logic (replaces 1-op-3 rule) ──
         const LINK_REQUEST_RE = /\b(link|bron|website|url|waar vind)\b/i;
-        const BRONPLICHTIG_RE = /\b(salaris|kosten|collegegeld|cao|subsidie|route|bevoegdheid)\b/i;
+        const BRONPLICHTIG_RE = /\b(salaris|kosten|collegegeld|cao|subsidie|route|bevoegdheid|vacature|events?|open dag)\b/i;
         const shouldIncludeLinks =
-          intent !== "greeting" && (
-            assistantCount % 3 === 0 ||
-            LINK_REQUEST_RE.test(lastUserMessage) ||
-            (intent === "question" && BRONPLICHTIG_RE.test(lastUserMessage))
-          );
+          intent === "question" ||
+          intent === "exploration" ||
+          LINK_REQUEST_RE.test(lastUserMessage) ||
+          BRONPLICHTIG_RE.test(lastUserMessage);
+
+        const intakeQuestionText = intakeNeeded && detector?.next_slot_key
+          ? INTAKE_QUESTIONS[detector.next_slot_key as string] || "Kun je even het volgende aangeven?"
+          : undefined;
 
         const uiPayload = JSON.stringify({
           actions: followupActions,
           slot_chips: slotChips,
           intake_needed: intakeNeeded,
+          intake_question: intakeQuestionText,
           corrected_slots: Object.keys(correctedSlots).length > 0 ? correctedSlots : undefined,
           links: shouldIncludeLinks ? uiLinks : [],
           phase_suggestion: phaseSuggestion,
