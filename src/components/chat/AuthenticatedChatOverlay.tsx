@@ -301,10 +301,13 @@ export function AuthenticatedChatOverlay() {
             if (currentEventType === "ui") {
               if (parsed.actions && Array.isArray(parsed.actions)) {
                 setLatestActions(parsed.actions.slice(0, 1));
+                turnHasActions = parsed.actions.length > 0;
               }
               if (parsed.links && Array.isArray(parsed.links)) {
                 setLatestLinks(parsed.links.slice(0, 1));
+                turnHasLinks = parsed.links.length > 0;
               }
+              if (parsed.mode) turnBackendMode = parsed.mode;
 
               // Handle corrected_slots
               if (parsed.corrected_slots && typeof parsed.corrected_slots === "object") {
@@ -318,6 +321,7 @@ export function AuthenticatedChatOverlay() {
               // Handle phase_suggestion
               if (parsed.phase_suggestion && parsed.phase_suggestion.from && parsed.phase_suggestion.to) {
                 setPendingPhaseSuggestion(parsed.phase_suggestion);
+                turnHasPhaseSuggestion = true;
               }
 
               // Structured meta
