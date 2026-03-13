@@ -98,9 +98,9 @@ export default function Dashboard() {
         <PhaseProgress currentPhase={currentPhase} />
 
         <div className="container py-4 md:py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
             {/* Sidebar: TopicMenu + ProfileCard */}
-            <div className="lg:col-span-4 xl:col-span-3 space-y-4">
+            <div className="md:col-span-4 xl:col-span-3 space-y-4">
               <TopicMenu
                 currentPhase={currentPhase}
                 knownSlots={knownSlots}
