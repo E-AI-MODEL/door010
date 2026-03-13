@@ -313,6 +313,16 @@ export function DashboardChat({ userId, currentPhase, preferredSector, knownSlot
               continue;
             }
 
+            // Handle `event: reflection` — post-stream quality check
+            if (currentEventType === "reflection") {
+              if (parsed.pass === false && Array.isArray(parsed.issues)) {
+                setReflectionWarning(parsed.issues);
+                console.warn("Reflection issues:", parsed.issues);
+              }
+              currentEventType = "";
+              continue;
+            }
+
             // Legacy fallback
             if (parsed.actions && Array.isArray(parsed.actions)) {
               setLatestActions(parsed.actions.slice(0, 2));
