@@ -126,7 +126,7 @@ export function AuthenticatedChatOverlay() {
   useEffect(() => {
     const el = chatContainerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, pendingIntake, pendingPhaseSuggestion]);
+  }, [messages, pendingPhaseSuggestion]);
 
   // Ref for sendMessage to avoid stale closures in event listeners
   const sendMessageRef = useRef<(text: string) => void>(() => {});
