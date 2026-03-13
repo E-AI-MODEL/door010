@@ -10,11 +10,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { runPhaseDetector, ConversationTurn, KnownSlots, UiPhaseCode } from "@/utils/phaseDetectorEngine";
 import { CollapsibleAnswer } from "@/components/chat/CollapsibleAnswer";
 import { ResponseActions } from "@/components/chat/ResponseActions";
-import { IntakeSheet } from "@/components/chat/IntakeSheet";
 import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
 import { TopicMenu } from "@/components/dashboard/TopicMenu";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
-import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
+import type { StructuredResponse } from "@/utils/responsePipeline";
 import type { OrientationPhase } from "@/data/dashboard-phases";
 
 const DOORAI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
