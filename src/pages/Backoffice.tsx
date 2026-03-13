@@ -382,6 +382,10 @@ export default function Backoffice() {
                   <MessageCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   {isMobile ? "Chat" : "Gesprekken"}
                 </TabsTrigger>
+                <TabsTrigger value="sources" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                  <Globe className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                  Bronnen
+                </TabsTrigger>
               </TabsList>
             </div>
 
