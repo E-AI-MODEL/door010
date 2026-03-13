@@ -470,6 +470,17 @@ export default function Backoffice() {
               </motion.div>
             </TabsContent>
 
+            {/* === SOURCES TAB === */}
+            <TabsContent value="sources">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <TrustedSourcesTab />
+              </motion.div>
+            </TabsContent>
+
             {/* === CHAT TAB === */}
             <TabsContent value="chat">
               <motion.div
