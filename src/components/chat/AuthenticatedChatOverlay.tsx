@@ -59,8 +59,10 @@ export function AuthenticatedChatOverlay() {
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
+  const [dismissedIntakeSlots, setDismissedIntakeSlots] = useState<Set<string>>(new Set());
   const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const [reflectionWarning, setReflectionWarning] = useState<string[] | null>(null);
+  const [showTopicPanel, setShowTopicPanel] = useState(false);
   // Separate message histories per mode
   const [generalMessages, setGeneralMessages] = useState<Array<{ role: string; content: string }>>([
     { role: "assistant", content: "Hoi! Ik ben DoorAI, de wegwijzer van Onderwijsloket Rotterdam. Hoe kan ik je helpen?" },
