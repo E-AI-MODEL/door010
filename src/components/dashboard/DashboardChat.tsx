@@ -49,7 +49,7 @@ interface ChatMessageExt {
   structured?: StructuredResponse | null;
 }
 
-export function DashboardChat({ userId, currentPhase, preferredSector, knownSlotsFromDb, profileMeta }: DashboardChatProps) {
+export function DashboardChat({ userId, currentPhase, preferredSector, knownSlotsFromDb, profileMeta, externalMessage, onExternalMessageSent }: DashboardChatProps) {
   const [input, setInput] = useState("");
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [knownSlots, setKnownSlots] = useState<KnownSlots>(() => {
