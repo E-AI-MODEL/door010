@@ -331,13 +331,10 @@ function computeLinks(
   return [...uniq.values()].slice(0, 6);
 }
 
-// Compute markdown links to inject into the prompt context (max 4)
-function computeTextLinks(uiLinks: UiLink[], faqSourceLinks: UiLink[]): string {
-  // Prioritize: internal pages, then top external, then FAQ sources
-  const all = [...uiLinks, ...faqSourceLinks];
-  const uniq = new Map<string, UiLink>();
-  for (const l of all) uniq.set(l.href, l);
-  const selected = [...uniq.values()].slice(0, 4);
+// Alleen externe FAQ-bronlinks injecteren — geen interne pagina's die toch al als chip verschijnen
+function computeTextLinks(faqSourceLinks: UiLink[]): string {
+  const external = faqSourceLinks.filter(l => l.href.startsWith("http"));
+  const selected = external.slice(0, 2);
   if (selected.length === 0) return "";
   return selected.map(l => `- [${l.label}](${l.href})`).join("\n");
 }
@@ -552,6 +549,11 @@ const DOORAI_CORE = `Je bent DoorAI, de orientatie-assistent van Onderwijsloket 
 - Opsommingen, stappen, bullets, genummerde lijsten.
 - Het woord "kennisbank" of "peildatum".
 - Zinnen als "Het traject ziet er globaal zo uit:" gevolgd door stappen.
+
+## Links
+- Linkchips verschijnen automatisch onder je antwoord. Herhaal ze NOOIT in de lopende tekst.
+- Gebruik een link in tekst alleen voor een specifieke externe bron (CAO-tabel, DUO-pagina) die niet als chip beschikbaar is.
+- Schrijf links altijd als beschrijvend anker: [CAO-salaristabellen](https://www.voraad.nl/cao), nooit kale URL's.
 `;
 
 const INTENT_APPENDIX: Record<IntentType, string> = {
@@ -763,7 +765,7 @@ Deno.serve(async (req) => {
     uiLinks = uiLinks.slice(0, 6);
 
     // Step 4: Build text links for LLM prompt injection
-    const textLinks = computeTextLinks(uiLinks, faqSourceLinks);
+    const textLinks = computeTextLinks(faqSourceLinks);
 
     // Step 5: Assemble context & system prompt
     const dynamicContext = assembleContext(
@@ -857,15 +859,59 @@ Deno.serve(async (req) => {
           await writer.write(enc.encode(buffer + "\n"));
         }
 
+        // Build conversation followup actions based on phase and slots
+        function buildConversationFollowups(
+          phase: string,
+          slots: Partial<Record<SlotKey, string>>,
+          intent: IntentType,
+        ): UiAction[] {
+          if (intent === "greeting") return [];
+          const sector = slots.school_type;
+          const sectorLabel = sector === "PO" ? "basisonderwijs"
+            : sector === "VO" ? "voortgezet onderwijs"
+            : sector === "MBO" ? "mbo"
+            : "het onderwijs";
+
+          if (phase === "orienteren" && sector) return [
+            { label: `Routes ${sectorLabel}`, value: `Welke routes zijn er voor ${sectorLabel}?` },
+            { label: "Kosten en duur", value: "Wat kost een opleiding en hoe lang duurt het?" },
+          ];
+          if (phase === "beslissen") return [
+            { label: "Kosten en duur", value: "Wat zijn de kosten en hoe lang duurt het?" },
+            { label: "Twijfels bespreken", value: "Ik twijfel nog, wat zijn mijn opties?" },
+          ];
+          if (phase === "matchen") return [
+            { label: "Vacatures zoeken", value: "Zijn er vacatures bij mij in de buurt?" },
+            { label: "Gesprek plannen", value: "Ik wil een gesprek plannen met een adviseur." },
+          ];
+          if (phase === "voorbereiden") return [
+            { label: "Wat moet ik regelen?", value: "Wat moet ik praktisch regelen voor de start?" },
+          ];
+          if (sector) return [
+            { label: `Meer over ${sectorLabel}`, value: `Vertel me meer over werken in ${sectorLabel}.` },
+          ];
+          return [];
+        }
+
         // Send UI payload — split slot_chips (intake) from actions (conversation followup)
-        // Determine intake_needed: if there's a next_slot_key and the slot is missing
-        const slotChips = detector?.next_slot_key
+        // Intake alleen voor de twee onboarding-kernslots
+        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "admission_requirements"];
+        const intakeNeeded =
+          detector?.next_slot_key !== undefined &&
+          INTAKE_TRIGGER_SLOTS.includes(detector.next_slot_key as SlotKey) &&
+          !slots[detector.next_slot_key as SlotKey] &&
+          intent !== "greeting" &&
+          intent !== "followup";
+
+        // slotChips alleen vullen als intake ook echt nodig is
+        const slotChips = intakeNeeded && detector?.next_slot_key
           ? actionsForNextSlot(detector.next_slot_key, slots)
           : [];
-        const intakeNeeded = slotChips.length > 0 && !slots[detector?.next_slot_key as SlotKey];
 
         // Conversation followup actions (max 2) — only when no intake needed
-        const followupActions = intakeNeeded ? [] : ssotActions.slice(0, 2);
+        const followupActions = intakeNeeded
+          ? []
+          : buildConversationFollowups(phase, slots, intent);
 
         // Corrected slots: send normalized values back so frontend can sync
         const correctedSlots: Record<string, string> = {};
