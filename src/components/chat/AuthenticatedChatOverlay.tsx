@@ -594,34 +594,61 @@ export function AuthenticatedChatOverlay() {
             }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <h3 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">DOORai</h3>
-              </div>
-              <div className="flex items-center gap-0.5">
-                {messages.length > 1 && (
+            <div className="flex flex-col border-b border-border shrink-0">
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <h3 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">DOORai</h3>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  {currentMessages.length > 1 && (
+                    <button
+                      onClick={handleClearConversation}
+                      className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-destructive"
+                      aria-label="Gesprek wissen"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   <button
-                    onClick={handleClearConversation}
-                    className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-destructive"
-                    aria-label="Gesprek wissen"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground"
+                    aria-label={isExpanded ? "Verklein" : "Vergroot"}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
                   </button>
-                )}
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground"
+                    aria-label="Sluit chat"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              {/* Mode switch pills */}
+              <div className="flex gap-1 px-4 pb-2">
                 <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground"
-                  aria-label={isExpanded ? "Verklein" : "Vergroot"}
+                  onClick={() => setChatMode("personal")}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                    isPersonal
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  <User className="h-3 w-3" />
+                  Persoonlijk
                 </button>
                 <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-1.5 hover:bg-muted rounded-full transition-colors text-muted-foreground"
-                  aria-label="Sluit chat"
+                  onClick={() => setChatMode("general")}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                    !isPersonal
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <Globe className="h-3 w-3" />
+                  Algemeen
                 </button>
               </div>
             </div>
@@ -654,7 +681,7 @@ export function AuthenticatedChatOverlay() {
                   </div>
                 </div>
               ))}
-              {isLoading && messages[messages.length - 1]?.role === "user" && (
+              {currentLoading && currentMessages[currentMessages.length - 1]?.role === "user" && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-2xl px-3.5 py-2.5">
                     <div className="flex gap-1">
@@ -668,8 +695,8 @@ export function AuthenticatedChatOverlay() {
               <div />
             </div>
 
-            {/* Intake */}
-            {pendingIntake && (
+            {/* Intake — personal mode only */}
+            {isPersonal && pendingIntake && (
               <div className="px-4 pb-2 shrink-0">
                 <IntakeSheet
                   questions={pendingIntake}
@@ -680,8 +707,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Phase confirmation */}
-            {pendingPhaseSuggestion && !pendingIntake && (
+            {/* Phase confirmation — personal mode only */}
+            {isPersonal && pendingPhaseSuggestion && !pendingIntake && (
               <div className="px-4 pb-2 shrink-0">
                 <PhaseConfirmation
                   from={pendingPhaseSuggestion.from}
@@ -695,22 +722,22 @@ export function AuthenticatedChatOverlay() {
             )}
 
             {/* Actions */}
-            {!pendingIntake && latestActions.length > 0 && (
+            {(!isPersonal || !pendingIntake) && currentActions.length > 0 && (
               <div className="px-4 pb-2 shrink-0">
                 <ResponseActions
-                  primaryFollowup={latestActions[0] ? { label: latestActions[0].label, value: latestActions[0].value } : null}
-                  secondaryAction={latestActions[1] ? { label: latestActions[1].label, value: latestActions[1].value } : null}
+                  primaryFollowup={currentActions[0] ? { label: currentActions[0].label, value: currentActions[0].value } : null}
+                  secondaryAction={currentActions[1] ? { label: currentActions[1].label, value: currentActions[1].value } : null}
                   onAskClick={handleActionClick}
                   compact
-                  disabled={isLoading}
+                  disabled={currentLoading}
                 />
               </div>
             )}
 
             {/* Link chips */}
-            {latestLinks.length > 0 && !pendingIntake && !isLoading && (
+            {currentLinks.length > 0 && (!isPersonal || !pendingIntake) && !currentLoading && (
               <div className="px-4 pb-2 flex flex-wrap gap-1.5 shrink-0">
-                {latestLinks.map((link, i) =>
+                {currentLinks.map((link, i) =>
                   link.href.startsWith("/") ? (
                     <Link
                       key={i}
@@ -735,8 +762,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Reflection warning */}
-            {reflectionWarning && !isLoading && (
+            {/* Reflection warning — personal mode only */}
+            {isPersonal && reflectionWarning && !currentLoading && (
               <div className="px-4 pb-2 shrink-0">
                 <div className="text-[10px] text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
                   ⚠️ Dit antwoord is mogelijk onvolledig of bevat aandachtspunten.
@@ -751,12 +778,12 @@ export function AuthenticatedChatOverlay() {
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Stel je vraag..."
-                  disabled={isLoading || !!pendingIntake}
+                  placeholder={isPersonal ? "Stel je vraag..." : "Vraag over onderwijs..."}
+                  disabled={currentLoading || (isPersonal && !!pendingIntake)}
                   className="flex-1 h-9 text-sm rounded-xl"
                   aria-label="Stel je vraag"
                 />
-                <Button type="submit" size="sm" disabled={isLoading || !input.trim() || !!pendingIntake} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
+                <Button type="submit" size="sm" disabled={currentLoading || !input.trim() || (isPersonal && !!pendingIntake)} className="h-9 w-9 p-0 rounded-xl" aria-label="Verstuur bericht">
                   <Send className="h-3.5 w-3.5" />
                 </Button>
               </form>
