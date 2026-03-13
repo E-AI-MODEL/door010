@@ -279,6 +279,11 @@ export default function Chat() {
                 });
               }
 
+              // Handle phase_suggestion from backend
+              if (parsed.phase_suggestion && parsed.phase_suggestion.from && parsed.phase_suggestion.to) {
+                setPendingPhaseSuggestion(parsed.phase_suggestion);
+              }
+
               const structured = parseStructuredMeta(parsed);
               if (structured) {
                 setMessages((prev) => {
