@@ -47,11 +47,13 @@ interface ChatMessageExt {
   structured?: StructuredResponse | null;
 }
 
+type WidgetSize = "compact" | "expanded" | "fullscreen";
+
 export function AuthenticatedChatOverlay() {
   const { user } = useAuth();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [widgetSize, setWidgetSize] = useState<WidgetSize>("compact");
   const [chatMode, setChatMode] = useState<ChatMode>("personal");
   const [input, setInput] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
