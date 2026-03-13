@@ -480,23 +480,6 @@ export function AuthenticatedChatOverlay() {
     }
   };
 
-  const handleIntakeSubmit = (answers: Record<string, string>) => {
-    setPendingIntake(null);
-    const summary = Object.entries(answers).map(([, v]) => v).join(", ");
-    sendMessage(`Mijn situatie: ${summary}`);
-  };
-
-  const handleIntakeDismiss = useCallback(() => {
-    if (pendingIntake) {
-      setDismissedIntakeSlots(prev => {
-        const next = new Set(prev);
-        pendingIntake.forEach(q => next.add(q.id));
-        return next;
-      });
-    }
-    setPendingIntake(null);
-  }, [pendingIntake]);
-
   // Topic menu sends message via overlay — use ref to avoid stale closure
   const handleTopicSend = useCallback((msg: string) => {
     setShowTopicPanel(false);
