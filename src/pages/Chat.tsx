@@ -52,6 +52,7 @@ export default function Chat() {
   const [knownSlots, setKnownSlots] = useState<KnownSlots>({});
   const [latestLinks, setLatestLinks] = useState<Array<{ label: string; href: string }>>([]);
   const [pendingIntake, setPendingIntake] = useState<IntakeQuestion[] | null>(null);
+  const [pendingPhaseSuggestion, setPendingPhaseSuggestion] = useState<{ from: string; to: string; message: string } | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const {
