@@ -488,15 +488,13 @@ function TopicItem({ item, onSendMessage }: { item: TopicMenuItem; onSendMessage
 
 function TopicGroupSection({ group, onSendMessage, defaultOpen }: { group: TopicGroup; onSendMessage: (msg: string) => void; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
-  const Icon = group.icon;
 
   return (
-    <div className="border-b border-border last:border-0">
+    <div className="border-b border-border/60 last:border-0">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+        className="w-full flex items-center gap-2 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" />
         <span className="flex-1 text-left">{group.title}</span>
         <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
