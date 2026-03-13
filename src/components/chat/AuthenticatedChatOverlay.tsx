@@ -298,19 +298,22 @@ export function AuthenticatedChatOverlay() {
                 setLatestLinks(parsed.links.slice(0, 6));
               }
 
-              // Handle intake_needed — use dynamic question from backend
+              // Handle intake_needed — use dynamic question from backend, skip if user dismissed this slot
               if (parsed.intake_needed && parsed.slot_chips && Array.isArray(parsed.slot_chips)) {
-                const intakeQuestion = parsed.intake_question || "Kun je even het volgende aangeven?";
-                setPendingIntake([{
-                  id: "slot_0",
-                  question: intakeQuestion,
-                  type: "choice",
-                  options: parsed.slot_chips.map((c: { label: string }) => c.label),
-                }]);
-                setMessages(prev => [
-                  ...prev.slice(0, -1),
-                  { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
-                ]);
+                const slotKey = parsed.slot_key || "slot_0";
+                if (!dismissedIntakeSlots.has(slotKey)) {
+                  const intakeQuestion = parsed.intake_question || "Kun je even het volgende aangeven?";
+                  setPendingIntake([{
+                    id: slotKey,
+                    question: intakeQuestion,
+                    type: "choice",
+                    options: parsed.slot_chips.map((c: { label: string }) => c.label),
+                  }]);
+                  setMessages(prev => [
+                    ...prev.slice(0, -1),
+                    { role: "assistant" as const, content: "Ik wil je graag goed helpen. Kun je even het volgende aangeven?" },
+                  ]);
+                }
               }
 
               // Handle corrected_slots
