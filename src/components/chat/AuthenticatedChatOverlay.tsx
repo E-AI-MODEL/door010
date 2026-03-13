@@ -431,6 +431,8 @@ export function AuthenticatedChatOverlay() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let genHasActions = false;
+      let genHasLinks = false;
 
       setGeneralMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -454,8 +456,14 @@ export function AuthenticatedChatOverlay() {
 
             // Meta payload from homepage-coach (first event)
             if (parsed.meta) {
-              if (parsed.meta.actions) setGeneralActions(parsed.meta.actions.slice(0, 1));
-              if (parsed.meta.verified_links) setGeneralLinks(parsed.meta.verified_links.slice(0, 1));
+              if (parsed.meta.actions) {
+                setGeneralActions(parsed.meta.actions.slice(0, 1));
+                genHasActions = parsed.meta.actions.length > 0;
+              }
+              if (parsed.meta.verified_links) {
+                setGeneralLinks(parsed.meta.verified_links.slice(0, 1));
+                genHasLinks = parsed.meta.verified_links.length > 0;
+              }
               continue;
             }
 
@@ -474,6 +482,17 @@ export function AuthenticatedChatOverlay() {
           }
         }
       }
+
+      // Run router for general pipeline
+      const vis = decideConversationMode({
+        pipeline: "general",
+        hasActions: genHasActions,
+        hasLinks: genHasLinks,
+        hasExternalResults: false,
+        offersExternalSearch: false,
+        assistantContentShort: assistantContent.split(/[.!?]+/).filter(s => s.trim().length > 5).length <= 2,
+      });
+      setTurnVisibility(vis);
     } catch (error) {
       console.error("General chat error:", error);
       setGeneralMessages((prev) => [
