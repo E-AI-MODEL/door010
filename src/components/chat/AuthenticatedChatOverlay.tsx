@@ -729,8 +729,8 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Actions — max 1 doorvraagchip, hidden during intake */}
-            {(!isPersonal || !pendingIntake) && currentActions.length > 0 && (
+            {/* Actions — max 1 doorvraagchip */}
+            {currentActions.length > 0 && (
               <div className="px-4 pb-2 shrink-0">
                 <ResponseActions
                   primaryFollowup={currentActions[0] ? { label: currentActions[0].label, value: currentActions[0].value } : null}
