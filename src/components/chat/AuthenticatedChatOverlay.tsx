@@ -651,8 +651,8 @@ export function AuthenticatedChatOverlay() {
                   </button>
                 </div>
               </div>
-              {/* Mode switch pills */}
-              <div className="flex gap-1 px-4 pb-2">
+              {/* Mode switch pills + topic menu button */}
+              <div className="flex items-center gap-1 px-4 pb-2">
                 <button
                   onClick={() => setChatMode("personal")}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
@@ -675,8 +675,42 @@ export function AuthenticatedChatOverlay() {
                   <Globe className="h-3 w-3" />
                   Algemeen
                 </button>
+                {isPersonal && (
+                  <button
+                    onClick={() => setShowTopicPanel(!showTopicPanel)}
+                    className={`ml-auto p-1.5 rounded-full transition-colors ${
+                      showTopicPanel
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    aria-label="Onderwerpen menu"
+                  >
+                    <Menu className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Topic panel — slides in when toggled, personal mode only */}
+            <AnimatePresence>
+              {isPersonal && showTopicPanel && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden border-b border-border shrink-0"
+                >
+                  <div className="max-h-64 overflow-y-auto">
+                    <TopicMenu
+                      currentPhase={(profile?.current_phase || "interesseren") as OrientationPhase}
+                      knownSlots={knownSlots}
+                      onSendMessage={handleTopicSend}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Messages */}
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5" aria-live="polite">
