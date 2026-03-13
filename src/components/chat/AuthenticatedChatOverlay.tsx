@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2 } from "lucide-react";
+import { Send, Trash2, ExternalLink, MessageCircle, X, Minimize2, Maximize2, Globe, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,7 +15,10 @@ import { PhaseConfirmation } from "@/components/chat/PhaseConfirmation";
 import { parseStructuredMeta } from "@/utils/responsePipeline";
 import type { StructuredResponse, IntakeQuestion } from "@/utils/responsePipeline";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
+const DOORAI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/doorai-chat`;
+const HOMEPAGE_COACH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/homepage-coach`;
+
+type ChatMode = "personal" | "general";
 
 function sectorToSchoolType(sector: string | null | undefined): string | undefined {
   if (!sector) return undefined;
