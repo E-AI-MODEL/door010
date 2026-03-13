@@ -860,14 +860,24 @@ Deno.serve(async (req) => {
         }
 
         // Send UI payload — split slot_chips (intake) from actions (conversation followup)
-        // Determine intake_needed: if there's a next_slot_key and the slot is missing
-        const slotChips = detector?.next_slot_key
+        // Intake alleen voor de twee onboarding-kernslots
+        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "admission_requirements"];
+        const intakeNeeded =
+          detector?.next_slot_key !== undefined &&
+          INTAKE_TRIGGER_SLOTS.includes(detector.next_slot_key as SlotKey) &&
+          !slots[detector.next_slot_key as SlotKey] &&
+          intent !== "greeting" &&
+          intent !== "followup";
+
+        // slotChips alleen vullen als intake ook echt nodig is
+        const slotChips = intakeNeeded && detector?.next_slot_key
           ? actionsForNextSlot(detector.next_slot_key, slots)
           : [];
-        const intakeNeeded = slotChips.length > 0 && !slots[detector?.next_slot_key as SlotKey];
 
         // Conversation followup actions (max 2) — only when no intake needed
-        const followupActions = intakeNeeded ? [] : ssotActions.slice(0, 2);
+        const followupActions = intakeNeeded
+          ? []
+          : buildConversationFollowups(phase, slots, intent);
 
         // Corrected slots: send normalized values back so frontend can sync
         const correctedSlots: Record<string, string> = {};
