@@ -7,13 +7,8 @@ const corsHeaders = {
 };
 
 // ══════════════════════════════════════════════════════════════════════
-// DoorAI CHAT ORCHESTRA v2 — productie-proof refactor
+// DoorAI CHAT ORCHESTRA v3 — fase-doorstroom + webfallback + SSOT kennis
 // ══════════════════════════════════════════════════════════════════════
-// 1. SSE: upstream deltas doorsturen, daarna `event: ui` apart event.
-// 2. Links: zowel in assistant-tekst (markdown) als UI payload (buttons).
-// 3. Slot values: canonical, machine-readable.
-// 4. Geen "peildatum", "kennisbank", of interne labels in output.
-// 5. Dash filter alleen op content-deltas, niet op SSE framing.
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
@@ -46,6 +41,12 @@ interface DetectorPayload {
   next_question_id: string;
   next_question: string;
   next_phase_target?: string;
+  exit_criteria_met?: boolean;
+  phase_suggestion?: {
+    from: string;
+    to: string;
+    message: string;
+  };
 }
 
 interface PhaseTransition { from: string; to: string }
@@ -177,7 +178,6 @@ const REGIONAL_DESKS_LIST: DeskInfo[] = [
 function findRoleDescription(role: string): string | null {
   const key = normalizeRole(role);
   if (key && ROLE_DESCRIPTIONS[key]) return ROLE_DESCRIPTIONS[key];
-  // fuzzy fallback
   for (const [k, v] of Object.entries(ROLE_DESCRIPTIONS)) {
     if (role.toLowerCase().includes(k) || k.includes(role.toLowerCase())) return v;
   }
@@ -197,7 +197,7 @@ function findDeskObjects(regionOrCity: string): DeskInfo[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Knowledge Blocks (geen "peildatum", compacte tekst)
+// Knowledge Blocks
 // ─────────────────────────────────────────────────────────────────────
 const KNOWLEDGE: Record<string, string> = {
   lesgeven_po: "Leraar PO: verantwoordelijk voor een klas op de basisschool (groep 1-8). Pabo-diploma of zij-instroom PO-traject vereist.",
@@ -218,22 +218,23 @@ const KNOWLEDGE: Record<string, string> = {
 const BASELINE_KNOWLEDGE = `Het landelijke Onderwijsloket (onderwijsloket.com) biedt informatie over routes en bevoegdheden. Regionale onderwijsloketten bieden persoonlijke begeleiding. Routes lopen via reguliere opleidingen of via zij-instroom. Handige tools: [Routetool](https://onderwijsloket.com/routes/), [Onderwijsnavigator](https://onderwijsloket.com/onderwijsnavigator/).`;
 
 // ─────────────────────────────────────────────────────────────────────
-// Knowledge Resolver
+// Knowledge Resolver — now includes phase-specific knowledge
 // ─────────────────────────────────────────────────────────────────────
 function resolveKnowledge(
   slots: Partial<Record<SlotKey, string>>,
   phase: string,
+  userMessage?: string,
 ): string[] {
   const fragments: string[] = [];
   const role = slots.role_interest;
   const sector = slots.school_type;
   const p = (phase || "interesseren").toLowerCase();
+  const msg = (userMessage || "").toLowerCase();
 
   // Role description
   if (role) {
     const desc = findRoleDescription(role);
     if (desc) fragments.push(desc);
-    // Sector-specific teaching info
     if (sector && (role === "leraar" || role === "instructeur")) {
       const key = `lesgeven_${sector.toLowerCase()}`;
       if (KNOWLEDGE[key] && !fragments.some(f => f.includes(KNOWLEDGE[key].slice(0, 30)))) {
@@ -256,9 +257,27 @@ function resolveKnowledge(
     }
   }
 
-  // Salary/costs
-  if (slots.salary_info || p === "beslissen") fragments.push(KNOWLEDGE.salaris);
-  if (slots.costs_info || p === "beslissen") fragments.push(KNOWLEDGE.kosten);
+  // Salary/costs — trigger on slot OR on message content
+  if (slots.salary_info || p === "beslissen" || /(salaris|verdien|loon|cao|inkomen)/.test(msg)) {
+    fragments.push(KNOWLEDGE.salaris);
+  }
+  if (slots.costs_info || p === "beslissen" || /(kosten|collegegeld|gratis|subsidie|betalen)/.test(msg)) {
+    fragments.push(KNOWLEDGE.kosten);
+  }
+
+  // Zij-instroom specifics triggered by message
+  if (/(zij-instroom|zijinstroom|zij instroom|versneld|2 jaar)/.test(msg)) {
+    if (!fragments.some(f => f.includes("Zij-instroom"))) fragments.push(KNOWLEDGE.route_zij_instroom);
+    if (/(subsidie|sool|vergoeding)/.test(msg)) fragments.push(KNOWLEDGE.sool_subsidie);
+    if (/(verwant|vakinhoudelijk)/.test(msg) && !fragments.some(f => f.includes("verwant"))) fragments.push(KNOWLEDGE.verwantschap);
+  }
+
+  // Route questions without sector
+  if (!sector && /(route|opleiding|hoe word|bevoegdheid)/.test(msg)) {
+    fragments.push(KNOWLEDGE.route_pabo);
+    fragments.push(KNOWLEDGE.route_tweedegraads);
+    fragments.push(KNOWLEDGE.route_pdg);
+  }
 
   // Regional desks
   if (slots.region_preference) {
@@ -273,7 +292,7 @@ function resolveKnowledge(
 
   // Deduplicate and limit
   const unique = [...new Set(fragments)];
-  return unique.slice(0, 5);
+  return unique.slice(0, 7);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -293,7 +312,6 @@ function computeLinks(
   const p = (phase || "interesseren").toLowerCase();
   const msg = lastMsg.toLowerCase();
 
-  // Always: routes
   links.push({ label: "Routes en opleidingen", href: "/opleidingen" });
 
   if (p === "matchen" || LIVE_TOPIC_RE.test(msg)) {
@@ -315,23 +333,19 @@ function computeLinks(
     links.push({ label: "Afspraak aanvragen", href: "/profiel" });
   }
 
-  // Regional desk links
   if (slots.region_preference) {
     for (const desk of findDeskObjects(slots.region_preference)) {
       if (desk.website) links.push({ label: desk.title, href: desk.website });
     }
   }
 
-  // Fallback
   if (links.length <= 1) links.push({ label: "Events en meelopen", href: "/events" });
 
-  // Deduplicate by href, max 6
   const uniq = new Map<string, UiLink>();
   for (const l of links) uniq.set(l.href, l);
   return [...uniq.values()].slice(0, 6);
 }
 
-// Alleen externe FAQ-bronlinks injecteren — geen interne pagina's die toch al als chip verschijnen
 function computeTextLinks(faqSourceLinks: UiLink[]): string {
   const external = faqSourceLinks.filter(l => l.href.startsWith("http"));
   const selected = external.slice(0, 2);
@@ -340,7 +354,7 @@ function computeTextLinks(faqSourceLinks: UiLink[]): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Actions: canonical machine-readable values
+// Actions
 // ─────────────────────────────────────────────────────────────────────
 function actionsForNextSlot(
   slot: SlotKey,
@@ -458,6 +472,72 @@ function humanizeSituation(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Web Fallback — search trusted sources via Firecrawl
+// ─────────────────────────────────────────────────────────────────────
+async function fetchTrustedSources(): Promise<Array<{ url: string; label: string; category: string }>> {
+  try {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data, error } = await supabase
+      .from("trusted_sources")
+      .select("url, label, category")
+      .eq("active", true);
+    if (error || !data) return [];
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+async function webFallbackSearch(
+  userMessage: string,
+  trustedSources: Array<{ url: string }>,
+): Promise<string[]> {
+  const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!FIRECRAWL_API_KEY || trustedSources.length === 0) return [];
+
+  try {
+    // Build site filter from trusted sources (max 5 for query length)
+    const siteFilter = trustedSources.slice(0, 5).map(s => `site:${s.url}`).join(" OR ");
+    const query = `${userMessage} (${siteFilter})`;
+
+    const response = await fetch("https://api.firecrawl.dev/v1/search", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${FIRECRAWL_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: truncateInput(query, 300),
+        limit: 3,
+        lang: "nl",
+        country: "nl",
+        scrapeOptions: { formats: ["markdown"] },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Firecrawl search error:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.data) return [];
+
+    return data.data
+      .filter((r: { markdown?: string; url?: string }) => r.markdown)
+      .slice(0, 2)
+      .map((r: { markdown?: string; url?: string; title?: string }) => {
+        const content = truncate(r.markdown || "", 300);
+        const source = r.url ? ` Bron: ${r.url}` : "";
+        return `${content}${source}`;
+      });
+  } catch (e) {
+    console.error("Web fallback error:", e);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Context Assembler
 // ─────────────────────────────────────────────────────────────────────
 function assembleContext(
@@ -469,6 +549,8 @@ function assembleContext(
   intent: IntentType,
   faqKnowledge: string[],
   textLinks: string,
+  webKnowledge: string[],
+  userMessage: string,
 ): string {
   const slots = normalizeSlots(detector?.known_slots || {}, userSector);
   const filled = Object.values(slots).filter(Boolean).length;
@@ -484,18 +566,21 @@ function assembleContext(
 
   // Knowledge injection based on intent
   if (intent === "question" || intent === "followup") {
-    const knowledge = resolveKnowledge(slots, phase);
+    const knowledge = resolveKnowledge(slots, phase, userMessage);
     if (faqKnowledge.length > 0) knowledge.push(...faqKnowledge);
+    if (webKnowledge.length > 0) knowledge.push(...webKnowledge);
     if (knowledge.length > 0) {
       parts.push(`\nRelevante informatie:\n${knowledge.map(k => `- ${k}`).join("\n")}`);
     } else {
       parts.push(`\nRelevante informatie:\n${BASELINE_KNOWLEDGE}`);
     }
   } else if (intent === "exploration") {
+    const knowledge = resolveKnowledge(slots, phase, userMessage);
     parts.push(`\nRelevante informatie:\n${BASELINE_KNOWLEDGE}`);
-    if (faqKnowledge.length > 0) parts.push(`\nAanvullend:\n${faqKnowledge.map(k => `- ${k}`).join("\n")}`);
+    if (faqKnowledge.length > 0) knowledge.push(...faqKnowledge);
+    if (webKnowledge.length > 0) knowledge.push(...webKnowledge);
+    if (knowledge.length > 0) parts.push(`\nAanvullend:\n${knowledge.map(k => `- ${k}`).join("\n")}`);
   }
-  // greeting: no knowledge blocks
 
   if (profile) parts.push(`\nOver de gebruiker: ${profile}`);
 
@@ -503,13 +588,11 @@ function assembleContext(
     parts.push(`\nFase-verschuiving: van "${phaseTransition.from}" naar "${phaseTransition.to}". Erken dit kort en positief.`);
   }
 
-  // Inject text links for LLM to use in response
   if (textLinks && intent !== "greeting") {
     parts.push(`\nRelevante links (gebruik max 4 als markdown-links in je antwoord waar ze passen):\n${textLinks}`);
   }
 
   const assembled = parts.join("\n");
-  // Token cap ~800
   if (assembled.length > 3200) return parts.slice(0, 4).join("\n");
   return assembled;
 }
@@ -529,6 +612,11 @@ const DOORAI_CORE = `Je bent DoorAI, de orientatie-assistent van Onderwijsloket 
 - Geen opsommingen, geen genummerde lijsten, geen stappen-overzichten.
 - Eén kernpunt per antwoord. Niet alles tegelijk uitleggen.
 - Stel maximaal 1 vervolgvraag per beurt, altijd als laatste zin.
+
+## Fase-bewustzijn
+- Je begeleidt de gebruiker actief door de fasen: interesseren > orienteren > beslissen > matchen > voorbereiden.
+- Als je merkt dat de gebruiker klaar is voor de volgende fase, benoem dit kort en positief.
+- Stel een gerichte vraag die past bij de volgende fase.
 
 ## Links in je antwoord
 - Gebruik max 2 markdown-links per antwoord, beschrijvend. Nooit "klik hier".
@@ -564,7 +652,7 @@ const INTENT_APPENDIX: Record<IntentType, string> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Intent Classification (with heuristic fallback)
+// Intent Classification
 // ─────────────────────────────────────────────────────────────────────
 const GREETING_RE = /^(hoi|hey|hallo|hi|goedemorgen|goedemiddag|goedenavond|welkom|dag)\b/i;
 const FOLLOWUP_RE = /^(ja|nee|en|maar|ok|oke|prima|goed|dank|bedankt|thanks|klopt)\b/i;
@@ -641,11 +729,9 @@ async function searchFaqsByFts(userMessage: string): Promise<FaqResult[]> {
 async function selectBestFaqs(userMessage: string, candidates: FaqResult[], apiKey: string): Promise<FaqResult[]> {
   if (candidates.length <= 3) return candidates;
 
-  // Only use LLM selector if ranks are close
   const topRank = candidates[0]?.rank ?? 0;
   const thirdRank = candidates[2]?.rank ?? 0;
   if (topRank > 0 && thirdRank > 0 && topRank / thirdRank < 2) {
-    // Ranks are close, use LLM
     try {
       const candidateList = candidates.map((c, i) =>
         `[${i}] Q: ${c.question}\nA: ${truncate(c.answer, 150)}`
@@ -687,8 +773,6 @@ async function retrieveFaqKnowledge(userMessage: string, apiKey: string): Promis
 
   const best = await selectBestFaqs(userMessage, candidates, apiKey);
 
-  // Build fragments WITHOUT "[Officiele bron: URL]" inline
-  // Instead, include the URL as a markdown link at the end
   const fragments = best.map(faq => {
     let entry = `${faq.question} - ${faq.answer}`;
     if (faq.source_url) entry += ` Meer info: [bron](${faq.source_url})`;
@@ -707,7 +791,7 @@ async function retrieveFaqKnowledge(userMessage: string, apiKey: string): Promis
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// SSE Stream Handler — safe dash replacement on content deltas only
+// SSE Stream Handler
 // ─────────────────────────────────────────────────────────────────────
 function replaceDashes(text: string): string {
   return text.replace(/[\u2014\u2013]/g, "-");
@@ -735,26 +819,38 @@ Deno.serve(async (req) => {
       2000,
     );
 
-    // Step 1: Intent classification (with heuristic fallback)
+    // Step 1: Intent classification
     const intent = await classifyIntent(messages, LOVABLE_API_KEY);
 
-    // Step 2: FAQ retrieval (for non-greetings)
+    // Step 2: FAQ retrieval + web fallback (parallel, for non-greetings)
     let faqKnowledge: string[] = [];
     let faqSourceLinks: UiLink[] = [];
+    let webKnowledge: string[] = [];
+
     if (intent !== "greeting") {
-      const faqResult = await retrieveFaqKnowledge(lastUserMessage, LOVABLE_API_KEY);
+      // Run FAQ retrieval and trusted sources fetch in parallel
+      const [faqResult, trustedSources] = await Promise.all([
+        retrieveFaqKnowledge(lastUserMessage, LOVABLE_API_KEY),
+        fetchTrustedSources(),
+      ]);
       faqKnowledge = faqResult.fragments;
       faqSourceLinks = faqResult.sourceLinks;
+
+      // Web fallback: only if FAQ + SSOT knowledge is sparse
+      const ssotKnowledge = resolveKnowledge(slots, phase, lastUserMessage);
+      if (faqKnowledge.length + ssotKnowledge.length < 2 && trustedSources.length > 0) {
+        webKnowledge = await webFallbackSearch(lastUserMessage, trustedSources);
+        console.log(`Web fallback: ${webKnowledge.length} results for "${lastUserMessage.slice(0, 50)}"`);
+      }
     }
 
-    // Step 3: Compute UI payload (deterministic)
+    // Step 3: Compute UI payload
     const ssotActions: UiAction[] = detector?.next_slot_key
       ? actionsForNextSlot(detector.next_slot_key, slots)
       : [];
 
     let uiLinks = computeLinks(phase, slots, lastUserMessage);
 
-    // Merge FAQ source links
     const existingHrefs = new Set(uiLinks.map(l => l.href));
     for (const fl of faqSourceLinks) {
       if (!existingHrefs.has(fl.href)) {
@@ -764,13 +860,13 @@ Deno.serve(async (req) => {
     }
     uiLinks = uiLinks.slice(0, 6);
 
-    // Step 4: Build text links for LLM prompt injection
+    // Step 4: Build text links
     const textLinks = computeTextLinks(faqSourceLinks);
 
     // Step 5: Assemble context & system prompt
     const dynamicContext = assembleContext(
       phase, detector, profileMeta, userSector, phase_transition,
-      intent, faqKnowledge, textLinks,
+      intent, faqKnowledge, textLinks, webKnowledge, lastUserMessage,
     );
     const systemPrompt = DOORAI_CORE + INTENT_APPENDIX[intent] + `\n\n${dynamicContext}`;
 
@@ -807,8 +903,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Stream processing: parse upstream SSE, apply dash filter on content deltas only,
-    // then append `event: ui` at the end.
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const enc = new TextEncoder();
@@ -829,7 +923,6 @@ Deno.serve(async (req) => {
             const line = buffer.slice(0, nlIdx);
             buffer = buffer.slice(nlIdx + 1);
 
-            // Parse SSE lines to apply dash filter only on content deltas
             if (line.startsWith("data: ")) {
               const jsonStr = line.slice(6).trim();
               if (jsonStr === "[DONE]") {
@@ -844,22 +937,19 @@ Deno.serve(async (req) => {
                 }
                 await writer.write(enc.encode(`data: ${JSON.stringify(parsed)}\n\n`));
               } catch {
-                // Forward unparseable lines as-is
                 await writer.write(enc.encode(line + "\n"));
               }
             } else {
-              // Forward non-data lines (comments, empty lines)
               await writer.write(enc.encode(line + "\n"));
             }
           }
         }
 
-        // Flush remaining buffer
         if (buffer.trim()) {
           await writer.write(enc.encode(buffer + "\n"));
         }
 
-        // Build conversation followup actions based on phase and slots
+        // Build conversation followup actions
         function buildConversationFollowups(
           phase: string,
           slots: Partial<Record<SlotKey, string>>,
@@ -893,9 +983,8 @@ Deno.serve(async (req) => {
           return [];
         }
 
-        // Send UI payload — split slot_chips (intake) from actions (conversation followup)
-        // Intake alleen voor de twee onboarding-kernslots
-        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "admission_requirements"];
+        // Intake trigger — now includes role_interest as third core slot
+        const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "role_interest", "admission_requirements"];
         const intakeNeeded =
           detector?.next_slot_key !== undefined &&
           INTAKE_TRIGGER_SLOTS.includes(detector.next_slot_key as SlotKey) &&
@@ -903,17 +992,15 @@ Deno.serve(async (req) => {
           intent !== "greeting" &&
           intent !== "followup";
 
-        // slotChips alleen vullen als intake ook echt nodig is
         const slotChips = intakeNeeded && detector?.next_slot_key
           ? actionsForNextSlot(detector.next_slot_key, slots)
           : [];
 
-        // Conversation followup actions (max 2) — only when no intake needed
         const followupActions = intakeNeeded
           ? []
           : buildConversationFollowups(phase, slots, intent);
 
-        // Corrected slots: send normalized values back so frontend can sync
+        // Corrected slots
         const correctedSlots: Record<string, string> = {};
         for (const [k, v] of Object.entries(slots)) {
           if (v && detector?.known_slots?.[k as SlotKey] !== v) {
@@ -921,12 +1008,16 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Phase suggestion from detector
+        const phaseSuggestion = detector?.phase_suggestion || undefined;
+
         const uiPayload = JSON.stringify({
           actions: followupActions,
           slot_chips: slotChips,
           intake_needed: intakeNeeded,
           corrected_slots: Object.keys(correctedSlots).length > 0 ? correctedSlots : undefined,
           links: uiLinks,
+          phase_suggestion: phaseSuggestion,
         });
         await writer.write(enc.encode(`event: ui\ndata: ${uiPayload}\n\n`));
       } catch (e) {
