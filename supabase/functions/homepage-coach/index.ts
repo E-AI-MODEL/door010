@@ -1,3 +1,5 @@
+import { publicThemes, themesToActions } from "../_shared/themes.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -177,12 +179,7 @@ Deno.serve(async (req) => {
     const answerType = classifyAnswerType(lastUserMsg);
     const mode = "public";
 
-    // ── Infer conversation signals for dynamic actions ──
     const allUserMsgs = messages.filter(m => m.role === "user").map(m => m.content.toLowerCase()).join(" ");
-    const mentionsSector = /\b(po|vo|mbo|basisonderwijs|voortgezet|middelbare|beroepsonderwijs)\b/i.test(allUserMsgs);
-    const mentionsLevel = /\b(mbo|hbo|wo|univers)\b/i.test(allUserMsgs);
-    const mentionsRoute = /\b(pabo|zij-instroom|zijinstroom|pdg|lerarenopleiding|onderwijsassistent)\b/i.test(allUserMsgs);
-    const msgCount = messages.filter(m => m.role === "user").length;
 
     // ── Dynamic actions based on conversation context ──
     function buildActions(): Array<{ label: string; value: string }> {
@@ -193,50 +190,14 @@ Deno.serve(async (req) => {
         ];
       }
 
-      // Theme-driven actions based on conversation content
-      const mentionsSalary = /\b(salaris|verdien|loon|cao|inkomen)\b/i.test(allUserMsgs);
-      const mentionsCosts = /\b(kosten|collegegeld|subsidie|financier|gratis)\b/i.test(allUserMsgs);
-      const mentionsEvents = /\b(event|open dag|meeloop|proefles)\b/i.test(allUserMsgs);
-      const mentionsRegion = /\b(regio|rotterdam|school|vacature|baan)\b/i.test(allUserMsgs);
+      // Use shared publicThemes for consistent theme selection
+      const themes = publicThemes(allUserMsgs);
+      const actions = themesToActions(themes, 2);
 
-      if (!mentionsSector && msgCount >= 1) {
-        return [
-          { label: "Sectoren vergelijken", value: "Wat zijn de verschillen tussen PO, VO en MBO?" },
-          { label: "Functies bekijken", value: "Welke functies zijn er in het onderwijs?" },
-        ];
-      }
-      if (mentionsSector && !mentionsRoute) {
-        const actions: Array<{ label: string; value: string }> = [
-          { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er voor mij?" },
-        ];
-        if (!mentionsCosts) {
-          actions.push({ label: "Kosten en financiering", value: "Wat kost een opleiding en welke financiering is er?" });
-        } else {
-          actions.push({ label: "Vacatures bekijken", value: "Zijn er vacatures in het onderwijs?" });
-        }
-        return actions;
-      }
-      if (mentionsRoute) {
-        const actions: Array<{ label: string; value: string }> = [];
-        if (!mentionsSalary) actions.push({ label: "Salaris bekijken", value: "Wat verdient een leraar gemiddeld?" });
-        if (!mentionsEvents) actions.push({ label: "Events bekijken", value: "Zijn er open dagen of informatie-avonden?" });
-        if (!mentionsRegion && actions.length < 2) actions.push({ label: "Scholen in de regio", value: "Welke scholen zijn er in mijn regio?" });
-        if (actions.length === 0) actions.push({ label: "Account aanmaken", value: "Hoe kan ik een account aanmaken voor persoonlijk advies?" });
-        return actions.slice(0, 2);
-      }
-      // Contextual fallback based on what's been discussed
-      if (mentionsSalary) {
-        return [
-          { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" },
-          { label: "Vacatures bekijken", value: "Zijn er vacatures in het onderwijs?" },
-        ];
-      }
-      if (mentionsCosts) {
-        return [
-          { label: "Subsidies bekijken", value: "Welke subsidies zijn er voor aanstaande leraren?" },
-          { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" },
-        ];
-      }
+      // If themes produced actions, use them
+      if (actions.length > 0) return actions;
+
+      // Absolute fallback
       return [
         { label: "Routes bekijken", value: "Welke opleidingsroutes zijn er?" },
         { label: "Sectoren vergelijken", value: "Wat zijn de verschillen tussen PO, VO en MBO?" },
