@@ -877,8 +877,8 @@ Deno.serve(async (req) => {
     );
     const systemPrompt = DOORAI_CORE + INTENT_APPENDIX[intent] + `\n\n${dynamicContext}`;
 
-    // Step 6: Stream LLM response
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Step 6: Non-streaming LLM call for draft validation
+    const llmResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -887,12 +887,12 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [{ role: "system", content: systemPrompt }, ...messages],
-        stream: true,
+        stream: false,
       }),
     });
 
-    if (!response.ok) {
-      const status = response.status;
+    if (!llmResponse.ok) {
+      const status = llmResponse.status;
       if (status === 429) {
         return new Response(JSON.stringify({ error: "Te veel verzoeken, probeer het later opnieuw." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -903,105 +903,125 @@ Deno.serve(async (req) => {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await response.text();
+      const errorText = await llmResponse.text();
       console.error("AI gateway error:", status, errorText);
       return new Response(JSON.stringify({ error: "Er ging iets mis, probeer het opnieuw." }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const llmData = await llmResponse.json();
+    let draft = replaceDashes(llmData.choices?.[0]?.message?.content ?? "");
+
+    // ── Pre-stream reflection & repair ──────────────────────────
+    const REFLECTION_FORBIDDEN = [
+      "peildatum", "kennisbank", "als ai", "goed dat je dit vraagt",
+      "ik begrijp je helemaal", "je moet", "scenario",
+      "achtergrondinformatie", "dynamische context",
+      "globaal zo uit",
+    ];
+    const reflectionIssues: string[] = [];
+    const lowerDraft = draft.toLowerCase();
+
+    for (const phrase of REFLECTION_FORBIDDEN) {
+      if (lowerDraft.includes(phrase)) {
+        reflectionIssues.push(`Bevat verboden term: "${phrase}"`);
+      }
+    }
+
+    // Bracket-labels check — independent of length
+    if (/\[[A-Z][^\]]{1,30}\]/.test(draft)) {
+      reflectionIssues.push("Bevat bracket-labels zoals [Label]");
+    }
+
+    // Sentence length check — independent of brackets
+    const intentMaxSentences: Record<string, number> = {
+      greeting: 2, question: 4, exploration: 3, followup: 3,
+    };
+    const maxS = intentMaxSentences[intent] ?? 4;
+    const sentences = draft.split(/[.!?]+/).filter(s => s.trim().length > 5);
+    if (sentences.length > maxS * 1.2) {
+      reflectionIssues.push(`Te lang: ${sentences.length} zinnen (max ~${maxS})`);
+    }
+
+    if (/[\u2014\u2013]/.test(draft)) {
+      reflectionIssues.push("Bevat em-dash of en-dash");
+    }
+
+    // ── Repair if issues found ──────────────────────────────────
+    if (reflectionIssues.length > 0) {
+      console.warn("Reflection issues (repairing):", reflectionIssues);
+
+      // Strip bracket-labels inline
+      draft = draft.replace(/\[[A-Z][^\]]{1,30}\]\s*/g, "");
+
+      // Strip em/en dashes
+      draft = draft.replace(/[\u2014\u2013]/g, "-");
+
+      // If still too long after bracket removal, truncate to maxS sentences
+      const repairedSentences = draft.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 5);
+      if (repairedSentences.length > maxS) {
+        draft = repairedSentences.slice(0, maxS).join(" ").trim();
+      }
+
+      // Remove forbidden terms by doing a second LLM call only if forbidden terms remain
+      const stillHasForbidden = REFLECTION_FORBIDDEN.some(p => draft.toLowerCase().includes(p));
+      if (stillHasForbidden) {
+        try {
+          const repairResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash-lite",
+              messages: [
+                { role: "system", content: `Herschrijf het volgende antwoord in maximaal ${maxS} korte zinnen. Verwijder alle verboden woorden: ${REFLECTION_FORBIDDEN.join(", ")}. Geen opsommingen, geen brackets, geen subkopjes. Alleen lopende tekst.` },
+                { role: "user", content: draft },
+              ],
+              stream: false,
+              temperature: 0.3,
+            }),
+          });
+          if (repairResponse.ok) {
+            const repairData = await repairResponse.json();
+            const repaired = repairData.choices?.[0]?.message?.content?.trim();
+            if (repaired && repaired.length > 10) {
+              draft = replaceDashes(repaired);
+            }
+          }
+        } catch (e) {
+          console.error("Repair call failed:", e);
+        }
+      }
+    }
+
+    const reflectionPass = reflectionIssues.length === 0;
+    const reflectionPayload = JSON.stringify({
+      pass: reflectionPass,
+      issues: reflectionIssues,
+      repaired: !reflectionPass,
+    });
+
+    // ── Stream the validated/repaired response to client ─────────
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const enc = new TextEncoder();
 
     (async () => {
       try {
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let fullResponse = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          let nlIdx: number;
-          while ((nlIdx = buffer.indexOf("\n")) !== -1) {
-            const line = buffer.slice(0, nlIdx);
-            buffer = buffer.slice(nlIdx + 1);
-
-            if (line.startsWith("data: ")) {
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr === "[DONE]") {
-                await writer.write(enc.encode("data: [DONE]\n\n"));
-                continue;
-              }
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const content = parsed.choices?.[0]?.delta?.content;
-                if (typeof content === "string") {
-                  const cleaned = replaceDashes(content);
-                  parsed.choices[0].delta.content = cleaned;
-                  fullResponse += cleaned;
-                }
-                await writer.write(enc.encode(`data: ${JSON.stringify(parsed)}\n\n`));
-              } catch {
-                await writer.write(enc.encode(line + "\n"));
-              }
-            } else {
-              await writer.write(enc.encode(line + "\n"));
-            }
-          }
+        // Stream the draft word-by-word for smooth UX
+        const words = draft.split(/(\s+)/);
+        for (const word of words) {
+          const chunk = {
+            choices: [{ delta: { content: word }, index: 0 }],
+          };
+          await writer.write(enc.encode(`data: ${JSON.stringify(chunk)}\n\n`));
         }
+        await writer.write(enc.encode("data: [DONE]\n\n"));
 
-        if (buffer.trim()) {
-          await writer.write(enc.encode(buffer + "\n"));
-        }
-
-        // ── Post-stream reflection ──────────────────────────────
-        const REFLECTION_FORBIDDEN = [
-          "peildatum", "kennisbank", "als ai", "goed dat je dit vraagt",
-          "ik begrijp je helemaal", "je moet", "scenario",
-          "achtergrondinformatie", "dynamische context",
-          "globaal zo uit",
-        ];
-        const reflectionIssues: string[] = [];
-        const lowerFull = fullResponse.toLowerCase();
-
-        for (const phrase of REFLECTION_FORBIDDEN) {
-          if (lowerFull.includes(phrase)) {
-            reflectionIssues.push(`Bevat verboden term: "${phrase}"`);
-          }
-        }
-
-        const intentMaxSentences: Record<string, number> = {
-          greeting: 2, question: 4, exploration: 3, followup: 3,
-        };
-        const maxS = intentMaxSentences[intent] ?? 4;
-        const sentences = fullResponse.split(/[.!?]+/).filter(s => s.trim().length > 5);
-        if (sentences.length > maxS * 1.2) {
-
-        // Detect bracket-labels like [Landelijk], [Stap 1], etc.
-        if (/\[[A-Z][^\]]{1,30}\]/.test(fullResponse)) {
-          reflectionIssues.push("Bevat bracket-labels zoals [Label]");
-        }
-          reflectionIssues.push(`Te lang: ${sentences.length} zinnen (max ~${maxS})`);
-        }
-
-        if (/[\u2014\u2013]/.test(fullResponse)) {
-          reflectionIssues.push("Bevat em-dash of en-dash na filtering");
-        }
-
-        const reflectionPass = reflectionIssues.length === 0;
-        if (!reflectionPass) {
-          console.warn("Reflection issues:", reflectionIssues);
-        }
-
-        const reflectionPayload = JSON.stringify({
-          pass: reflectionPass,
-          issues: reflectionIssues,
-        });
+        // Send reflection event
         await writer.write(enc.encode(`event: reflection\ndata: ${reflectionPayload}\n\n`));
 
         // Build conversation followup actions
