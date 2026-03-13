@@ -859,6 +859,40 @@ Deno.serve(async (req) => {
           await writer.write(enc.encode(buffer + "\n"));
         }
 
+        // Build conversation followup actions based on phase and slots
+        function buildConversationFollowups(
+          phase: string,
+          slots: Partial<Record<SlotKey, string>>,
+          intent: IntentType,
+        ): UiAction[] {
+          if (intent === "greeting") return [];
+          const sector = slots.school_type;
+          const sectorLabel = sector === "PO" ? "basisonderwijs"
+            : sector === "VO" ? "voortgezet onderwijs"
+            : sector === "MBO" ? "mbo"
+            : "het onderwijs";
+
+          if (phase === "orienteren" && sector) return [
+            { label: `Routes ${sectorLabel}`, value: `Welke routes zijn er voor ${sectorLabel}?` },
+            { label: "Kosten en duur", value: "Wat kost een opleiding en hoe lang duurt het?" },
+          ];
+          if (phase === "beslissen") return [
+            { label: "Kosten en duur", value: "Wat zijn de kosten en hoe lang duurt het?" },
+            { label: "Twijfels bespreken", value: "Ik twijfel nog, wat zijn mijn opties?" },
+          ];
+          if (phase === "matchen") return [
+            { label: "Vacatures zoeken", value: "Zijn er vacatures bij mij in de buurt?" },
+            { label: "Gesprek plannen", value: "Ik wil een gesprek plannen met een adviseur." },
+          ];
+          if (phase === "voorbereiden") return [
+            { label: "Wat moet ik regelen?", value: "Wat moet ik praktisch regelen voor de start?" },
+          ];
+          if (sector) return [
+            { label: `Meer over ${sectorLabel}`, value: `Vertel me meer over werken in ${sectorLabel}.` },
+          ];
+          return [];
+        }
+
         // Send UI payload — split slot_chips (intake) from actions (conversation followup)
         // Intake alleen voor de twee onboarding-kernslots
         const INTAKE_TRIGGER_SLOTS: SlotKey[] = ["school_type", "admission_requirements"];
