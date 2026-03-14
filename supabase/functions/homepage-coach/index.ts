@@ -1,4 +1,4 @@
-import { publicThemes, themesToActions } from "../_shared/themes.ts";
+import { publicThemes, themesToActions, detectCurrentThemeKeys } from "../_shared/themes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
