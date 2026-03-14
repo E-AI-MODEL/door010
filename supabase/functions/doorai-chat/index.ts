@@ -1043,6 +1043,7 @@ Deno.serve(async (req) => {
           slots: Partial<Record<SlotKey, string>>,
           intent: IntentType,
           missingSlots: SlotKey[],
+          userMsg: string,
         ): UiAction[] {
           if (intent === "greeting") return [];
 
@@ -1052,11 +1053,15 @@ Deno.serve(async (req) => {
             if (v) slotsRecord[k] = v;
           }
 
+          // Detect what user already asked about, exclude those themes
+          const currentKeys = detectCurrentThemeKeys(userMsg);
+
           const themes = deriveThemes({
             phase,
             knownSlots: slotsRecord,
             missingSlots,
             maxThemes: 3,
+            excludeKeys: currentKeys,
           });
 
           // Convert themes to actions, max 2
