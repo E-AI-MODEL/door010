@@ -78,12 +78,20 @@ async function resolveSystemPrompt(chatbotKey: string, fallbackPrompt: string): 
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("llm_prompt_configs")
-      .select("prompt_override, active")
+      .select("prompt_override, active, sort_order")
       .eq("chatbot_key", chatbotKey)
-      .maybeSingle();
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
 
-    if (error || !data?.active || !data.prompt_override?.trim()) return fallbackPrompt;
-    return data.prompt_override;
+    if (error || !data || data.length === 0) return fallbackPrompt;
+
+    const addons = data
+      .filter((row: any) => row.prompt_override?.trim())
+      .map((row: any) => row.prompt_override.trim());
+
+    if (addons.length === 0) return fallbackPrompt;
+
+    return fallbackPrompt + "\n\n" + addons.join("\n\n");
   } catch {
     return fallbackPrompt;
   }

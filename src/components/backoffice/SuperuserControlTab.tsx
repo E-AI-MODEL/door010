@@ -5,16 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { RefreshCw, Save, Wrench, AlertTriangle, Bot, RotateCcw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { RefreshCw, Save, Wrench, AlertTriangle, Bot, RotateCcw, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 type PromptConfig = {
   id: string;
   chatbot_key: string;
   title: string;
+  addon_label: string;
   prompt_override: string | null;
   active: boolean;
   notes: string | null;
+  sort_order: number;
   updated_at: string;
 };
 
@@ -36,11 +39,78 @@ function severityBadgeVariant(severity: PipelineEvent["severity"]) {
   return "outline" as const;
 }
 
+// ── Add-on Card ────────────────────────────────────────────────
+function AddonCard({
+  config,
+  onSave,
+  onDelete,
+  onToggle,
+  saving,
+}: {
+  config: PromptConfig;
+  onSave: (id: string, override: string, notes: string, label: string) => void;
+  onDelete: (id: string) => void;
+  onToggle: (id: string, active: boolean) => void;
+  saving: boolean;
+}) {
+  const [draft, setDraft] = useState(config.prompt_override ?? "");
+  const [notesDraft, setNotesDraft] = useState(config.notes ?? "");
+  const [labelDraft, setLabelDraft] = useState(config.addon_label ?? "");
+
+  return (
+    <div className="rounded-lg border p-4 bg-card space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Switch
+            checked={config.active}
+            onCheckedChange={(checked) => onToggle(config.id, checked)}
+          />
+          <Input
+            value={labelDraft}
+            onChange={(e) => setLabelDraft(e.target.value)}
+            placeholder="Add-on label"
+            className="h-7 text-xs max-w-[200px]"
+          />
+          <Badge variant={config.active ? "outline" : "secondary"} className="shrink-0">
+            {config.active ? "Aan" : "Uit"}
+          </Badge>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => onDelete(config.id)} className="text-destructive h-7 w-7 p-0">
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      <Textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Prompt add-on tekst (wordt toegevoegd aan de basisprompt)"
+        className="min-h-28 text-xs"
+      />
+
+      <Textarea
+        value={notesDraft}
+        onChange={(e) => setNotesDraft(e.target.value)}
+        placeholder="Notities / tuning rationale"
+        className="min-h-16 text-xs"
+      />
+
+      <div className="flex items-center justify-between">
+        <Button size="sm" onClick={() => onSave(config.id, draft, notesDraft, labelDraft)} disabled={saving}>
+          <Save className="h-3.5 w-3.5 mr-1" />
+          Opslaan
+        </Button>
+        <span className="text-[11px] text-muted-foreground">
+          {new Date(config.updated_at).toLocaleString("nl-NL")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Tab ───────────────────────────────────────────────────
 export function SuperuserControlTab() {
   const [promptConfigs, setPromptConfigs] = useState<PromptConfig[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [notesDrafts, setNotesDrafts] = useState<Record<string, string>>({});
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const [pipelineEvents, setPipelineEvents] = useState<PipelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,41 +120,31 @@ export function SuperuserControlTab() {
   const loadPromptConfigs = useCallback(async () => {
     const { data, error } = await (supabase as any)
       .from("llm_prompt_configs")
-      .select("id, chatbot_key, title, prompt_override, active, notes, updated_at")
-      .order("chatbot_key", { ascending: true });
+      .select("id, chatbot_key, title, addon_label, prompt_override, active, notes, sort_order, updated_at")
+      .order("chatbot_key", { ascending: true })
+      .order("sort_order", { ascending: true });
 
     if (error) {
       toast.error("Kon prompt-instellingen niet laden");
       console.error("Failed to load prompt configs", error);
       return;
     }
-
-    const rows = (data ?? []) as PromptConfig[];
-    setPromptConfigs(rows);
-    setDrafts(
-      Object.fromEntries(rows.map((row) => [row.chatbot_key, row.prompt_override ?? ""])),
-    );
-    setNotesDrafts(
-      Object.fromEntries(rows.map((row) => [row.chatbot_key, row.notes ?? ""])),
-    );
+    setPromptConfigs((data ?? []) as PromptConfig[]);
   }, []);
 
   const loadPipelineEvents = useCallback(async () => {
     setLoadingEvents(true);
-    const query = (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("chatbot_pipeline_events")
       .select("id, chatbot_key, stage, severity, message, created_at, resolved")
       .order("created_at", { ascending: false })
       .limit(80);
 
-    const { data, error } = await query;
     if (error) {
       toast.error("Kon pipeline-events niet laden");
-      console.error("Failed to load pipeline events", error);
       setLoadingEvents(false);
       return;
     }
-
     setPipelineEvents((data ?? []) as PipelineEvent[]);
     setLoadingEvents(false);
   }, []);
@@ -95,75 +155,95 @@ export function SuperuserControlTab() {
     setLoading(false);
   }, [loadPromptConfigs, loadPipelineEvents]);
 
-  useEffect(() => {
-    void refreshAll();
-  }, [refreshAll]);
+  useEffect(() => { void refreshAll(); }, [refreshAll]);
 
-  const saveConfig = async (config: PromptConfig) => {
-    setSavingKey(config.chatbot_key);
-
-    const { data: authData } = await supabase.auth.getUser();
-    const updatePayload = {
-      prompt_override: drafts[config.chatbot_key]?.trim() || null,
-      notes: notesDrafts[config.chatbot_key]?.trim() || null,
-      updated_by: authData.user?.id ?? null,
-    };
-
-    const { error } = await (supabase as any)
-      .from("llm_prompt_configs")
-      .update(updatePayload)
-      .eq("id", config.id);
-
-    if (error) {
-      toast.error("Opslaan mislukt");
-      console.error("Failed to save prompt config", error);
-      setSavingKey(null);
-      return;
-    }
-
-    toast.success("Prompt-instelling opgeslagen");
-    await loadPromptConfigs();
-    setSavingKey(null);
-  };
-
-  const clearOverride = async (config: PromptConfig) => {
-    setDrafts((prev) => ({ ...prev, [config.chatbot_key]: "" }));
-    setSavingKey(config.chatbot_key);
-
+  const saveAddon = useCallback(async (id: string, override: string, notes: string, label: string) => {
+    setSavingId(id);
     const { data: authData } = await supabase.auth.getUser();
     const { error } = await (supabase as any)
       .from("llm_prompt_configs")
-      .update({ prompt_override: null, updated_by: authData.user?.id ?? null })
-      .eq("id", config.id);
+      .update({
+        prompt_override: override.trim() || null,
+        notes: notes.trim() || null,
+        addon_label: label.trim(),
+        updated_by: authData.user?.id ?? null,
+      })
+      .eq("id", id);
 
-    if (error) {
-      toast.error("Reset van prompt override mislukt");
-      console.error("Failed to clear prompt override", error);
-      setSavingKey(null);
-      return;
-    }
-
-    toast.success("Override verwijderd - fallback prompt actief");
+    if (error) { toast.error("Opslaan mislukt"); setSavingId(null); return; }
+    toast.success("Add-on opgeslagen");
     await loadPromptConfigs();
-    setSavingKey(null);
-  };
+    setSavingId(null);
+  }, [loadPromptConfigs]);
+
+  const toggleAddon = useCallback(async (id: string, active: boolean) => {
+    const { error } = await (supabase as any)
+      .from("llm_prompt_configs")
+      .update({ active })
+      .eq("id", id);
+
+    if (error) { toast.error("Toggle mislukt"); return; }
+    toast.success(active ? "Add-on geactiveerd" : "Add-on gedeactiveerd");
+    await loadPromptConfigs();
+  }, [loadPromptConfigs]);
+
+  const deleteAddon = useCallback(async (id: string) => {
+    const { error } = await (supabase as any)
+      .from("llm_prompt_configs")
+      .delete()
+      .eq("id", id);
+
+    if (error) { toast.error("Verwijderen mislukt"); return; }
+    toast.success("Add-on verwijderd");
+    await loadPromptConfigs();
+  }, [loadPromptConfigs]);
+
+  const addNewAddon = useCallback(async (chatbotKey: string, title: string) => {
+    const maxSort = promptConfigs
+      .filter((c) => c.chatbot_key === chatbotKey)
+      .reduce((max, c) => Math.max(max, c.sort_order), -1);
+
+    const { error } = await (supabase as any)
+      .from("llm_prompt_configs")
+      .insert({
+        chatbot_key: chatbotKey,
+        title,
+        addon_label: `Add-on ${maxSort + 2}`,
+        sort_order: maxSort + 1,
+        active: false,
+        prompt_override: null,
+      });
+
+    if (error) { toast.error("Toevoegen mislukt"); return; }
+    toast.success("Nieuwe add-on aangemaakt");
+    await loadPromptConfigs();
+  }, [promptConfigs, loadPromptConfigs]);
 
   const filteredEvents = useMemo(() => {
     if (filterBot === "all") return pipelineEvents;
-    return pipelineEvents.filter((event) => event.chatbot_key === filterBot);
+    return pipelineEvents.filter((e) => e.chatbot_key === filterBot);
   }, [filterBot, pipelineEvents]);
 
-  const eventCounts = useMemo(() => {
-    return {
-      total: pipelineEvents.length,
-      errors: pipelineEvents.filter((e) => e.severity === "error").length,
-      warnings: pipelineEvents.filter((e) => e.severity === "warning").length,
-      unresolved: pipelineEvents.filter((e) => !e.resolved).length,
-    };
-  }, [pipelineEvents]);
+  const eventCounts = useMemo(() => ({
+    total: pipelineEvents.length,
+    errors: pipelineEvents.filter((e) => e.severity === "error").length,
+    warnings: pipelineEvents.filter((e) => e.severity === "warning").length,
+    unresolved: pipelineEvents.filter((e) => !e.resolved).length,
+  }), [pipelineEvents]);
+
+  const groupedConfigs = useMemo(() => {
+    const map: Record<string, PromptConfig[]> = {};
+    for (const key of CHATBOT_KEYS) map[key] = [];
+    for (const c of promptConfigs) {
+      if (!map[c.chatbot_key]) map[c.chatbot_key] = [];
+      map[c.chatbot_key].push(c);
+    }
+    return map;
+  }, [promptConfigs]);
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -173,7 +253,7 @@ export function SuperuserControlTab() {
                 Superuser besturing
               </CardTitle>
               <CardDescription className="mt-1 text-xs">
-                Hier kun je per chatbot de systeemprompt overriden en pipeline-fouten monitoren.
+                Beheer prompt add-ons per chatbot. Elke add-on wordt <strong>toegevoegd</strong> aan de basisprompt (niet vervangen). Toggle aan/uit per add-on.
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={refreshAll} disabled={loading || loadingEvents}>
@@ -184,83 +264,58 @@ export function SuperuserControlTab() {
         </CardHeader>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-muted-foreground">Pipeline events</p>
-            <p className="text-2xl font-semibold">{eventCounts.total}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-muted-foreground">Errors</p>
-            <p className="text-2xl font-semibold text-destructive">{eventCounts.errors}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-muted-foreground">Warnings</p>
-            <p className="text-2xl font-semibold text-amber-500">{eventCounts.warnings}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-muted-foreground">Open issues</p>
-            <p className="text-2xl font-semibold">{eventCounts.unresolved}</p>
-          </CardContent>
-        </Card>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">Pipeline events</p><p className="text-2xl font-semibold">{eventCounts.total}</p></CardContent></Card>
+        <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">Errors</p><p className="text-2xl font-semibold text-destructive">{eventCounts.errors}</p></CardContent></Card>
+        <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">Warnings</p><p className="text-2xl font-semibold text-amber-500">{eventCounts.warnings}</p></CardContent></Card>
+        <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">Open issues</p><p className="text-2xl font-semibold">{eventCounts.unresolved}</p></CardContent></Card>
       </div>
 
+      {/* Prompt Add-ons per chatbot */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {promptConfigs.map((config) => (
-          <Card key={config.id} className="h-full">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5">
-                  <Bot className="h-4 w-4" />
-                  {config.title}
-                </span>
-                <Badge variant={config.active ? "outline" : "secondary"}>{config.active ? "Actief" : "Inactief"}</Badge>
-              </CardTitle>
-              <CardDescription className="text-xs">Key: {config.chatbot_key}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Systeemprompt override</p>
-                <Textarea
-                  value={drafts[config.chatbot_key] ?? ""}
-                  onChange={(e) => setDrafts((prev) => ({ ...prev, [config.chatbot_key]: e.target.value }))}
-                  placeholder="Laat leeg om fallback in code te gebruiken"
-                  className="min-h-40 text-xs"
-                />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Notities / tuning rationale</p>
-                <Textarea
-                  value={notesDrafts[config.chatbot_key] ?? ""}
-                  onChange={(e) => setNotesDrafts((prev) => ({ ...prev, [config.chatbot_key]: e.target.value }))}
-                  placeholder="Bijv. waarom deze override is ingesteld"
-                  className="min-h-20 text-xs"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => saveConfig(config)} disabled={savingKey === config.chatbot_key}>
-                  <Save className="h-3.5 w-3.5 mr-1" />
-                  Opslaan
+        {CHATBOT_KEYS.map((key) => {
+          const configs = groupedConfigs[key] ?? [];
+          const title = key === "doorai-chat" ? "DoorAI Authenticated Chat" : "DoorAI Public Widget";
+          return (
+            <Card key={key} className="h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Bot className="h-4 w-4" />
+                    {title}
+                  </span>
+                  <Badge variant="outline" className="text-[11px]">{key}</Badge>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {configs.filter((c) => c.active).length} van {configs.length} add-ons actief
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {configs.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Geen add-ons. Klik + om er een toe te voegen.</p>
+                )}
+                {configs.map((config) => (
+                  <AddonCard
+                    key={config.id}
+                    config={config}
+                    onSave={saveAddon}
+                    onDelete={deleteAddon}
+                    onToggle={toggleAddon}
+                    saving={savingId === config.id}
+                  />
+                ))}
+                <Button variant="outline" size="sm" className="w-full" onClick={() => addNewAddon(key, title)}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Add-on toevoegen
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => clearOverride(config)} disabled={savingKey === config.chatbot_key}>
-                  <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  Reset override
-                </Button>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Laatste update: {new Date(config.updated_at).toLocaleString("nl-NL")}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
+      {/* Pipeline Events */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -291,43 +346,19 @@ export function SuperuserControlTab() {
               {filteredEvents.map((event) => (
                 <div key={event.id} className="rounded-lg border p-3 bg-card">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <Badge variant={severityBadgeVariant(event.severity)} className="capitalize">
-                      {event.severity}
-                    </Badge>
+                    <Badge variant={severityBadgeVariant(event.severity)} className="capitalize">{event.severity}</Badge>
                     <Badge variant="outline">{event.chatbot_key}</Badge>
                     <span className="text-[11px] text-muted-foreground">{event.stage}</span>
                     {!event.resolved && <Badge variant="secondary">open</Badge>}
                   </div>
                   <p className="text-sm">{event.message}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    {new Date(event.created_at).toLocaleString("nl-NL")}
-                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{new Date(event.created_at).toLocaleString("nl-NL")}</p>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {promptConfigs.length === 0 && !loading && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">
-              Geen prompt-configs gevonden. Controleer of de migratie voor superuser controls is toegepast.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {CHATBOT_KEYS.some((key) => !promptConfigs.some((config) => config.chatbot_key === key)) && !loading && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">
-              Let op: niet alle verwachte chatbot keys zijn aanwezig in <code>llm_prompt_configs</code>.
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
