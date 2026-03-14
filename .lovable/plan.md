@@ -1,41 +1,44 @@
+## Diagnose
+
+Het account `vis@emmauscollege.nl` bestaat in de database, maar heeft alleen de rol **candidate** — niet **superuser**. De seed-functie is waarschijnlijk eerder gedraaid voordat vis in de seed-lijst stond, of is nooit opnieuw gedraaid na de toevoeging.
 
 
-# Plan: FAQ-data verrijken en importeren
+| Veld             | Status             |
+| ---------------- | ------------------ |
+| Account bestaat  | Ja                 |
+| Email bevestigd  | Ja                 |
+| Wachtwoord gezet | Ja                 |
+| Huidige rol      | `candidate` (fout) |
+| Gewenste rol     | `admin`            |
 
-## Wat ik ga doen
 
-De geüploade `ingest_faqs_payload_DOORTJE_ZIB_MVP_v2_deduped.json` (17 FAQ's) bevat goede vragen maar heeft twee problemen:
+## Plan
 
-1. **Dunne antwoorden** — items 5, 6, 7, 8 bevatten alleen "Vervolgvragen" zonder inhoudelijk antwoord
-2. **Gemixte antwoorden** — item 1 en 2 bevatten antwoorden die niet bij de vraag passen (salaris-info bij "intensiteit", buitenland-info bij "wat is zij-instroom")
+### Stap 1: Voeg admin-rol toe
 
-Ik ga:
+Database migratie met 1 SQL statement:
 
-### Stap 1: FAQ-data opschonen en verrijken
+```sql
+INSERT INTO public.user_roles (user_id, role)
+VALUES ('ab70ec17-075f-40a1-8008-ef984231b8a6', 'admin')
+ON CONFLICT (user_id, role) DO NOTHING;
+```
 
-Een verbeterde versie van het JSON-bestand aanmaken als `src/data/faq-seed.json` met:
+### Stap 2: Profiel bijwerken
 
-- **17 bestaande items opschonen**: antwoorden koppelen aan de juiste vraag, dunne items aanvullen met kennis uit `KNOWLEDGE_BLOCKS` en `ROUTE_SUMMARIES`
-- **~15 nieuwe items toevoegen** op basis van de hardcoded `KNOWLEDGE_BLOCKS` die nu in `doorai-chat` staan (salaris, kosten, bevoegdheden, PDG, verwantschap, SOOL-subsidie, etc.)
-- **Categorieën standaardiseren**: `route`, `salaris`, `toelating`, `bevoegdheid`, `subsidie`, `algemeen`, `duur`, `vacature`
-- **Alias-tags behouden** — deze zijn waardevol voor full-text search
+Het profiel moet `first_name` en `last_name` correct bevatten:
 
-### Stap 2: Importeren via `ingest-faqs`
+```sql
+UPDATE public.profiles
+SET first_name = 'Vis', last_name = 'Emmaus'
+WHERE user_id = 'ab70ec17-075f-40a1-8008-ef984231b8a6'
+  AND (first_name IS NULL OR first_name = '');
+```
 
-De opgeschoonde dataset importeren met `mode: "replace"` zodat de 3 test-items worden vervangen.
+### Stap 3: Wachtwoord resetten naar admin010
 
-### Concreet resultaat
+Via de seed edge function aanroepen (alleen voor vis), of via een kleine migratie is dit niet mogelijk — wachtwoord reset vereist de `seed-admin-users` edge function. Ik roep die functie aan na de migratie.
 
-~32 FAQ-items in de database die dekken:
+### Resultaat
 
-| Bron | Items |
-|------|-------|
-| Geüploade ZIB-data (opgeschoond) | 17 |
-| KNOWLEDGE_BLOCKS → FAQ conversie | ~15 |
-
-### Wat NIET verandert
-
-- De `KNOWLEDGE_BLOCKS` in `doorai-chat` blijven als fallback
-- De `ingest-faqs` edge function blijft ongewijzigd
-- De hybride retrieval-logica blijft ongewijzigd
-
+Na deze fix kun je inloggen met `vis@emmauscollege.nl` / `admin010` en word je automatisch doorgestuurd naar `/backoffice`.
