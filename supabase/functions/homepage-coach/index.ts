@@ -190,8 +190,9 @@ Deno.serve(async (req) => {
         ];
       }
 
-      // Use shared publicThemes for consistent theme selection
-      const themes = publicThemes(allUserMsgs);
+      // Detect what the user already asked about, exclude those from follow-ups
+      const currentKeys = detectCurrentThemeKeys(lastUserMsg);
+      const themes = publicThemes(allUserMsgs, currentKeys);
       const actions = themesToActions(themes, 2);
 
       // If themes produced actions, use them

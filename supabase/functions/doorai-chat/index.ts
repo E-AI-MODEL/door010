@@ -1083,7 +1083,7 @@ Deno.serve(async (req) => {
 
         const followupActions = intakeNeeded
           ? []
-          : buildConversationFollowups(phase, slots, intent, detector?.missing_slots || []);
+          : buildConversationFollowups(phase, slots, intent, detector?.missing_slots || [], lastUserMsg);
 
         // Corrected slots
         const correctedSlots: Record<string, string> = {};
