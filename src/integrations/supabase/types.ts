@@ -182,33 +182,39 @@ export type Database = {
       llm_prompt_configs: {
         Row: {
           active: boolean
+          addon_label: string
           chatbot_key: string
           created_at: string
           id: string
           notes: string | null
           prompt_override: string | null
+          sort_order: number
           title: string
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           active?: boolean
+          addon_label?: string
           chatbot_key: string
           created_at?: string
           id?: string
           notes?: string | null
           prompt_override?: string | null
+          sort_order?: number
           title: string
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           active?: boolean
+          addon_label?: string
           chatbot_key?: string
           created_at?: string
           id?: string
           notes?: string | null
           prompt_override?: string | null
+          sort_order?: number
           title?: string
           updated_at?: string
           updated_by?: string | null
