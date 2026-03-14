@@ -71,7 +71,7 @@ export function SuperuserControlTab() {
 
   const loadPipelineEvents = useCallback(async () => {
     setLoadingEvents(true);
-    const query = supabase
+    const query = (supabase as any)
       .from("chatbot_pipeline_events")
       .select("id, chatbot_key, stage, severity, message, created_at, resolved")
       .order("created_at", { ascending: false })
