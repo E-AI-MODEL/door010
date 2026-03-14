@@ -19,12 +19,9 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // In this project, the designated "superuser" maps to the `admin` app_role.
     const adminUsers: Array<{ email: string; password: string; role: "admin" | "advisor" | "candidate"; firstName: string; lastName: string }> = [
       { email: "admin@doorai.nl", password: "admin010", role: "admin", firstName: "Admin", lastName: "DOOR" },
       { email: "backoffice@doorai.nl", password: "admin010", role: "advisor", firstName: "Backoffice", lastName: "DOOR" },
-      // vis@emmauscollege.nl is the designated superuser account (stored as role: "admin").
-      { email: "vis@emmauscollege.nl", password: "admin010", role: "admin", firstName: "Vis", lastName: "Emmaus" },
       { email: "test@doorai.nl", password: "admin010", role: "candidate", firstName: "Test", lastName: "DOOR" },
       { email: "test1@doorai.nl", password: "admin010", role: "candidate", firstName: "Test1", lastName: "DOOR" },
     ];
@@ -42,18 +39,14 @@ Deno.serve(async (req) => {
 
     const results = [];
 
-    // Only users explicitly listed in adminUsers are created/updated; all other accounts remain untouched.
     for (const user of adminUsers) {
       // Check if user exists
       const { data: existingUsers } = await supabase.auth.admin.listUsers();
       const exists = existingUsers?.users?.find(u => u.email === user.email);
 
       if (exists) {
-        const roleSync = {
-          roleInserted: false,
-          status: "role already present",
-        };
-
+        results.push({ email: user.email, status: "already exists", userId: exists.id });
+        
         // Ensure role exists
         const { data: existingRole } = await supabase
           .from("user_roles")
@@ -61,34 +54,13 @@ Deno.serve(async (req) => {
           .eq("user_id", exists.id)
           .eq("role", user.role)
           .single();
-
+          
         if (!existingRole) {
           await supabase.from("user_roles").insert({
             user_id: exists.id,
             role: user.role,
           });
-          roleSync.roleInserted = true;
-          roleSync.status = "role inserted";
         }
-
-        // Keep seeded users aligned on the configured password
-        const { error: passwordResetError } = await supabase.auth.admin.updateUserById(exists.id, {
-          password: user.password,
-        });
-
-        results.push({
-          email: user.email,
-          status: "already exists",
-          userId: exists.id,
-          roleSync: roleSync.status,
-          passwordReset: !passwordResetError,
-          passwordResetError: passwordResetError?.message,
-          note: passwordResetError
-            ? "Role synced; password reset failed"
-            : roleSync.roleInserted
-              ? "Role synced and password reset"
-              : "Only password reset; role already present",
-        });
         continue;
       }
 
