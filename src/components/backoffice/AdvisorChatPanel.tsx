@@ -25,15 +25,6 @@ import {
   Loader2,
   Trash2
 } from "lucide-react";
-import { format } from "date-fns";
-import { nl } from "date-fns/locale";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import type { ProfileWithEmail } from "./UserOverviewTable";
-import { format } from "date-fns";
-import { nl } from "date-fns/locale";
-import { supabase } from "@/integrations/supabase/client";
-import type { ProfileWithEmail } from "./UserOverviewTable";
 
 interface Message {
   id: string;
