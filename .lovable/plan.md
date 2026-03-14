@@ -1,41 +1,54 @@
+## Diagnose
 
+Er zijn drie afzonderlijke problemen:
 
-# Plan: FAQ-data verrijken en importeren
+### 1. Chat suggestie-chips stapelen op
 
-## Wat ik ga doen
+In zowel `PublicChatWidget` als `AuthenticatedChatOverlay` worden actie-chips (ResponseActions) getoond op basis van de **laatst gevonden** `primaryFollowup` in de berichtenlijst. Wanneer een nieuw assistant-bericht binnenkomt zonder eigen followup, valt de memo terug op de vorige beurt. Hierdoor blijven oude chips zichtbaar.
 
-De geüploade `ingest_faqs_payload_DOORTJE_ZIB_MVP_v2_deduped.json` (17 FAQ's) bevat goede vragen maar heeft twee problemen:
+**Fix**: Bij het starten van een nieuwe beurt de `primaryFollowup` van alle eerdere berichten wissen. Alleen het allerlaatste assistant-bericht mag een followup hebben.
 
-1. **Dunne antwoorden** — items 5, 6, 7, 8 bevatten alleen "Vervolgvragen" zonder inhoudelijk antwoord
-2. **Gemixte antwoorden** — item 1 en 2 bevatten antwoorden die niet bij de vraag passen (salaris-info bij "intensiteit", buitenland-info bij "wat is zij-instroom")
+### 2. Add-on override bibliotheek met toggles
 
-Ik ga:
+De huidige Superuser tab werkt al met meerdere add-ons per bot, maar het is niet duidelijk genoeg als bibliotheek. De gebruiker wil:
 
-### Stap 1: FAQ-data opschonen en verrijken
+- Elke override permanent opgeslagen als item in een lijst
+- Per item een toggle aan/uit
+- Verwijderen is optioneel, niet verplicht
+- Dezelfde opzet als bij de systeemprompt-visie
+- Check  of de laatste add on niet een vaste toevoeging is geweest op de systeem prompt van de public chat. Indien ja: herstel en zet in te maken ads om bibliotheek met toggle  aan/uit 
 
-Een verbeterde versie van het JSON-bestand aanmaken als `src/data/faq-seed.json` met:
+De huidige `SuperuserControlTab` doet dit al grotendeels, maar heeft een UX-probleem: de test-override uit de vorige sessie zit nog in de DB. De code is correct, maar de layout moet duidelijker "bibliotheek" communiceren.
 
-- **17 bestaande items opschonen**: antwoorden koppelen aan de juiste vraag, dunne items aanvullen met kennis uit `KNOWLEDGE_BLOCKS` en `ROUTE_SUMMARIES`
-- **~15 nieuwe items toevoegen** op basis van de hardcoded `KNOWLEDGE_BLOCKS` die nu in `doorai-chat` staan (salaris, kosten, bevoegdheden, PDG, verwantschap, SOOL-subsidie, etc.)
-- **Categorieën standaardiseren**: `route`, `salaris`, `toelating`, `bevoegdheid`, `subsidie`, `algemeen`, `duur`, `vacature`
-- **Alias-tags behouden** — deze zijn waardevol voor full-text search
+**Fix**: De UI verbeteren met duidelijkere bibliotheek-header, en het filter in pipeline events vervangen door een dropdown in plaats van een vrij tekstveld.
 
-### Stap 2: Importeren via `ingest-faqs`
+### 3. Pipeline issues oplossen/heropenen
 
-De opgeschoonde dataset importeren met `mode: "replace"` zodat de 3 test-items worden vervangen.
+De `chatbot_pipeline_events` tabel mist een UPDATE RLS policy, en de UI heeft geen "markeer als opgelost" knop.
 
-### Concreet resultaat
+**Fix**:
 
-~32 FAQ-items in de database die dekken:
+- Database: voeg UPDATE policy toe voor admins
+- UI: per event een resolve-toggle
+- Filter op "open" standaard
 
-| Bron | Items |
-|------|-------|
-| Geüploade ZIB-data (opgeschoond) | 17 |
-| KNOWLEDGE_BLOCKS → FAQ conversie | ~15 |
+## Implementatie
 
-### Wat NIET verandert
+### Stap 1: Fix chat-chip stacking (PublicChatWidget + AuthenticatedChatOverlay)
 
-- De `KNOWLEDGE_BLOCKS` in `doorai-chat` blijven als fallback
-- De `ingest-faqs` edge function blijft ongewijzigd
-- De hybride retrieval-logica blijft ongewijzigd
+In beide componenten, bij het starten van een nieuwe beurt (net voor het toevoegen van het lege assistant-bericht):
 
+- Wis `primaryFollowup` van alle eerdere assistant-berichten
+- In `PublicChatWidget`: aanpassen van `sendMessageWithText` om de messages state te updaten
+- In `AuthenticatedChatOverlay`: zelfde in `sendMessage` en `sendGeneralMessage`
+
+### Stap 2: Pipeline events resolve-functionaliteit
+
+- Database migratie: `CREATE POLICY "Admins can update pipeline events" ON public.chatbot_pipeline_events FOR UPDATE USING (has_role(auth.uid(), 'admin')) WITH CHECK (has_role(auth.uid(), 'admin'));`
+- SuperuserControlTab: resolve-knop per event, filter standaard op "open"
+
+### Stap 3: Superuser UI verbeteringen
+
+- Pipeline filter: dropdown (`all` / `homepage-coach` / `doorai-chat` / `open` / `resolved`) i.p.v. vrij tekstveld
+- Add-on sectie: duidelijke "Override bibliotheek" header
+- Bestaande test-data opschonen (homepage-coach prompt_override leegmaken)
