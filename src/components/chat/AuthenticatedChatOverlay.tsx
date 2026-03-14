@@ -408,7 +408,7 @@ export function AuthenticatedChatOverlay() {
     setGeneralMessages(outgoing);
     setInput("");
     setGeneralLoading(true);
-    setGeneralActions([]);
+    setGeneralActions([]);  // Clear previous turn's actions so chips don't stack
     setGeneralLinks([]);
     setTurnVisibility(null);
 

@@ -138,7 +138,11 @@ export function PublicChatWidget() {
     setSignals(nextSignals);
 
     const userMessage: Message = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMessage]);
+    // Clear followups from ALL previous messages so old chips don't persist
+    setMessages((prev) => [
+      ...prev.map((m) => m.role === "assistant" ? { ...m, primaryFollowup: null } : m),
+      userMessage,
+    ]);
     setInput("");
     setIsLoading(true);
     setLatestLinks([]);
