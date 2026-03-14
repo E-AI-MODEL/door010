@@ -109,7 +109,7 @@ export function SuperuserControlTab() {
       updated_by: authData.user?.id ?? null,
     };
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("llm_prompt_configs")
       .update(updatePayload)
       .eq("id", config.id);
