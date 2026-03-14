@@ -48,7 +48,7 @@ export function SuperuserControlTab() {
   const [filterBot, setFilterBot] = useState<string>("all");
 
   const loadPromptConfigs = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("llm_prompt_configs")
       .select("id, chatbot_key, title, prompt_override, active, notes, updated_at")
       .order("chatbot_key", { ascending: true });
