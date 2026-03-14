@@ -1,41 +1,37 @@
 
 
-# Plan: FAQ-data verrijken en importeren
+## Build Errors Fix
 
-## Wat ik ga doen
+Two simple fixes needed:
 
-De geüploade `ingest_faqs_payload_DOORTJE_ZIB_MVP_v2_deduped.json` (17 FAQ's) bevat goede vragen maar heeft twee problemen:
+### Fix 1: `doorai-chat/index.ts` line 1140
+The variable `lastUserMsg` doesn't exist — it should be `lastUserMessage` (defined on line 861). This was introduced when the `buildConversationFollowups` function was updated to accept a `userMsg` parameter but the call site used the wrong variable name.
 
-1. **Dunne antwoorden** — items 5, 6, 7, 8 bevatten alleen "Vervolgvragen" zonder inhoudelijk antwoord
-2. **Gemixte antwoorden** — item 1 en 2 bevatten antwoorden die niet bij de vraag passen (salaris-info bij "intensiteit", buitenland-info bij "wat is zij-instroom")
+**Change line 1140:** `lastUserMsg` → `lastUserMessage`
 
-Ik ga:
+### Fix 2: `scrape-events/index.ts` line 228
+`error` is typed as `unknown` in the catch block. Need to cast it.
 
-### Stap 1: FAQ-data opschonen en verrijken
+**Change line 228:** `error.message` → `(error as Error).message`
 
-Een verbeterde versie van het JSON-bestand aanmaken als `src/data/faq-seed.json` met:
+---
 
-- **17 bestaande items opschonen**: antwoorden koppelen aan de juiste vraag, dunne items aanvullen met kennis uit `KNOWLEDGE_BLOCKS` en `ROUTE_SUMMARIES`
-- **~15 nieuwe items toevoegen** op basis van de hardcoded `KNOWLEDGE_BLOCKS` die nu in `doorai-chat` staan (salaris, kosten, bevoegdheden, PDG, verwantschap, SOOL-subsidie, etc.)
-- **Categorieën standaardiseren**: `route`, `salaris`, `toelating`, `bevoegdheid`, `subsidie`, `algemeen`, `duur`, `vacature`
-- **Alias-tags behouden** — deze zijn waardevol voor full-text search
+## Superuser Check: `vis@emmauscollege.nl`
 
-### Stap 2: Importeren via `ingest-faqs`
+The `seed-admin-users` edge function already includes `vis@emmauscollege.nl` with:
+- Password: `admin010`
+- Role: `admin`
 
-De opgeschoonde dataset importeren met `mode: "replace"` zodat de 3 test-items worden vervangen.
+This is correctly configured in the seed function (line 24 of `seed-admin-users/index.ts`). The account will work as superuser after the seed function has been executed. No changes needed for this.
 
-### Concreet resultaat
+---
 
-~32 FAQ-items in de database die dekken:
+## Summary
 
-| Bron | Items |
-|------|-------|
-| Geüploade ZIB-data (opgeschoond) | 17 |
-| KNOWLEDGE_BLOCKS → FAQ conversie | ~15 |
+| File | Line | Fix |
+|------|------|-----|
+| `supabase/functions/doorai-chat/index.ts` | 1140 | `lastUserMsg` → `lastUserMessage` |
+| `supabase/functions/scrape-events/index.ts` | 228 | Type assertion on `error` |
 
-### Wat NIET verandert
-
-- De `KNOWLEDGE_BLOCKS` in `doorai-chat` blijven als fallback
-- De `ingest-faqs` edge function blijft ongewijzigd
-- De hybride retrieval-logica blijft ongewijzigd
+No other merge issues detected. Both are one-line fixes.
 
