@@ -50,6 +50,27 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+
+## Lovable sync in 1 commit (history flatten)
+
+If Lovable misses merges, you can sync your current repository state as **one single commit** (including all older work in the resulting snapshot):
+
+```sh
+# 1) Configure a remote that points to your Lovable repo (one-time)
+git remote add lovable <LOVABLE_GIT_URL>
+
+# 2) Push current state as one squashed commit to branch main
+scripts/lovable-sync.sh --remote lovable --branch main
+```
+
+What it does:
+- creates a temporary orphan branch
+- commits the current project tree as one commit
+- force-pushes that commit to the target remote branch
+- restores your original branch locally
+
+> Tip: use `--yes` to skip confirmation in CI scripts.
+
 ## What technologies are used for this project?
 
 This project is built with:
