@@ -35,14 +35,16 @@ export function deriveThemes(opts: {
   knownSlots: Record<string, string>;
   missingSlots?: string[];
   maxThemes?: number;
+  excludeKeys?: string[];
 }): ThemeSignal[] {
-  const { phase, knownSlots, missingSlots = [], maxThemes = 4 } = opts;
+  const { phase, knownSlots, missingSlots = [], maxThemes = 4, excludeKeys = [] } = opts;
   const p = phase.toLowerCase();
+  const excluded = new Set(excludeKeys);
   const selected: ThemeSignal[] = [];
   const used = new Set<string>();
 
   function add(key: string) {
-    if (used.has(key)) return;
+    if (used.has(key) || excluded.has(key)) return;
     const t = ALL_THEMES.find(th => th.key === key);
     if (t) { selected.push(t); used.add(key); }
   }
