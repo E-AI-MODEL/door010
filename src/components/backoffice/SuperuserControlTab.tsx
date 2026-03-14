@@ -131,7 +131,7 @@ export function SuperuserControlTab() {
     setSavingKey(config.chatbot_key);
 
     const { data: authData } = await supabase.auth.getUser();
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("llm_prompt_configs")
       .update({ prompt_override: null, updated_by: authData.user?.id ?? null })
       .eq("id", config.id);
