@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { deriveThemes, themesToActions } from "../_shared/themes.ts";
+import { deriveThemes, themesToActions, detectCurrentThemeKeys } from "../_shared/themes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
