@@ -48,7 +48,7 @@ export function SuperuserControlTab() {
   const [filterBot, setFilterBot] = useState<string>("all");
 
   const loadPromptConfigs = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("llm_prompt_configs")
       .select("id, chatbot_key, title, prompt_override, active, notes, updated_at")
       .order("chatbot_key", { ascending: true });
@@ -71,7 +71,7 @@ export function SuperuserControlTab() {
 
   const loadPipelineEvents = useCallback(async () => {
     setLoadingEvents(true);
-    const query = supabase
+    const query = (supabase as any)
       .from("chatbot_pipeline_events")
       .select("id, chatbot_key, stage, severity, message, created_at, resolved")
       .order("created_at", { ascending: false })
@@ -109,7 +109,7 @@ export function SuperuserControlTab() {
       updated_by: authData.user?.id ?? null,
     };
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("llm_prompt_configs")
       .update(updatePayload)
       .eq("id", config.id);
@@ -131,7 +131,7 @@ export function SuperuserControlTab() {
     setSavingKey(config.chatbot_key);
 
     const { data: authData } = await supabase.auth.getUser();
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("llm_prompt_configs")
       .update({ prompt_override: null, updated_by: authData.user?.id ?? null })
       .eq("id", config.id);
