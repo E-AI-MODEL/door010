@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
 
     const adminUsers: Array<{ email: string; password: string; role: "admin" | "advisor" | "candidate"; firstName: string; lastName: string }> = [
       { email: "admin@doorai.nl", password: "admin010", role: "admin", firstName: "Admin", lastName: "DOOR" },
+      { email: "vis@emmauscollege.nl", password: "admin010", role: "admin", firstName: "Vis", lastName: "Emmaus" },
       { email: "backoffice@doorai.nl", password: "admin010", role: "advisor", firstName: "Backoffice", lastName: "DOOR" },
       { email: "test@doorai.nl", password: "admin010", role: "candidate", firstName: "Test", lastName: "DOOR" },
       { email: "test1@doorai.nl", password: "admin010", role: "candidate", firstName: "Test1", lastName: "DOOR" },
@@ -45,7 +46,17 @@ Deno.serve(async (req) => {
       const exists = existingUsers?.users?.find(u => u.email === user.email);
 
       if (exists) {
-        results.push({ email: user.email, status: "already exists", userId: exists.id });
+        const { error: updateAuthError } = await supabase.auth.admin.updateUserById(exists.id, {
+          password: user.password,
+          email_confirm: true,
+        });
+
+        results.push({
+          email: user.email,
+          status: updateAuthError ? "already exists (password unchanged)" : "already exists (password reset)",
+          userId: exists.id,
+          updateAuthError: updateAuthError?.message,
+        });
         
         // Ensure role exists
         const { data: existingRole } = await supabase
@@ -61,6 +72,22 @@ Deno.serve(async (req) => {
             role: user.role,
           });
         }
+
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("user_id")
+          .eq("user_id", exists.id)
+          .maybeSingle();
+
+        if (!existingProfile) {
+          await supabase.from("profiles").insert({
+            user_id: exists.id,
+            first_name: user.firstName,
+            last_name: user.lastName,
+            current_phase: user.role === "candidate" ? "interesseren" : "voorbereiden",
+          });
+        }
+
         continue;
       }
 
