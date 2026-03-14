@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { RefreshCw, Save, Wrench, AlertTriangle, Bot, RotateCcw, Plus, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RefreshCw, Save, Wrench, AlertTriangle, Bot, Plus, Trash2, CheckCircle2, CircleDot, Library } from "lucide-react";
 import { toast } from "sonner";
 
 type PromptConfig = {
@@ -58,7 +59,7 @@ function AddonCard({
   const [labelDraft, setLabelDraft] = useState(config.addon_label ?? "");
 
   return (
-    <div className="rounded-lg border p-4 bg-card space-y-3">
+    <div className={`rounded-lg border p-4 space-y-3 ${config.active ? "bg-card border-primary/30" : "bg-muted/30 border-border"}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Switch
@@ -71,8 +72,8 @@ function AddonCard({
             placeholder="Add-on label"
             className="h-7 text-xs max-w-[200px]"
           />
-          <Badge variant={config.active ? "outline" : "secondary"} className="shrink-0">
-            {config.active ? "Aan" : "Uit"}
+          <Badge variant={config.active ? "default" : "secondary"} className="shrink-0 text-[10px]">
+            {config.active ? "Actief" : "Uit"}
           </Badge>
         </div>
         <Button variant="ghost" size="sm" onClick={() => onDelete(config.id)} className="text-destructive h-7 w-7 p-0">
@@ -116,6 +117,7 @@ export function SuperuserControlTab() {
   const [loading, setLoading] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [filterBot, setFilterBot] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("open");
 
   const loadPromptConfigs = useCallback(async () => {
     const { data, error } = await (supabase as any)
@@ -219,10 +221,31 @@ export function SuperuserControlTab() {
     await loadPromptConfigs();
   }, [promptConfigs, loadPromptConfigs]);
 
+  const toggleResolve = useCallback(async (id: string, resolved: boolean) => {
+    const { error } = await (supabase as any)
+      .from("chatbot_pipeline_events")
+      .update({ resolved })
+      .eq("id", id);
+
+    if (error) { toast.error("Status wijzigen mislukt"); return; }
+    toast.success(resolved ? "Issue opgelost" : "Issue heropend");
+    setPipelineEvents((prev) =>
+      prev.map((e) => e.id === id ? { ...e, resolved } : e)
+    );
+  }, []);
+
   const filteredEvents = useMemo(() => {
-    if (filterBot === "all") return pipelineEvents;
-    return pipelineEvents.filter((e) => e.chatbot_key === filterBot);
-  }, [filterBot, pipelineEvents]);
+    let result = pipelineEvents;
+    if (filterBot !== "all") {
+      result = result.filter((e) => e.chatbot_key === filterBot);
+    }
+    if (filterStatus === "open") {
+      result = result.filter((e) => !e.resolved);
+    } else if (filterStatus === "resolved") {
+      result = result.filter((e) => e.resolved);
+    }
+    return result;
+  }, [filterBot, filterStatus, pipelineEvents]);
 
   const eventCounts = useMemo(() => ({
     total: pipelineEvents.length,
@@ -253,7 +276,7 @@ export function SuperuserControlTab() {
                 Superuser besturing
               </CardTitle>
               <CardDescription className="mt-1 text-xs">
-                Beheer prompt add-ons per chatbot. Elke add-on wordt <strong>toegevoegd</strong> aan de basisprompt (niet vervangen). Toggle aan/uit per add-on.
+                Beheer prompt add-ons en pipeline-monitoring voor beide chatbots.
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={refreshAll} disabled={loading || loadingEvents}>
@@ -272,7 +295,19 @@ export function SuperuserControlTab() {
         <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">Open issues</p><p className="text-2xl font-semibold">{eventCounts.unresolved}</p></CardContent></Card>
       </div>
 
-      {/* Prompt Add-ons per chatbot */}
+      {/* Override Bibliotheek */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Library className="h-4 w-4" />
+            Override Bibliotheek
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Elke add-on wordt <strong>toegevoegd</strong> aan de basisprompt (niet vervangen). Gebruik de toggle om een add-on aan/uit te zetten zonder deze te verwijderen.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {CHATBOT_KEYS.map((key) => {
           const configs = groupedConfigs[key] ?? [];
@@ -324,12 +359,26 @@ export function SuperuserControlTab() {
               Pipeline fouten & waarschuwingen
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Input
-                value={filterBot}
-                onChange={(e) => setFilterBot(e.target.value)}
-                placeholder="Filter bot (all / homepage-coach / doorai-chat)"
-                className="h-8 text-xs w-[280px]"
-              />
+              <Select value={filterBot} onValueChange={setFilterBot}>
+                <SelectTrigger className="h-8 text-xs w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alle bots</SelectItem>
+                  <SelectItem value="homepage-coach">homepage-coach</SelectItem>
+                  <SelectItem value="doorai-chat">doorai-chat</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-8 text-xs w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alle</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="resolved">Opgelost</SelectItem>
+                </SelectContent>
+              </Select>
               <Button variant="outline" size="sm" onClick={loadPipelineEvents} disabled={loadingEvents}>
                 <RefreshCw className={`h-3.5 w-3.5 ${loadingEvents ? "animate-spin" : ""}`} />
               </Button>
@@ -344,12 +393,25 @@ export function SuperuserControlTab() {
           ) : (
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
               {filteredEvents.map((event) => (
-                <div key={event.id} className="rounded-lg border p-3 bg-card">
+                <div key={event.id} className={`rounded-lg border p-3 ${event.resolved ? "bg-muted/30 opacity-70" : "bg-card"}`}>
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <Badge variant={severityBadgeVariant(event.severity)} className="capitalize">{event.severity}</Badge>
                     <Badge variant="outline">{event.chatbot_key}</Badge>
                     <span className="text-[11px] text-muted-foreground">{event.stage}</span>
-                    {!event.resolved && <Badge variant="secondary">open</Badge>}
+                    <div className="ml-auto">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-6 px-2 text-[11px] gap-1 ${event.resolved ? "text-muted-foreground" : "text-primary"}`}
+                        onClick={() => toggleResolve(event.id, !event.resolved)}
+                      >
+                        {event.resolved ? (
+                          <><CheckCircle2 className="h-3 w-3" /> Opgelost</>
+                        ) : (
+                          <><CircleDot className="h-3 w-3" /> Markeer opgelost</>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-sm">{event.message}</p>
                   <p className="text-[11px] text-muted-foreground mt-1">{new Date(event.created_at).toLocaleString("nl-NL")}</p>

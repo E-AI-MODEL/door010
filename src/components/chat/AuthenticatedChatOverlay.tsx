@@ -197,7 +197,7 @@ export function AuthenticatedChatOverlay() {
     setMessages(outgoingMessages);
     setInput("");
     setIsLoading(true);
-    setLatestActions([]);
+    setLatestActions([]);  // Clear previous turn's actions so chips don't stack
     setLatestLinks([]);
     setReflectionWarning(null);
     setTurnVisibility(null);
@@ -408,7 +408,7 @@ export function AuthenticatedChatOverlay() {
     setGeneralMessages(outgoing);
     setInput("");
     setGeneralLoading(true);
-    setGeneralActions([]);
+    setGeneralActions([]);  // Clear previous turn's actions so chips don't stack
     setGeneralLinks([]);
     setTurnVisibility(null);
 
