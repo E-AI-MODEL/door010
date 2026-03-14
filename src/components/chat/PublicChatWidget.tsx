@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { MessageCircle, X, Send, Bot, Mail, Phone, ExternalLink } from "lucide-react";
+import { MessageCircle, X, Send, Bot, Mail, Phone, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
@@ -77,6 +77,20 @@ export function PublicChatWidget() {
     },
   ]);
 
+  const resetPublicConversation = () => {
+    setMessages([
+      {
+        role: "assistant",
+        content: "Welkom bij het Onderwijsloket Rotterdam. Heb je een vraag over werken in het onderwijs? Ik help je graag verder.",
+        ...initialFollowups,
+      },
+    ]);
+    setInput("");
+    setLatestLinks([]);
+    setTurnVisibility(null);
+    setSignals({ sector: "UNK", studyLevel: "UNK" });
+  };
+
   // Get latest followups from last assistant message
   const latestFollowups = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -133,6 +147,8 @@ export function PublicChatWidget() {
     let assistantContent = "";
 
     try {
+      const conversationWindow = [...messages, userMessage].slice(-10);
+
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -140,7 +156,7 @@ export function PublicChatWidget() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({ role: m.role, content: m.content })),
+          messages: conversationWindow.map((m) => ({ role: m.role, content: m.content })),
           mode: "public",
           context: { signals: nextSignals, site: "door010" },
         }),
@@ -198,7 +214,7 @@ export function PublicChatWidget() {
               let pf: FollowUpAction | null = null;
               if (parsedMeta?.primary_followup) pf = parsedMeta.primary_followup;
               if (parsedMeta?.verifiedLinks?.length) {
-                setLatestLinks(parsedMeta.verifiedLinks.slice(0, 1).map((link) => ({ label: link.label, href: link.href })));
+                setLatestLinks(parsedMeta.verifiedLinks.slice(0, 3).map((link) => ({ label: link.label, href: link.href })));
                 turnHasLinks = true;
               }
 
@@ -213,7 +229,7 @@ export function PublicChatWidget() {
               }
               if (pf) turnHasActions = true;
               if (parsed.links && Array.isArray(parsed.links)) {
-                setLatestLinks(parsed.links.slice(0, 1));
+                setLatestLinks(parsed.links.slice(0, 3));
                 turnHasLinks = parsed.links.length > 0;
               }
 
@@ -243,7 +259,7 @@ export function PublicChatWidget() {
               offersExternalSearch = offersExternalSearch || parsed.meta.offers_external_search === true || parsed.meta.external_search_offer === true;
               hasExternalResults = hasExternalResults || parsed.meta.has_external_results === true || (typeof parsed.meta.external_results_count === "number" && parsed.meta.external_results_count > 0);
               if (parsed.meta.verified_links && Array.isArray(parsed.meta.verified_links)) {
-                setLatestLinks(parsed.meta.verified_links.slice(0, 1));
+                setLatestLinks(parsed.meta.verified_links.slice(0, 3));
                 turnHasLinks = parsed.meta.verified_links.length > 0;
               }
               setMessages((prev) => {
@@ -263,7 +279,7 @@ export function PublicChatWidget() {
               const pf = parsed.actions[0] ? { label: parsed.actions[0].label, value: parsed.actions[0].value } : null;
               turnHasActions = parsed.actions.length > 0;
               if (parsed.links && Array.isArray(parsed.links)) {
-                setLatestLinks(parsed.links.slice(0, 1));
+                setLatestLinks(parsed.links.slice(0, 3));
                 turnHasLinks = parsed.links.length > 0;
               }
               setMessages((prev) => {
@@ -388,6 +404,16 @@ export function PublicChatWidget() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                {messages.length > 1 && (
+                  <button
+                    onClick={resetPublicConversation}
+                    title="Gesprek wissen"
+                    className="p-1 hover:bg-primary-foreground/20 rounded-full transition-colors"
+                    aria-label="Gesprek wissen"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
                 <a
                   href="https://doortje-embedded-bot.replit.app/"
                   target="_blank"
@@ -483,11 +509,11 @@ export function PublicChatWidget() {
 
               {/* Link chip */}
               {!isLoading && latestLinks.length > 0 && (turnVisibility?.showLinkChip !== false) && (
-                <div className="px-4 pt-2.5 pb-1">
-                  {(() => {
-                    const link = latestLinks[0];
-                    return link.href.startsWith("/") ? (
+                <div className="px-4 pt-2.5 pb-1 flex flex-wrap gap-1.5">
+                  {latestLinks.map((link, index) => (
+                    link.href.startsWith("/") ? (
                       <Link
+                        key={`${link.href}-${index}`}
                         to={link.href}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
                       >
@@ -495,6 +521,7 @@ export function PublicChatWidget() {
                       </Link>
                     ) : (
                       <a
+                        key={`${link.href}-${index}`}
                         href={link.href}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -503,8 +530,8 @@ export function PublicChatWidget() {
                         {link.label}
                         <ExternalLink className="h-2.5 w-2.5" />
                       </a>
-                    );
-                  })()}
+                    )
+                  ))}
                 </div>
               )}
 

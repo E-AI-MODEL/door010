@@ -1,4 +1,5 @@
 import { publicThemes, themesToActions, detectCurrentThemeKeys } from "../_shared/themes.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,6 +64,50 @@ function validateAndRepair(draft: string, maxSentences: number): { text: string;
   }
 
   return { text, issues, repaired: issues.length > 0 };
+}
+
+function createAdminClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+}
+
+async function resolveSystemPrompt(chatbotKey: string, fallbackPrompt: string): Promise<string> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("llm_prompt_configs")
+      .select("prompt_override, active")
+      .eq("chatbot_key", chatbotKey)
+      .maybeSingle();
+
+    if (error || !data?.active || !data.prompt_override?.trim()) return fallbackPrompt;
+    return data.prompt_override;
+  } catch {
+    return fallbackPrompt;
+  }
+}
+
+async function logPipelineEvent(
+  chatbotKey: string,
+  stage: string,
+  severity: "info" | "warning" | "error",
+  message: string,
+  details: Record<string, unknown> = {},
+) {
+  try {
+    const supabase = createAdminClient();
+    await supabase.from("chatbot_pipeline_events").insert({
+      chatbot_key: chatbotKey,
+      stage,
+      severity,
+      message,
+      details,
+    });
+  } catch {
+    // Keep diagnostics non-blocking.
+  }
 }
 
 // ── System prompt ──────────────────────────────────────────────
@@ -230,6 +275,8 @@ Deno.serve(async (req) => {
           ],
     };
 
+    const systemPrompt = await resolveSystemPrompt("homepage-coach", SITE_GUIDE_PROMPT);
+
     // ── Non-streaming LLM call for draft validation ──
     const maxSentences = answerType === "begroeting" ? 2 : 3;
 
@@ -242,7 +289,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: SITE_GUIDE_PROMPT },
+          { role: "system", content: systemPrompt },
           ...messages,
         ],
         stream: false,
@@ -251,18 +298,24 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       if (response.status === 429) {
+        await logPipelineEvent("homepage-coach", "llm_call", "warning", "Rate limit from AI gateway", { status: 429 });
         return new Response(
           JSON.stringify({ error: "Te veel verzoeken, probeer het later opnieuw." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402) {
+        await logPipelineEvent("homepage-coach", "llm_call", "error", "Credits exhausted from AI gateway", { status: 402 });
         return new Response(
           JSON.stringify({ error: "AI-credits zijn op, neem contact op met de beheerder." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorText = await response.text();
+      await logPipelineEvent("homepage-coach", "llm_call", "error", "AI gateway failure", {
+        status: response.status,
+        error: errorText.slice(0, 300),
+      });
       console.error("AI gateway error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "Er ging iets mis met de AI, probeer het opnieuw." }),
@@ -278,6 +331,9 @@ Deno.serve(async (req) => {
     const finalText = validated.text;
 
     if (validated.issues.length > 0) {
+      await logPipelineEvent("homepage-coach", "validation", "warning", "Output validation repaired issues", {
+        issues: validated.issues,
+      });
       console.warn("Homepage-coach validation issues (repaired):", validated.issues);
     }
 
@@ -318,6 +374,9 @@ Deno.serve(async (req) => {
       },
     });
   } catch (error) {
+    await logPipelineEvent("homepage-coach", "handler", "error", "Unhandled homepage-coach error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     console.error("Homepage coach error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Onbekende fout" }),

@@ -304,7 +304,7 @@ export function AuthenticatedChatOverlay() {
                 turnHasActions = parsed.actions.length > 0;
               }
               if (parsed.links && Array.isArray(parsed.links)) {
-                setLatestLinks(parsed.links.slice(0, 1));
+                setLatestLinks(parsed.links.slice(0, 3));
                 turnHasLinks = parsed.links.length > 0;
               }
               if (parsed.mode) turnBackendMode = parsed.mode;
@@ -354,7 +354,7 @@ export function AuthenticatedChatOverlay() {
             // Legacy fallback
             if (parsed.actions && Array.isArray(parsed.actions)) {
               setLatestActions(parsed.actions.slice(0, 1));
-              if (parsed.links) setLatestLinks((parsed.links as Array<{ label: string; href: string }>).slice(0, 1));
+              if (parsed.links) setLatestLinks((parsed.links as Array<{ label: string; href: string }>).slice(0, 3));
               continue;
             }
 
@@ -463,7 +463,7 @@ export function AuthenticatedChatOverlay() {
                 genHasActions = parsed.meta.actions.length > 0;
               }
               if (parsed.meta.verified_links) {
-                setGeneralLinks(parsed.meta.verified_links.slice(0, 1));
+                setGeneralLinks(parsed.meta.verified_links.slice(0, 3));
                 genHasLinks = parsed.meta.verified_links.length > 0;
               }
               genOffersExternalSearch = genOffersExternalSearch || parsed.meta.offers_external_search === true || parsed.meta.external_search_offer === true;
@@ -794,13 +794,13 @@ export function AuthenticatedChatOverlay() {
               </div>
             )}
 
-            {/* Link chip — only when router allows */}
+            {/* Link chips — only when router allows */}
             {currentLinks.length > 0 && !currentLoading && (turnVisibility?.showLinkChip !== false) && (
-              <div className="px-4 pb-2 shrink-0">
-                {(() => {
-                  const link = currentLinks[0];
-                  return link.href.startsWith("/") ? (
+              <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-1.5">
+                {currentLinks.map((link, index) => (
+                  link.href.startsWith("/") ? (
                     <Link
+                      key={`${link.href}-${index}`}
                       to={link.href}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
                     >
@@ -808,6 +808,7 @@ export function AuthenticatedChatOverlay() {
                     </Link>
                   ) : (
                     <a
+                      key={`${link.href}-${index}`}
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -816,8 +817,8 @@ export function AuthenticatedChatOverlay() {
                       {link.label}
                       <ExternalLink className="h-2.5 w-2.5" />
                     </a>
-                  );
-                })()}
+                  )
+                ))}
               </div>
             )}
 

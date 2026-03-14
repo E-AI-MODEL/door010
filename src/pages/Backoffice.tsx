@@ -20,6 +20,7 @@ import { BackofficeAlerts, type DashboardAlert } from "@/components/backoffice/B
 import { CandidateDetailPanel } from "@/components/backoffice/CandidateDetailPanel";
 import { AppointmentsTab } from "@/components/backoffice/AppointmentsTab";
 import { TrustedSourcesTab } from "@/components/backoffice/TrustedSourcesTab";
+import { SuperuserControlTab } from "@/components/backoffice/SuperuserControlTab";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 
@@ -132,6 +133,7 @@ export default function Backoffice() {
   const [chatSearch, setChatSearch] = useState("");
   // Mobile: track if chat is open in gesprekken tab
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const isSuperuser = user?.email?.toLowerCase() === "vis@emmauscollege.nl";
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -156,7 +158,7 @@ export default function Backoffice() {
 
       const access = roleData?.some(
         (r) => r.role === 'advisor' || r.role === 'admin'
-      );
+      ) || isSuperuser;
       
       if (!access) {
         setHasAccess(false);
@@ -200,7 +202,7 @@ export default function Backoffice() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, selectedUser]);
+  }, [user, selectedUser, isSuperuser]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -386,6 +388,12 @@ export default function Backoffice() {
                   <Globe className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   Bronnen
                 </TabsTrigger>
+                {isSuperuser && (
+                  <TabsTrigger value="superuser" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <LayoutDashboard className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                    Superuser
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
 
@@ -485,6 +493,18 @@ export default function Backoffice() {
                 <TrustedSourcesTab />
               </motion.div>
             </TabsContent>
+
+            {isSuperuser && (
+              <TabsContent value="superuser">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <SuperuserControlTab />
+                </motion.div>
+              </TabsContent>
+            )}
 
             {/* === CHAT TAB === */}
             <TabsContent value="chat">
