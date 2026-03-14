@@ -797,6 +797,50 @@ function replaceDashes(text: string): string {
   return text.replace(/[\u2014\u2013]/g, "-");
 }
 
+function createAdminClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+}
+
+async function resolveSystemPrompt(chatbotKey: string, fallbackPrompt: string): Promise<string> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("llm_prompt_configs")
+      .select("prompt_override, active")
+      .eq("chatbot_key", chatbotKey)
+      .maybeSingle();
+
+    if (error || !data?.active || !data.prompt_override?.trim()) return fallbackPrompt;
+    return data.prompt_override;
+  } catch {
+    return fallbackPrompt;
+  }
+}
+
+async function logPipelineEvent(
+  chatbotKey: string,
+  stage: string,
+  severity: "info" | "warning" | "error",
+  message: string,
+  details: Record<string, unknown> = {},
+) {
+  try {
+    const supabase = createAdminClient();
+    await supabase.from("chatbot_pipeline_events").insert({
+      chatbot_key: chatbotKey,
+      stage,
+      severity,
+      message,
+      details,
+    });
+  } catch {
+    // Keep diagnostics non-blocking.
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Main Handler
 // ─────────────────────────────────────────────────────────────────────
@@ -868,7 +912,8 @@ Deno.serve(async (req) => {
       phase, detector, profileMeta, userSector, phase_transition,
       intent, faqKnowledge, textLinks, webKnowledge, lastUserMessage,
     );
-    const systemPrompt = DOORAI_CORE + INTENT_APPENDIX[intent] + `\n\n${dynamicContext}`;
+    const resolvedCorePrompt = await resolveSystemPrompt("doorai-chat", DOORAI_CORE);
+    const systemPrompt = resolvedCorePrompt + INTENT_APPENDIX[intent] + `\n\n${dynamicContext}`;
 
     // Step 6: Non-streaming LLM call for draft validation
     const llmResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -887,16 +932,22 @@ Deno.serve(async (req) => {
     if (!llmResponse.ok) {
       const status = llmResponse.status;
       if (status === 429) {
+        await logPipelineEvent("doorai-chat", "llm_call", "warning", "Rate limit from AI gateway", { status: 429 });
         return new Response(JSON.stringify({ error: "Te veel verzoeken, probeer het later opnieuw." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (status === 402) {
+        await logPipelineEvent("doorai-chat", "llm_call", "error", "Credits exhausted from AI gateway", { status: 402 });
         return new Response(JSON.stringify({ error: "AI-credits zijn op, neem contact op met de beheerder." }), {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const errorText = await llmResponse.text();
+      await logPipelineEvent("doorai-chat", "llm_call", "error", "AI gateway failure", {
+        status,
+        error: errorText.slice(0, 300),
+      });
       console.error("AI gateway error:", status, errorText);
       return new Response(JSON.stringify({ error: "Er ging iets mis, probeer het opnieuw." }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -943,6 +994,9 @@ Deno.serve(async (req) => {
 
     // ── Repair if issues found ──────────────────────────────────
     if (reflectionIssues.length > 0) {
+      await logPipelineEvent("doorai-chat", "reflection", "warning", "Draft repaired after reflection issues", {
+        issues: reflectionIssues,
+      });
       console.warn("Reflection issues (repairing):", reflectionIssues);
 
       // Strip bracket-labels inline
@@ -1142,6 +1196,9 @@ Deno.serve(async (req) => {
       },
     });
   } catch (error) {
+    await logPipelineEvent("doorai-chat", "handler", "error", "Unhandled doorai-chat error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     console.error("DoorAI error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Onbekende fout" }),

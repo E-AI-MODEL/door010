@@ -43,5 +43,15 @@ export function normalizeMarkdown(input: string): string {
 
   flush();
 
-  return out.join("\n").replace(/\n{3,}/g, "\n\n");
+  const normalized = out.join("\n").replace(/\n{3,}/g, "\n\n");
+
+  // Linkify bare URLs so they become clickable in markdown rendering.
+  return normalized.replace(
+    /(^|\s)(https?:\/\/[^\s<)\]]+)(?=$|\s)/gm,
+    (match, prefix: string, url: string) => {
+      // Skip already-markdown-linked URLs.
+      if (match.includes("](")) return match;
+      return `${prefix}[${url}](${url})`;
+    },
+  );
 }
