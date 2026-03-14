@@ -35,14 +35,16 @@ export function deriveThemes(opts: {
   knownSlots: Record<string, string>;
   missingSlots?: string[];
   maxThemes?: number;
+  excludeKeys?: string[];
 }): ThemeSignal[] {
-  const { phase, knownSlots, missingSlots = [], maxThemes = 4 } = opts;
+  const { phase, knownSlots, missingSlots = [], maxThemes = 4, excludeKeys = [] } = opts;
   const p = phase.toLowerCase();
+  const excluded = new Set(excludeKeys);
   const selected: ThemeSignal[] = [];
   const used = new Set<string>();
 
   function add(key: string) {
-    if (used.has(key)) return;
+    if (used.has(key) || excluded.has(key)) return;
     const t = ALL_THEMES.find(th => th.key === key);
     if (t) { selected.push(t); used.add(key); }
   }
@@ -87,13 +89,35 @@ export function deriveThemes(opts: {
  * Derive themes for public/anonymous context based on user message keywords.
  * Used by public pipeline (homepage-coach).
  */
-export function publicThemes(userMessage: string): ThemeSignal[] {
+/**
+ * Detect which theme keys the user message already covers,
+ * so we can exclude them from follow-up actions.
+ */
+export function detectCurrentThemeKeys(userMessage: string): string[] {
   const msg = userMessage.toLowerCase();
+  const keys: string[] = [];
+  if (/(route|opleiding|zij-instroom|hoe word|leraar word)/.test(msg)) keys.push("route");
+  if (/(vacature|baan|werk|school)/.test(msg)) keys.push("vacatures");
+  if (/(salaris|verdien|loon|cao)/.test(msg)) keys.push("salaris");
+  if (/(kosten|collegegeld|subsidie|financier|gratis)/.test(msg)) keys.push("kosten");
+  if (/(bevoegdheid|eerste|tweede|graads)/.test(msg)) keys.push("bevoegdheid");
+  if (/(event|open dag|meeloop)/.test(msg)) keys.push("events");
+  if (/(regio|rotterdam|stad)/.test(msg)) keys.push("regio");
+  if (/(functie|rol|lesgeven|begeleid)/.test(msg)) keys.push("functie");
+  if (/(toelating|eisen|diploma|vooropleiding)/.test(msg)) keys.push("toelating");
+  if (/(sector|po|vo|mbo|verschil)/.test(msg)) keys.push("sector");
+  if (/(zij-instroom|zij instroom|zijinstroom)/.test(msg)) keys.push("zij_instroom");
+  return keys;
+}
+
+export function publicThemes(userMessage: string, excludeKeys: string[] = []): ThemeSignal[] {
+  const msg = userMessage.toLowerCase();
+  const excluded = new Set(excludeKeys);
   const selected: ThemeSignal[] = [];
   const used = new Set<string>();
 
   function add(key: string) {
-    if (used.has(key)) return;
+    if (used.has(key) || excluded.has(key)) return;
     const t = ALL_THEMES.find(th => th.key === key);
     if (t) { selected.push(t); used.add(key); }
   }
@@ -108,10 +132,11 @@ export function publicThemes(userMessage: string): ThemeSignal[] {
   if (/(functie|rol|lesgeven|begeleid)/.test(msg)) add("functie");
   if (/(toelating|eisen|diploma|vooropleiding)/.test(msg)) add("toelating");
 
-  // Fallback: exploration themes
+  // Fallback: exploration themes (excluding already-covered ones)
   if (selected.length === 0) {
     add("route");
     add("sector");
+    add("salaris");
   }
 
   return selected.slice(0, 3);

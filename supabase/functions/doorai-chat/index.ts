@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { deriveThemes, themesToActions } from "../_shared/themes.ts";
+import { deriveThemes, themesToActions, detectCurrentThemeKeys } from "../_shared/themes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1043,6 +1043,7 @@ Deno.serve(async (req) => {
           slots: Partial<Record<SlotKey, string>>,
           intent: IntentType,
           missingSlots: SlotKey[],
+          userMsg: string,
         ): UiAction[] {
           if (intent === "greeting") return [];
 
@@ -1052,11 +1053,15 @@ Deno.serve(async (req) => {
             if (v) slotsRecord[k] = v;
           }
 
+          // Detect what user already asked about, exclude those themes
+          const currentKeys = detectCurrentThemeKeys(userMsg);
+
           const themes = deriveThemes({
             phase,
             knownSlots: slotsRecord,
             missingSlots,
             maxThemes: 3,
+            excludeKeys: currentKeys,
           });
 
           // Convert themes to actions, max 2
@@ -1078,7 +1083,7 @@ Deno.serve(async (req) => {
 
         const followupActions = intakeNeeded
           ? []
-          : buildConversationFollowups(phase, slots, intent, detector?.missing_slots || []);
+          : buildConversationFollowups(phase, slots, intent, detector?.missing_slots || [], lastUserMsg);
 
         // Corrected slots
         const correctedSlots: Record<string, string> = {};

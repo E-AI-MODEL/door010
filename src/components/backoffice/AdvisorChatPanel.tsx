@@ -4,6 +4,17 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   Send, 
   User, 
@@ -11,11 +22,13 @@ import {
   MessageCircle,
   Clock,
   GraduationCap,
-  Loader2
+  Loader2,
+  Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { ProfileWithEmail } from "./UserOverviewTable";
 
 interface Message {
@@ -36,6 +49,7 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
   const [sending, setSending] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load real messages when user is selected
@@ -48,7 +62,7 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
     }
   }, [selectedUser]);
 
-  // Realtime subscription (punt 2)
+  // Realtime subscription
   useEffect(() => {
     if (!conversationId) return;
 
@@ -65,7 +79,6 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
         (payload) => {
           const newMsg = payload.new as Message;
           setMessages(prev => {
-            // Avoid duplicates
             if (prev.some(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
@@ -87,7 +100,6 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
   const loadConversation = async (userId: string) => {
     setLoadingMessages(true);
     try {
-      // Get conversations for this user
       const { data: conversations, error: convError } = await supabase
         .from("conversations")
         .select("id")
@@ -107,7 +119,6 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
       const convId = conversations[0].id;
       setConversationId(convId);
 
-      // Get messages for this conversation
       const { data: messagesData, error: msgError } = await supabase
         .from("messages")
         .select("id, role, content, created_at")
@@ -124,6 +135,35 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
     }
   };
 
+  const handleDeleteConversation = async () => {
+    if (!conversationId) return;
+    setDeleting(true);
+    try {
+      // Delete messages first (FK constraint)
+      const { error: msgErr } = await supabase
+        .from("messages")
+        .delete()
+        .eq("conversation_id", conversationId);
+      if (msgErr) throw msgErr;
+
+      // Delete conversation
+      const { error: convErr } = await supabase
+        .from("conversations")
+        .delete()
+        .eq("id", conversationId);
+      if (convErr) throw convErr;
+
+      setMessages([]);
+      setConversationId(null);
+      toast.success("Gesprek gewist");
+    } catch (err) {
+      console.error("Error deleting conversation:", err);
+      toast.error("Kon gesprek niet wissen");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedUser) return;
 
@@ -131,7 +171,6 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
     try {
       let targetConvId = conversationId;
 
-      // Create conversation if none exists
       if (!targetConvId) {
         const { data: newConv, error: convError } = await supabase
           .from("conversations")
@@ -144,7 +183,6 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
         setConversationId(targetConvId);
       }
 
-      // Insert message with advisor metadata (punt 18)
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const { data: advisorProfile } = authUser ? await supabase
         .from("profiles")
@@ -229,9 +267,34 @@ export function AdvisorChatPanel({ selectedUser, onClose }: AdvisorChatPanelProp
               </div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {conversationId && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" disabled={deleting} title="Gesprek wissen">
+                    {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Gesprek wissen?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Alle berichten in dit gesprek worden permanent verwijderd. Dit kan niet ongedaan worden gemaakt.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteConversation} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Wis gesprek
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
